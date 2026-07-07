@@ -1,70 +1,85 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="forgeGlow" x1="232" y1="206" x2="852" y2="762" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8be9fd" />
-      <stop offset="0.36" stop-color="#d8b4fe" />
-      <stop offset="0.68" stop-color="#f9a8d4" />
-      <stop offset="1" stop-color="#7ee787" />
+    <linearGradient id="tileFill" x1="176" y1="134" x2="830" y2="898" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="0.58" stop-color="#f7fbff" />
+      <stop offset="1" stop-color="#fef7ff" />
     </linearGradient>
-    <filter id="softGlow" x="160" y="86" width="792" height="792" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="15" result="blur" />
+    <linearGradient id="borderGradient" x1="132" y1="152" x2="884" y2="872" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#78dfff" />
+      <stop offset="0.26" stop-color="#4fa6ff" />
+      <stop offset="0.52" stop-color="#7c5cff" />
+      <stop offset="0.74" stop-color="#ff6db4" />
+      <stop offset="1" stop-color="#ff9f6e" />
+    </linearGradient>
+    <linearGradient id="markGradient" x1="294" y1="296" x2="730" y2="734" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#19d3ff" />
+      <stop offset="0.32" stop-color="#5b8cff" />
+      <stop offset="0.54" stop-color="#c16dff" />
+      <stop offset="0.76" stop-color="#ff72be" />
+      <stop offset="1" stop-color="#ff9d66" />
+    </linearGradient>
+    <radialGradient id="surfaceGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(508 528) rotate(90) scale(330 390)">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.94" />
+      <stop offset="0.68" stop-color="#ffffff" stop-opacity="0.38" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+    <filter id="tileShadow" x="36" y="40" width="952" height="952" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#0b1224" flood-opacity="0.26" />
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#39c6ff" flood-opacity="0.24" />
+    </filter>
+    <filter id="borderGlow" x="72" y="72" width="880" height="880" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="4" result="blur" />
       <feColorMatrix
         in="blur"
         type="matrix"
-        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1.45 0"
+        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1.2 0"
         result="glow"
       />
       <feMerge>
         <feMergeNode in="glow" />
+        <feMergeNode in="SourceGraphic" />
       </feMerge>
     </filter>
+    <filter id="markGlow" x="220" y="208" width="608" height="622" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1.15 0"
+        result="glow"
+      />
+      <feMerge>
+        <feMergeNode in="glow" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <path
+      id="octocatMain"
+      d="M384 575C326 563 292 520 292 450C292 404 305 364 332 331C325 297 327 265 338 235C382 239 425 265 456 289C484 282 512 279 541 279C570 279 598 282 626 289C657 265 700 239 744 235C755 265 757 297 750 331C777 364 790 404 790 450C790 520 756 563 698 575C667 584 649 588 640 606C633 621 640 635 640 657V720"
+    />
+    <path
+      id="octocatLeftLeg"
+      d="M384 575C415 584 433 588 442 606C449 621 442 635 442 657V720"
+    />
+    <path
+      id="octocatTail"
+      d="M442 662C392 679 337 665 303 600"
+    />
   </defs>
-  <path
-    d="M365 604C295 590 253 536 253 448C253 390 269 340 304 299C295 256 298 216 312 179C366 184 420 217 458 247C494 238 530 234 566 234C602 234 638 238 674 247C712 217 766 184 820 179C834 216 837 256 828 299C863 340 879 390 879 448C879 536 837 590 767 604C730 615 706 618 696 640C687 658 696 672 696 700V778"
-    stroke="url(#forgeGlow)"
-    stroke-width="80"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    opacity="0.72"
-    filter="url(#softGlow)"
-  />
-  <path
-    d="M365 604C402 615 426 618 436 640C445 658 436 672 436 700V778"
-    stroke="url(#forgeGlow)"
-    stroke-width="80"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    opacity="0.72"
-    filter="url(#softGlow)"
-  />
-  <path
-    d="M436 708C371 729 300 713 256 630"
-    stroke="url(#forgeGlow)"
-    stroke-width="80"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    opacity="0.72"
-    filter="url(#softGlow)"
-  />
-  <path
-    d="M365 604C295 590 253 536 253 448C253 390 269 340 304 299C295 256 298 216 312 179C366 184 420 217 458 247C494 238 530 234 566 234C602 234 638 238 674 247C712 217 766 184 820 179C834 216 837 256 828 299C863 340 879 390 879 448C879 536 837 590 767 604C730 615 706 618 696 640C687 658 696 672 696 700V778"
-    stroke="#111827"
-    stroke-width="52"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M365 604C402 615 426 618 436 640C445 658 436 672 436 700V778"
-    stroke="#111827"
-    stroke-width="52"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M436 708C371 729 300 713 256 630"
-    stroke="#111827"
-    stroke-width="52"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+
+  <rect x="84" y="84" width="856" height="856" rx="196" fill="url(#tileFill)" filter="url(#tileShadow)" />
+  <rect x="112" y="112" width="800" height="800" rx="170" stroke="url(#borderGradient)" stroke-width="34" filter="url(#borderGlow)" />
+  <rect x="136" y="136" width="752" height="752" rx="150" fill="url(#surfaceGlow)" opacity="0.82" />
+  <path d="M856 206C739 168 612 166 492 196" stroke="#ffffff" stroke-opacity="0.4" stroke-width="16" stroke-linecap="round" />
+
+  <g transform="translate(-28 36)">
+    <use href="#octocatMain" stroke="url(#markGradient)" stroke-width="60" stroke-linecap="round" stroke-linejoin="round" opacity="0.3" filter="url(#markGlow)" />
+    <use href="#octocatLeftLeg" stroke="url(#markGradient)" stroke-width="60" stroke-linecap="round" stroke-linejoin="round" opacity="0.3" filter="url(#markGlow)" />
+    <use href="#octocatTail" stroke="url(#markGradient)" stroke-width="60" stroke-linecap="round" stroke-linejoin="round" opacity="0.3" filter="url(#markGlow)" />
+
+    <use href="#octocatMain" stroke="url(#markGradient)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round" />
+    <use href="#octocatLeftLeg" stroke="url(#markGradient)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round" />
+    <use href="#octocatTail" stroke="url(#markGradient)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
 </svg>
