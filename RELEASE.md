@@ -11,9 +11,22 @@ Forge follows the same two-step release model as FScript.
 
 Both `0.1.0` and `v0.1.0` style tags are supported.
 
+The recommended local release preparation command is:
+
 ```sh
-git tag 0.1.0
-git push origin 0.1.0
+make release-prepare version=0.1.0
+```
+
+It moves the `## [Unreleased]` notes into `## [0.1.0]`, commits `CHANGELOG.md`, and creates an annotated tag.
+
+To preview the changelog/tag operation without writing files:
+
+```sh
+make release-prepare version=0.1.0 dryrun=true
+```
+
+```sh
+git push origin main --follow-tags
 ```
 
 Each release tag must have a matching `## [x.y.z]` section in `CHANGELOG.md`.

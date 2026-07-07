@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added Forge contributor guidance and CI changelog enforcement for branch builds.
+- Added a release preparation target that materializes changelog entries, commits them, and creates the release tag.
 - Added branch-push CI for typechecking, building, unit tests, and GitHub test summaries.
 - Added GitHub Actions release packaging for unsigned macOS arm64 draft artifacts and signed/notarized macOS arm64 release artifacts.
 

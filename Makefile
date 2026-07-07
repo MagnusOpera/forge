@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build run package-mac-arm64 verify-changelog check typecheck test audit preview clean
+.PHONY: help install dev build run package-mac-arm64 verify-changelog release-prepare check typecheck test audit preview clean
 
 version ?= 0.1.0
 app_version ?= $(patsubst v%,%,$(version))
@@ -15,6 +15,7 @@ help:
 	@printf "  make build      Build Electron main/preload and renderer assets\n"
 	@printf "  make run        Run the built Electron app\n"
 	@printf "  make package-mac-arm64 version=x.y.z  Build unsigned macOS arm64 ZIP\n"
+	@printf "  make release-prepare version=x.y.z  Move changelog, commit, and tag\n"
 	@printf "  make test       Run unit tests\n"
 	@printf "  make check      Run typecheck and high-severity audit\n"
 	@printf "  make preview    Preview the built renderer in a browser\n"
@@ -47,6 +48,9 @@ package-mac-arm64:
 
 verify-changelog:
 	REQUIRE_CHANGELOG_ALWAYS=true .github/scripts/check-unreleased-changelog.sh
+
+release-prepare:
+	./.github/scripts/release.sh "$(version)" "$(dryrun)"
 
 typecheck:
 	npm run typecheck
