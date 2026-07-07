@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added Homebrew tap cask publishing for signed Forge releases.
+
 ## [0.0.4]
 
 

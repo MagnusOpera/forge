@@ -172,3 +172,14 @@ jobs:
             } catch (error) {
               core.warning(`Best-effort cleanup failed: ${error?.message ?? error}`);
             }
+
+  update-homebrew-tap:
+    if: ${{ !contains(github.event.release.tag_name, '-') }}
+    needs:
+      - sign-and-notarize
+    uses: ./.github/workflows/release-homebrew-tap.yml
+    with:
+      ref: ${{ format('refs/tags/{0}', github.event.release.tag_name) }}
+      version: ${{ github.event.release.tag_name }}
+      dry-run: false
+    secrets: inherit

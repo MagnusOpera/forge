@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+FORGE_TAG="${1}"
+TAP_TEMPLATE_FILE="$(realpath "${2}")"
+FORGE_GH_REPO="${FORGE_GH_REPO:-MagnusOpera/forge}"
+FORGE_VERSION="${FORGE_TAG#v}"
+FORGE_ASSET="forge-${FORGE_TAG}-mac-arm64.zip"
+
+export FORGE_TAG
+export FORGE_VERSION
+
+cd "$(mktemp -d)"
+
+>&2 echo "::info Generating Homebrew cask for Forge ${FORGE_TAG}"
+>&2 echo "::group::Download release asset"
+>&2 gh release download --repo "${FORGE_GH_REPO}" "${FORGE_TAG}" \
+  -p "${FORGE_ASSET}" \
+  --skip-existing
+>&2 echo "::endgroup::"
+
+FORGE_MAC_ARM64_SHA256="$(sha256sum "${FORGE_ASSET}" | cut -f1 -d' ')"
+FORGE_MAC_ARM64_URL="https://github.com/${FORGE_GH_REPO}/releases/download/${FORGE_TAG}/${FORGE_ASSET}"
+
+export FORGE_MAC_ARM64_SHA256
+export FORGE_MAC_ARM64_URL
+
+>&2 echo "arm64 SHA256: ${FORGE_MAC_ARM64_SHA256}"
+>&2 echo "arm64 URL:    ${FORGE_MAC_ARM64_URL}"
+
+# shellcheck disable=SC2016
+envsubst '$FORGE_VERSION,$FORGE_MAC_ARM64_URL,$FORGE_MAC_ARM64_SHA256' < "${TAP_TEMPLATE_FILE}"

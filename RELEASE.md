@@ -6,6 +6,7 @@ Forge follows the same two-step release model as FScript.
 2. GitHub Actions creates a draft release with an unsigned macOS arm64 app ZIP.
 3. Publish the draft release.
 4. GitHub Actions signs and notarizes the app, uploads the signed ZIP, and removes the unsigned ZIP.
+5. Stable releases update `MagnusOpera/homebrew-tap` with the signed Forge cask.
 
 ## Version Tags
 
@@ -40,5 +41,6 @@ Configure these repository secrets before publishing a release:
 - `MAC_DEV_TEAM_ID`: Apple Developer Team ID.
 - `MAC_DEV_LOGIN`: Apple ID used for notarization.
 - `MAC_DEV_PASSWORD`: app-specific password for Apple notarization.
+- `PAT_HOMEBREW_TAP`: token with write access to `MagnusOpera/homebrew-tap`.
 
 The app is only signed after the GitHub release is published.

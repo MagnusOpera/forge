@@ -1,0 +1,93 @@
+name: Update Homebrew Tap
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        description: GitHub ref to use
+        type: string
+      version:
+        required: true
+        description: Version tag to produce
+        type: string
+      dry-run:
+        required: false
+        default: true
+        description: Whether to skip pushing the tap commit
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      ref:
+        required: true
+        description: GitHub ref to use
+        type: string
+      version:
+        required: true
+        description: Version tag to produce
+        type: string
+      dry-run:
+        required: false
+        default: true
+        description: Whether to skip pushing the tap commit
+        type: boolean
+
+env:
+  FORGE_TAG: ${{ inputs.version }}
+
+jobs:
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Forge repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: forge
+
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: MagnusOpera/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.PAT_HOMEBREW_TAP }}
+
+      - name: Update Homebrew cask
+        env:
+          FORGE_GH_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p ./homebrew-tap/Casks
+          bash ./forge/.github/scripts/generate-homebrew-cask \
+            "${FORGE_TAG}" \
+            ./forge/.github/scripts/forge-cask-template.rb \
+            > ./homebrew-tap/Casks/forge.rb
+
+      - name: Commit updated tap
+        working-directory: homebrew-tap
+        run: |
+          set -euo pipefail
+
+          git config user.name magnusopera-bot
+          git config user.email bot@magnusopera.io
+          git add Casks/forge.rb
+
+          if git diff --cached --quiet; then
+            echo "No tap changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Brew cask update for forge version ${FORGE_TAG}"
+
+      - name: Push tap
+        working-directory: homebrew-tap
+        if: ${{ !inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main
