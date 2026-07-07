@@ -163,9 +163,13 @@ export interface CommitSummary {
 
 export interface ChangedFileSummary {
   path: string;
+  previousPath?: string | null;
   additions: number;
   deletions: number;
+  changes: number;
   changeType: string;
+  patch?: string | null;
+  url?: string | null;
 }
 
 export interface CheckSummary {

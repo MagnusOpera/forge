@@ -31,12 +31,14 @@ import {
   Workflow,
   XCircle
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PatchDiffProps } from "@pierre/diffs/react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import type {
   AuthStatus,
+  ChangedFileSummary,
   GithubFocusApi,
   IssueSummary,
   OrganizationSummary,
@@ -47,6 +49,11 @@ import type {
   WorkflowRunSummary,
   WorkflowSummary
 } from "../shared/github";
+
+const PatchDiff = lazy(async () => {
+  const module = await import("@pierre/diffs/react");
+  return { default: module.PatchDiff };
+});
 
 type ContentSelection =
   | { kind: "repo" }
@@ -79,6 +86,7 @@ interface PaletteItem {
 
 type ThemeMode = "dark" | "light";
 type SidebarRepoTab = "favorites" | "all";
+type PatchDiffOptions = NonNullable<PatchDiffProps<unknown>["options"]>;
 
 const accentColors = [
   "#7ee787",
@@ -1518,7 +1526,13 @@ function ContentPane(props: {
       ) : props.selection.kind === "repo" ? (
         <RepoOverview repo={props.repo} />
       ) : props.selection.kind === "pr" ? (
-        <PullRequestContent detail={props.prDetail} fallback={props.selection.pr} tab={props.prTab} onTab={props.onPrTabChange} />
+        <PullRequestContent
+          detail={props.prDetail}
+          fallback={props.selection.pr}
+          tab={props.prTab}
+          theme={props.theme}
+          onTab={props.onPrTabChange}
+        />
       ) : props.selection.kind === "issue" ? (
         <IssueContent issue={props.selection.issue} />
       ) : props.selection.kind === "run" ? (
@@ -1627,6 +1641,7 @@ function PullRequestContent(props: {
   detail: PullRequestDetail | null;
   fallback: PullRequestSummary;
   tab: string;
+  theme: ThemeMode;
   onTab(tab: string): void;
 }) {
   const detail = props.detail;
@@ -1673,18 +1688,7 @@ function PullRequestContent(props: {
           )}
         />
       ) : props.tab === "Files" ? (
-        <StackedList
-          empty="No changed files"
-          items={detail.files}
-          render={(file) => (
-            <div className="file-row" key={file.path}>
-              <FileCode2 size={15} />
-              <span>{file.path}</span>
-              <span className="diff-stat positive">+{file.additions}</span>
-              <span className="diff-stat negative">-{file.deletions}</span>
-            </div>
-          )}
-        />
+        <ChangedFilesDiffList files={detail.files} theme={props.theme} />
       ) : props.tab === "Commits" ? (
         <StackedList
           empty="No commits"
@@ -1712,6 +1716,78 @@ function PullRequestContent(props: {
           )}
         />
       )}
+    </div>
+  );
+}
+
+function ChangedFilesDiffList({ files, theme }: { files: ChangedFileSummary[]; theme: ThemeMode }) {
+  const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
+  const filesKey = files.map((file) => `${file.previousPath ?? ""}:${file.path}`).join("\n");
+  const diffOptions = useMemo<PatchDiffOptions>(
+    () => ({
+      diffStyle: "unified",
+      diffIndicators: "bars",
+      disableFileHeader: true,
+      hunkSeparators: "line-info-basic",
+      lineDiffType: "word",
+      overflow: "wrap",
+      theme: {
+        dark: "pierre-dark",
+        light: "pierre-light"
+      },
+      themeType: theme
+    }),
+    [theme]
+  );
+
+  useEffect(() => {
+    setCollapsedFiles({});
+  }, [filesKey]);
+
+  if (!files.length) {
+    return <div className="empty-content">No changed files</div>;
+  }
+
+  return (
+    <div className="changed-files-list">
+      {files.map((file) => {
+        const fileKey = `${file.previousPath ?? ""}:${file.path}`;
+        const collapsed = collapsedFiles[fileKey] ?? true;
+        return (
+          <article className={cx("changed-file-card", collapsed && "collapsed")} key={fileKey}>
+            <button
+              className="changed-file-header"
+              aria-expanded={!collapsed}
+              onClick={() =>
+                setCollapsedFiles((current) => ({
+                  ...current,
+                  [fileKey]: !(current[fileKey] ?? true)
+                }))
+              }
+            >
+              {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+              <FileCode2 size={15} />
+              <span className="changed-file-path">
+                {file.previousPath ? `${file.previousPath} -> ${file.path}` : file.path}
+              </span>
+              <span className="changed-file-type">{file.changeType}</span>
+              <span className="diff-stat positive">+{file.additions}</span>
+              <span className="diff-stat negative">-{file.deletions}</span>
+            </button>
+            {!collapsed && (
+              <div className="changed-file-body">
+                {file.patch ? (
+                  <Suspense fallback={<div className="diff-loading">Loading diff...</div>}>
+                    <PatchDiff className="diff-viewer" patch={file.patch} options={diffOptions} disableWorkerPool />
+                  </Suspense>
+                ) : (
+                  <div className="empty-row">Diff unavailable for this file.</div>
+                )}
+              </div>
+            )}
+          </article>
+        );
+      })}
     </div>
   );
 }

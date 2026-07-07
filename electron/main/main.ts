@@ -623,71 +623,73 @@ async function getWorkflowRuns(repoRef: RepoRef): Promise<CacheEnvelope<Workflow
 
 async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>> {
   const repo = ensureRepo(repoRef);
-  return cached(`repo:${repo.owner}/${repo.name}:pull:${number}`, async () => {
-    const { gql } = await getClients();
-    const result: any = await gql(
-      `
-        query PullRequest($owner: String!, $name: String!, $number: Int!) {
-          repository(owner: $owner, name: $name) {
-            pullRequest(number: $number) {
-              id
-              number
-              title
-              body
-              state
-              isDraft
-              reviewDecision
-              mergeable
-              headRefName
-              baseRefName
-              createdAt
-              updatedAt
-              url
-              author { login avatarUrl url }
-              labels(first: 20) { nodes { id name color } }
-              comments(first: 100) {
-                nodes {
-                  id
-                  body
-                  createdAt
-                  updatedAt
-                  url
-                  author { login avatarUrl url }
-                }
-              }
-              reviews(first: 50) {
-                nodes {
-                  id
-                  state
-                  body
-                  submittedAt
-                  url
-                  author { login avatarUrl url }
-                }
-              }
-              commits(first: 50) {
-                nodes {
-                  commit {
-                    oid
-                    messageHeadline
-                    authoredDate
+  return cached(`repo:${repo.owner}/${repo.name}:pull:${number}:v2`, async () => {
+    const { gql, octokit } = await getClients();
+    const [result, files] = await Promise.all([
+      gql(
+        `
+          query PullRequest($owner: String!, $name: String!, $number: Int!) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                id
+                number
+                title
+                body
+                state
+                isDraft
+                reviewDecision
+                mergeable
+                headRefName
+                baseRefName
+                createdAt
+                updatedAt
+                url
+                author { login avatarUrl url }
+                labels(first: 20) { nodes { id name color } }
+                comments(first: 100) {
+                  nodes {
+                    id
+                    body
+                    createdAt
+                    updatedAt
                     url
-                    author { name }
-                    statusCheckRollup {
-                      state
-                      contexts(first: 50) {
-                        nodes {
-                          __typename
-                          ... on CheckRun {
-                            name
-                            status
-                            conclusion
-                            detailsUrl
-                          }
-                          ... on StatusContext {
-                            context
-                            state
-                            targetUrl
+                    author { login avatarUrl url }
+                  }
+                }
+                reviews(first: 50) {
+                  nodes {
+                    id
+                    state
+                    body
+                    submittedAt
+                    url
+                    author { login avatarUrl url }
+                  }
+                }
+                commits(first: 50) {
+                  nodes {
+                    commit {
+                      oid
+                      messageHeadline
+                      authoredDate
+                      url
+                      author { name }
+                      statusCheckRollup {
+                        state
+                        contexts(first: 50) {
+                          nodes {
+                            __typename
+                            ... on CheckRun {
+                              name
+                              status
+                              conclusion
+                              detailsUrl
+                            }
+                            ... on StatusContext {
+                              context
+                              state
+                              targetUrl
+                            }
                           }
                         }
                       }
@@ -695,22 +697,20 @@ async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEn
                   }
                 }
               }
-              files(first: 100) {
-                nodes {
-                  path
-                  additions
-                  deletions
-                  changeType
-                }
-              }
             }
           }
-        }
-      `,
-      { ...repo, number }
-    );
+        `,
+        { ...repo, number }
+      ),
+      octokit.paginate(octokit.pulls.listFiles, {
+        owner: repo.owner,
+        repo: repo.name,
+        pull_number: number,
+        per_page: 100
+      })
+    ]);
 
-    const pr = result.repository.pullRequest;
+    const pr = (result as any).repository.pullRequest;
     const summary = toPullRequest(pr);
     const latestCommit = nodeList<any>(pr.commits).at(-1)?.commit;
     const checks: CheckSummary[] = nodeList<any>(latestCommit?.statusCheckRollup?.contexts).map((check) => ({
@@ -746,15 +746,45 @@ async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEn
         authorName: commitNode.commit.author?.name ?? null,
         url: commitNode.commit.url
       })),
-      files: nodeList<any>(pr.files).map<ChangedFileSummary>((file) => ({
-        path: file.path,
+      files: files.map<ChangedFileSummary>((file) => ({
+        path: file.filename,
+        previousPath: file.previous_filename ?? null,
         additions: file.additions,
         deletions: file.deletions,
-        changeType: file.changeType
+        changes: file.changes,
+        changeType: file.status,
+        patch: buildPullRequestFilePatch(file),
+        url: file.blob_url ?? null
       })),
       checks
     };
   });
+}
+
+function buildPullRequestFilePatch(file: {
+  filename: string;
+  previous_filename?: string | null;
+  status: string;
+  patch?: string | null;
+}): string | null {
+  if (!file.patch) {
+    return null;
+  }
+
+  const oldPath = file.previous_filename ?? file.filename;
+  const newPath = file.filename;
+  const oldTarget = file.status === "added" ? "/dev/null" : `a/${oldPath}`;
+  const newTarget = file.status === "removed" ? "/dev/null" : `b/${newPath}`;
+  const header = [`diff --git a/${oldPath} b/${newPath}`];
+
+  if (file.status === "added") {
+    header.push("new file mode 100644");
+  }
+  if (file.status === "removed") {
+    header.push("deleted file mode 100644");
+  }
+
+  return [...header, `--- ${oldTarget}`, `+++ ${newTarget}`, file.patch].join("\n");
 }
 
 async function getWorkflowRun(repoRef: RepoRef, runId: number): Promise<CacheEnvelope<WorkflowRunDetail>> {
