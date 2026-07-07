@@ -29,6 +29,8 @@ import {
   Star,
   StarOff,
   Sun,
+  ThumbsDown,
+  ThumbsUp,
   Workflow,
   XCircle
 } from "lucide-react";
@@ -45,6 +47,7 @@ import type {
   IssueSummary,
   OrganizationSummary,
   PullRequestDetail,
+  PullRequestReviewEvent,
   PullRequestSummary,
   RepoRef,
   RepoSummary,
@@ -162,6 +165,7 @@ const browserApi: GithubFocusApi = {
   getWorkflowRun: () => ipcUnavailable(),
   getWorkflowJob: () => ipcUnavailable(),
   dispatchWorkflow: () => ipcUnavailable(),
+  submitPullRequestReview: () => ipcUnavailable(),
   openInGitHub: () => ipcUnavailable(),
   onCacheUpdated: () => () => undefined
 };
@@ -377,6 +381,10 @@ function pullRequestTabForState(pr: PullRequestSummary): ProjectPullRequestTab {
   return pr.state === "CLOSED" || pr.state === "MERGED" ? "closed" : "open";
 }
 
+function canSubmitPullRequestReview(repo: RepoSummary): boolean {
+  return ["ADMIN", "MAINTAIN", "WRITE"].includes(repo.viewerPermission ?? "");
+}
+
 function isLiveStatus(status?: string | null): boolean {
   return ["queued", "waiting", "pending", "requested", "in_progress"].includes((status ?? "").toLowerCase());
 }
@@ -462,6 +470,7 @@ export function App() {
   const [runDetail, setRunDetail] = useState<WorkflowRunDetail | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [prTab, setPrTab] = useState("Description");
   const [runTab, setRunTab] = useState("Summary");
 
@@ -762,6 +771,56 @@ export function App() {
         void loadProject(selectedRepo, false);
       } catch (error) {
         flash(error instanceof Error ? error.message : "Workflow dispatch failed.");
+      }
+    },
+    [flash, loadProject, selectedRepo]
+  );
+
+  const submitPullRequestReview = useCallback(
+    async (pr: PullRequestSummary, event: PullRequestReviewEvent) => {
+      if (!selectedRepo || !canSubmitPullRequestReview(selectedRepo)) {
+        return;
+      }
+
+      let body: string | undefined;
+      if (event === "REQUEST_CHANGES") {
+        const message = window.prompt(`Request changes on PR #${pr.number}`);
+        if (message === null) {
+          return;
+        }
+        body = message.trim();
+        if (!body) {
+          flash("Request changes needs a message.");
+          return;
+        }
+      } else {
+        const confirmed = window.confirm(`Approve PR #${pr.number}?`);
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      setReviewSubmitting(true);
+      try {
+        await api.submitPullRequestReview({
+          repo: selectedRepo,
+          pullNumber: pr.number,
+          event,
+          body
+        });
+        const [detailResponse] = await Promise.all([
+          api.getPullRequest(selectedRepo, pr.number),
+          loadProject(selectedRepo, false, true)
+        ]);
+        setPrDetail(detailResponse.data);
+        setSelection((current) =>
+          current.kind === "pr" && current.pr.number === pr.number ? { kind: "pr", pr: detailResponse.data } : current
+        );
+        flash(event === "APPROVE" ? "Approved pull request." : "Requested changes.");
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to submit review.");
+      } finally {
+        setReviewSubmitting(false);
       }
     },
     [flash, loadProject, selectedRepo]
@@ -1360,6 +1419,7 @@ export function App() {
         onRunTabChange={setRunTab}
         loading={contentLoading}
         error={contentError}
+        reviewSubmitting={reviewSubmitting}
         theme={theme}
         canNavigateBack={canNavigateBack}
         canNavigateForward={canNavigateForward}
@@ -1371,6 +1431,7 @@ export function App() {
         onOpenGithub={openGithub}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
+        onSubmitPullRequestReview={submitPullRequestReview}
         onSelectRun={selectRun}
         onRunWorkflow={runWorkflow}
         workflowRuns={workflowRuns}
@@ -2140,6 +2201,7 @@ function ContentPane(props: {
   runTab: string;
   loading: boolean;
   error: string | null;
+  reviewSubmitting: boolean;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
   canNavigateBack: boolean;
@@ -2157,6 +2219,7 @@ function ContentPane(props: {
   onOpenGithub(): void;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
+  onSubmitPullRequestReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
   onSelectRun(run: WorkflowRunSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
@@ -2254,6 +2317,8 @@ function ContentPane(props: {
           workflowRuns={props.workflowRuns}
           onOpenGithubUrl={props.onOpenGithubUrl}
           onOpenWorkflowRunFromCheck={props.onOpenWorkflowRunFromCheck}
+          onSubmitReview={props.onSubmitPullRequestReview}
+          reviewSubmitting={props.reviewSubmitting}
           onTab={props.onPrTabChange}
         />
       ) : props.selection.kind === "issue" ? (
@@ -2382,24 +2447,53 @@ function PullRequestContent(props: {
   workflowRuns: WorkflowRunSummary[];
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
+  onSubmitReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
+  reviewSubmitting: boolean;
   onTab(tab: string): void;
 }) {
   const detail = props.detail;
   const tabs = ["Description", "Comments", "Reviews", "Files", "Commits", "Checks"];
+  const canReview = canSubmitPullRequestReview(props.repo) && (detail?.state ?? props.fallback.state) === "OPEN";
 
   return (
     <div className="content-scroll">
-      <div className="detail-heading">
+      <div className="detail-heading pr-detail-heading">
         <div>
           <span className="eyebrow">Pull request #{props.fallback.number}</span>
           <h1>{detail?.title ?? props.fallback.title}</h1>
         </div>
-        <div className="label-row">
-          {(detail?.labels ?? props.fallback.labels).map((label) => (
-            <span className="label" style={{ borderColor: `#${label.color}` }} key={label.id}>
-              {label.name}
-            </span>
-          ))}
+        <div className="pr-heading-meta">
+          {canReview && (
+            <div className="pr-review-actions" aria-label="Pull request review actions">
+              <button
+                type="button"
+                className="review-action-button approve"
+                title="Approve"
+                aria-label="Approve pull request"
+                disabled={props.reviewSubmitting}
+                onClick={() => props.onSubmitReview(detail ?? props.fallback, "APPROVE")}
+              >
+                <ThumbsUp size={15} />
+              </button>
+              <button
+                type="button"
+                className="review-action-button request"
+                title="Request changes"
+                aria-label="Request changes"
+                disabled={props.reviewSubmitting}
+                onClick={() => props.onSubmitReview(detail ?? props.fallback, "REQUEST_CHANGES")}
+              >
+                <ThumbsDown size={15} />
+              </button>
+            </div>
+          )}
+          <div className="label-row">
+            {(detail?.labels ?? props.fallback.labels).map((label) => (
+              <span className="label" style={{ borderColor: `#${label.color}` }} key={label.id}>
+                {label.name}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
       <TabBar tabs={tabs} selected={props.tab} onSelect={props.onTab} />

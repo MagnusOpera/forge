@@ -1141,6 +1141,60 @@ p {
   gap: 6px;
 }
 
+.pr-detail-heading {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.pr-heading-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.pr-heading-meta .label-row {
+  max-width: 360px;
+  justify-content: flex-end;
+}
+
+.pr-review-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-action-button {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--icon);
+}
+
+.review-action-button:hover:not(:disabled) {
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+.review-action-button.approve:hover:not(:disabled) {
+  border-color: var(--good-border);
+  color: var(--good-text);
+}
+
+.review-action-button.request:hover:not(:disabled) {
+  border-color: var(--bad-border);
+  color: var(--bad-text);
+}
+
+.review-action-button:disabled {
+  opacity: 0.45;
+}
+
 .label {
   display: inline-flex;
   align-items: center;

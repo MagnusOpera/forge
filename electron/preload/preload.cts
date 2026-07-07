@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { CacheRequestOptions, DispatchWorkflowPayload, GithubFocusApi, RepoRef } from "../../shared/github.js";
+import type {
+  CacheRequestOptions,
+  DispatchWorkflowPayload,
+  GithubFocusApi,
+  RepoRef,
+  SubmitPullRequestReviewPayload
+} from "../../shared/github.js";
 
 const api: GithubFocusApi = {
   platform: process.platform,
@@ -27,6 +33,8 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:get-workflow-job", repo, jobId),
   dispatchWorkflow: (payload: DispatchWorkflowPayload) =>
     ipcRenderer.invoke("github:dispatch-workflow", payload),
+  submitPullRequestReview: (payload: SubmitPullRequestReviewPayload) =>
+    ipcRenderer.invoke("github:submit-pull-request-review", payload),
   openInGitHub: (url: string) => ipcRenderer.invoke("github:open-in-github", url),
   onCacheUpdated: (callback: (key: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, key: string) => callback(key);

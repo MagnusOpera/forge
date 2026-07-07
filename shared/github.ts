@@ -21,6 +21,8 @@ export interface RepoRef {
   name: string;
 }
 
+export type RepositoryPermission = "ADMIN" | "MAINTAIN" | "WRITE" | "TRIAGE" | "READ" | "NONE" | null;
+
 export interface ActorSummary {
   login: string;
   avatarUrl?: string | null;
@@ -38,6 +40,7 @@ export interface RepoSummary extends RepoRef {
   fullName: string;
   description?: string | null;
   defaultBranch?: string | null;
+  viewerPermission?: RepositoryPermission;
   isPrivate: boolean;
   isArchived: boolean;
   isFork: boolean;
@@ -253,6 +256,15 @@ export interface DispatchWorkflowPayload {
   inputs?: Record<string, string>;
 }
 
+export type PullRequestReviewEvent = "APPROVE" | "REQUEST_CHANGES";
+
+export interface SubmitPullRequestReviewPayload {
+  repo: RepoRef;
+  pullNumber: number;
+  event: PullRequestReviewEvent;
+  body?: string;
+}
+
 export interface GithubFocusApi {
   getAuthStatus(): Promise<AuthStatus>;
   saveToken(token: string): Promise<AuthStatus>;
@@ -270,6 +282,7 @@ export interface GithubFocusApi {
   getWorkflowRun(repo: RepoRef, runId: number): Promise<CacheEnvelope<WorkflowRunDetail>>;
   getWorkflowJob(repo: RepoRef, jobId: number): Promise<CacheEnvelope<WorkflowJobLogDetail>>;
   dispatchWorkflow(payload: DispatchWorkflowPayload): Promise<void>;
+  submitPullRequestReview(payload: SubmitPullRequestReviewPayload): Promise<void>;
   openInGitHub(url: string): Promise<void>;
   onCacheUpdated(callback: (key: string) => void): () => void;
   platform: string;

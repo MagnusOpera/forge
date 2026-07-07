@@ -23,6 +23,7 @@ import type {
   PullRequestSummary,
   RepoRef,
   RepoSummary,
+  SubmitPullRequestReviewPayload,
   TimelineComment,
   WorkflowJobLogDetail,
   WorkflowJobSummary,
@@ -70,6 +71,18 @@ function broadcastCacheUpdate(key: string): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("github:cache-updated", key);
   }
+}
+
+async function invalidateCacheKey(key: string): Promise<void> {
+  cacheMemory.delete(key);
+  try {
+    await fs.unlink(cachePath(key));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+  broadcastCacheUpdate(key);
 }
 
 async function clearCache(): Promise<void> {
@@ -243,6 +256,18 @@ async function cached<T>(
 
 const cacheMemory = new Map<string, CacheRecord<unknown>>();
 
+function repoCacheKey(repo: RepoRef): string {
+  return `repo:${repo.owner}/${repo.name}:v2`;
+}
+
+function pullRequestsCacheKey(repo: RepoRef): string {
+  return `repo:${repo.owner}/${repo.name}:pulls:v2`;
+}
+
+function pullRequestCacheKey(repo: RepoRef, number: number): string {
+  return `repo:${repo.owner}/${repo.name}:pull:${number}:v5`;
+}
+
 function nodeList<T>(connection: { nodes?: Array<T | null> | null } | null | undefined): T[] {
   return (connection?.nodes ?? []).filter(Boolean) as T[];
 }
@@ -267,6 +292,44 @@ function toLabels(labels: any): LabelSummary[] {
   }));
 }
 
+function toRepositoryPermission(repo: any): RepoSummary["viewerPermission"] {
+  if (typeof repo.viewerPermission === "string") {
+    return repo.viewerPermission as RepoSummary["viewerPermission"];
+  }
+
+  const permissions = repo.permissions;
+  if (permissions?.admin) {
+    return "ADMIN";
+  }
+  if (permissions?.maintain) {
+    return "MAINTAIN";
+  }
+  if (permissions?.push) {
+    return "WRITE";
+  }
+  if (permissions?.triage) {
+    return "TRIAGE";
+  }
+  if (permissions?.pull) {
+    return "READ";
+  }
+
+  switch (String(repo.role_name ?? "").toLowerCase()) {
+    case "admin":
+      return "ADMIN";
+    case "maintain":
+      return "MAINTAIN";
+    case "write":
+      return "WRITE";
+    case "triage":
+      return "TRIAGE";
+    case "read":
+      return "READ";
+    default:
+      return null;
+  }
+}
+
 function toRepo(repo: any): RepoSummary {
   return {
     id: String(repo.id),
@@ -275,6 +338,7 @@ function toRepo(repo: any): RepoSummary {
     fullName: repo.nameWithOwner ?? `${repo.owner.login}/${repo.name}`,
     description: repo.description ?? null,
     defaultBranch: repo.defaultBranchRef?.name ?? repo.default_branch ?? null,
+    viewerPermission: toRepositoryPermission(repo),
     isPrivate: Boolean(repo.isPrivate ?? repo.private),
     isArchived: Boolean(repo.isArchived ?? repo.archived),
     isFork: Boolean(repo.isFork ?? repo.fork),
@@ -380,7 +444,7 @@ function ensureRepo(repo: RepoRef): RepoRef {
 }
 
 async function getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
-  return cached("viewer:starred-repos", async () => {
+  return cached("viewer:starred-repos:v2", async () => {
     const { gql } = await getClients();
     const result: any = await gql(`
       query StarredRepos {
@@ -396,6 +460,7 @@ async function getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
               isFork
               updatedAt
               pushedAt
+              viewerPermission
               url
               owner { login avatarUrl }
               defaultBranchRef { name }
@@ -409,7 +474,7 @@ async function getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
 }
 
 async function getRepositories(): Promise<CacheEnvelope<RepoSummary[]>> {
-  return cached("viewer:repositories:v2", async () => {
+  return cached("viewer:repositories:v3", async () => {
     const { octokit } = await getClients();
     const [viewerRepositories, organizations] = await Promise.all([
       octokit.paginate(octokit.repos.listForAuthenticatedUser, {
@@ -445,7 +510,7 @@ async function getRepositories(): Promise<CacheEnvelope<RepoSummary[]>> {
 }
 
 async function getRecentRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
-  return cached("viewer:recent-repos", async () => {
+  return cached("viewer:recent-repos:v2", async () => {
     const { gql } = await getClients();
     const result: any = await gql(`
       query RecentRepos {
@@ -465,6 +530,7 @@ async function getRecentRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
               isFork
               updatedAt
               pushedAt
+              viewerPermission
               url
               owner { login avatarUrl }
               defaultBranchRef { name }
@@ -500,7 +566,7 @@ async function getOrganizations(): Promise<CacheEnvelope<OrganizationSummary[]>>
 
 async function getRepo(repoRef: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<RepoSummary>> {
   const repo = ensureRepo(repoRef);
-  return cached(`repo:${repo.owner}/${repo.name}`, async () => {
+  return cached(repoCacheKey(repo), async () => {
     const { gql } = await getClients();
     const result: any = await gql(
       `
@@ -515,6 +581,7 @@ async function getRepo(repoRef: RepoRef, options?: CacheRequestOptions): Promise
             isFork
             updatedAt
             pushedAt
+            viewerPermission
             url
             owner { login avatarUrl }
             defaultBranchRef { name }
@@ -532,7 +599,7 @@ async function getPullRequests(
   options?: CacheRequestOptions
 ): Promise<CacheEnvelope<PullRequestSummary[]>> {
   const repo = ensureRepo(repoRef);
-  return cached(`repo:${repo.owner}/${repo.name}:pulls:v2`, async () => {
+  return cached(pullRequestsCacheKey(repo), async () => {
     const { gql } = await getClients();
     const result: any = await gql(
       `
@@ -674,7 +741,7 @@ async function getWorkflowRuns(
 
 async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>> {
   const repo = ensureRepo(repoRef);
-  return cached(`repo:${repo.owner}/${repo.name}:pull:${number}:v5`, async () => {
+  return cached(pullRequestCacheKey(repo, number), async () => {
     const { gql, octokit } = await getClients();
     const [result, files] = await Promise.all([
       gql(
@@ -1190,6 +1257,32 @@ async function dispatchWorkflow(payload: DispatchWorkflowPayload): Promise<void>
   });
 }
 
+async function submitPullRequestReview(payload: SubmitPullRequestReviewPayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  if (payload.event !== "APPROVE" && payload.event !== "REQUEST_CHANGES") {
+    throw new Error("Unsupported pull request review event.");
+  }
+
+  const body = payload.body?.trim();
+  if (payload.event === "REQUEST_CHANGES" && !body) {
+    throw new Error("Requesting changes requires a review message.");
+  }
+
+  const { octokit } = await getClients();
+  await octokit.pulls.createReview({
+    owner: repo.owner,
+    repo: repo.name,
+    pull_number: payload.pullNumber,
+    event: payload.event,
+    body: body || undefined
+  });
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, payload.pullNumber))
+  ]);
+}
+
 async function openInGitHub(rawUrl: string): Promise<void> {
   const url = new URL(rawUrl);
   const host = url.hostname.toLowerCase();
@@ -1286,6 +1379,9 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:dispatch-workflow", (_event, payload: DispatchWorkflowPayload) =>
     dispatchWorkflow(payload)
+  );
+  ipcMain.handle("github:submit-pull-request-review", (_event, payload: SubmitPullRequestReviewPayload) =>
+    submitPullRequestReview(payload)
   );
   ipcMain.handle("github:open-in-github", (_event, url: string) => openInGitHub(url));
 }
