@@ -676,6 +676,32 @@ input {
   padding: 22px 26px 36px;
 }
 
+.content-detail-shell {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+}
+
+.detail-fixed {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 22px 26px 0;
+  background: var(--content-bg);
+}
+
+.detail-fixed .tab-bar {
+  margin-bottom: 0;
+}
+
+.detail-body-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 26px 36px;
+}
+
 .section-title {
   height: 28px;
   padding: 0 8px;
@@ -1842,5 +1868,13 @@ code {
 
   .content-scroll {
     padding: 18px;
+  }
+
+  .detail-fixed {
+    padding: 18px 18px 0;
+  }
+
+  .detail-body-scroll {
+    padding: 16px 18px 28px;
   }
 }

@@ -2461,99 +2461,103 @@ function PullRequestContent(props: {
   const canReview = canSubmitPullRequestReview(props.repo) && (detail?.state ?? props.fallback.state) === "OPEN";
 
   return (
-    <div className="content-scroll">
-      <div className="detail-heading pr-detail-heading">
-        <div>
-          <span className="eyebrow">Pull request #{props.fallback.number}</span>
-          <h1>{detail?.title ?? props.fallback.title}</h1>
-        </div>
-        <div className="pr-heading-meta">
-          {canReview && (
-            <div className="pr-review-actions" aria-label="Pull request review actions">
-              <button
-                type="button"
-                className="review-action-button approve"
-                title="Approve"
-                aria-label="Approve pull request"
-                disabled={props.reviewSubmitting}
-                onClick={() => props.onSubmitReview(detail ?? props.fallback, "APPROVE")}
-              >
-                <ThumbsUp size={15} />
-              </button>
-              <button
-                type="button"
-                className="review-action-button request"
-                title="Request changes"
-                aria-label="Request changes"
-                disabled={props.reviewSubmitting}
-                onClick={() => props.onSubmitReview(detail ?? props.fallback, "REQUEST_CHANGES")}
-              >
-                <ThumbsDown size={15} />
-              </button>
+    <div className="content-detail-shell">
+      <div className="detail-fixed">
+        <div className="detail-heading pr-detail-heading">
+          <div>
+            <span className="eyebrow">Pull request #{props.fallback.number}</span>
+            <h1>{detail?.title ?? props.fallback.title}</h1>
+          </div>
+          <div className="pr-heading-meta">
+            {canReview && (
+              <div className="pr-review-actions" aria-label="Pull request review actions">
+                <button
+                  type="button"
+                  className="review-action-button approve"
+                  title="Approve"
+                  aria-label="Approve pull request"
+                  disabled={props.reviewSubmitting}
+                  onClick={() => props.onSubmitReview(detail ?? props.fallback, "APPROVE")}
+                >
+                  <ThumbsUp size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="review-action-button request"
+                  title="Request changes"
+                  aria-label="Request changes"
+                  disabled={props.reviewSubmitting}
+                  onClick={() => props.onSubmitReview(detail ?? props.fallback, "REQUEST_CHANGES")}
+                >
+                  <ThumbsDown size={15} />
+                </button>
+              </div>
+            )}
+            <div className="label-row">
+              {(detail?.labels ?? props.fallback.labels).map((label) => (
+                <span className="label" style={{ borderColor: `#${label.color}` }} key={label.id}>
+                  {label.name}
+                </span>
+              ))}
             </div>
-          )}
-          <div className="label-row">
-            {(detail?.labels ?? props.fallback.labels).map((label) => (
-              <span className="label" style={{ borderColor: `#${label.color}` }} key={label.id}>
-                {label.name}
-              </span>
-            ))}
           </div>
         </div>
+        <TabBar tabs={tabs} selected={props.tab} onSelect={props.onTab} />
       </div>
-      <TabBar tabs={tabs} selected={props.tab} onSelect={props.onTab} />
-      {!detail ? (
-        <Skeleton />
-      ) : props.tab === "Description" ? (
-        <MarkdownBlock value={detail.body || "No description."} />
-      ) : props.tab === "Comments" ? (
-        <StackedList
-          empty="No comments"
-          items={detail.comments}
-          render={(comment) => (
-            <ArticleCard key={comment.id} title={comment.author?.login ?? "unknown"} meta={formatRelative(comment.updatedAt ?? comment.createdAt)}>
-              <MarkdownBlock value={comment.body} compact />
-            </ArticleCard>
-          )}
-        />
-      ) : props.tab === "Reviews" ? (
-        <StackedList
-          empty="No reviews"
-          items={detail.reviews}
-          render={(review) => (
-            <ArticleCard key={review.id} title={review.author?.login ?? "unknown"} meta={formatReviewMeta(review.state, review.submittedAt)}>
-              <MarkdownBlock value={review.body || "No review body."} compact />
-            </ArticleCard>
-          )}
-        />
-      ) : props.tab === "Files" ? (
-        <ChangedFilesDiffList files={detail.files} theme={props.theme} />
-      ) : props.tab === "Commits" ? (
-        <StackedList
-          empty="No commits"
-          items={detail.commits}
-          render={(commit) => (
-            <div className="commit-row" key={commit.oid}>
-              <GitBranch size={15} />
-              <span>{commit.messageHeadline}</span>
-              <button
-                type="button"
-                className="commit-link"
-                title="Open commit in GitHub"
-                onClick={() => props.onOpenGithubUrl(commit.url)}
-              >
-                {shortSha(commit.oid)}
-              </button>
-            </div>
-          )}
-        />
-      ) : (
-        <ChecksList
-          checks={detail.checks}
-          workflowRuns={props.workflowRuns}
-          onOpenWorkflowRun={props.onOpenWorkflowRunFromCheck}
-        />
-      )}
+      <div className="detail-body-scroll">
+        {!detail ? (
+          <Skeleton />
+        ) : props.tab === "Description" ? (
+          <MarkdownBlock value={detail.body || "No description."} />
+        ) : props.tab === "Comments" ? (
+          <StackedList
+            empty="No comments"
+            items={detail.comments}
+            render={(comment) => (
+              <ArticleCard key={comment.id} title={comment.author?.login ?? "unknown"} meta={formatRelative(comment.updatedAt ?? comment.createdAt)}>
+                <MarkdownBlock value={comment.body} compact />
+              </ArticleCard>
+            )}
+          />
+        ) : props.tab === "Reviews" ? (
+          <StackedList
+            empty="No reviews"
+            items={detail.reviews}
+            render={(review) => (
+              <ArticleCard key={review.id} title={review.author?.login ?? "unknown"} meta={formatReviewMeta(review.state, review.submittedAt)}>
+                <MarkdownBlock value={review.body || "No review body."} compact />
+              </ArticleCard>
+            )}
+          />
+        ) : props.tab === "Files" ? (
+          <ChangedFilesDiffList files={detail.files} theme={props.theme} />
+        ) : props.tab === "Commits" ? (
+          <StackedList
+            empty="No commits"
+            items={detail.commits}
+            render={(commit) => (
+              <div className="commit-row" key={commit.oid}>
+                <GitBranch size={15} />
+                <span>{commit.messageHeadline}</span>
+                <button
+                  type="button"
+                  className="commit-link"
+                  title="Open commit in GitHub"
+                  onClick={() => props.onOpenGithubUrl(commit.url)}
+                >
+                  {shortSha(commit.oid)}
+                </button>
+              </div>
+            )}
+          />
+        ) : (
+          <ChecksList
+            checks={detail.checks}
+            workflowRuns={props.workflowRuns}
+            onOpenWorkflowRun={props.onOpenWorkflowRunFromCheck}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -2820,56 +2824,60 @@ function WorkflowContent(props: {
   }, [props.workflow.id]);
 
   return (
-    <div className="content-scroll">
-      <div className="detail-heading row-heading">
-        <div>
-          <span className="eyebrow">Workflow</span>
-          <h1>{props.workflow.name}</h1>
+    <div className="content-detail-shell">
+      <div className="detail-fixed">
+        <div className="detail-heading row-heading">
+          <div>
+            <span className="eyebrow">Workflow</span>
+            <h1>{props.workflow.name}</h1>
+          </div>
+          <button className="primary-button inline" onClick={() => props.onRun(props.workflow)}>
+            <Play size={15} />
+            Run
+          </button>
         </div>
-        <button className="primary-button inline" onClick={() => props.onRun(props.workflow)}>
-          <Play size={15} />
-          Run
-        </button>
+        <TabBar tabs={["Description", "Runs"]} selected={tab} onSelect={setTab} />
       </div>
-      <TabBar tabs={["Description", "Runs"]} selected={tab} onSelect={setTab} />
-      {tab === "Description" ? (
-        <div className="stat-grid">
-          <div className="stat">
-            <span>State</span>
-            <strong>{props.workflow.state}</strong>
+      <div className="detail-body-scroll">
+        {tab === "Description" ? (
+          <div className="stat-grid">
+            <div className="stat">
+              <span>State</span>
+              <strong>{props.workflow.state}</strong>
+            </div>
+            <div className="stat">
+              <span>Path</span>
+              <strong>{props.workflow.path}</strong>
+            </div>
+            <div className="stat">
+              <span>Default ref</span>
+              <strong>{props.repo.defaultBranch ?? "main"}</strong>
+            </div>
+            <div className="stat">
+              <span>Updated</span>
+              <strong>{formatRelative(props.workflow.updatedAt)}</strong>
+            </div>
           </div>
-          <div className="stat">
-            <span>Path</span>
-            <strong>{props.workflow.path}</strong>
-          </div>
-          <div className="stat">
-            <span>Default ref</span>
-            <strong>{props.repo.defaultBranch ?? "main"}</strong>
-          </div>
-          <div className="stat">
-            <span>Updated</span>
-            <strong>{formatRelative(props.workflow.updatedAt)}</strong>
-          </div>
-        </div>
-      ) : (
-        <StackedList
-          empty="No runs for this workflow"
-          items={relatedRuns}
-          render={(run) => (
-            <button className="workflow-run-row" key={run.id} onClick={() => props.onSelectRun(run)}>
-              <StatusIcon status={run.status} conclusion={run.conclusion} />
-              <span className="focus-main">
-                <span className="focus-title">{run.displayTitle || run.name || `Run ${run.id}`}</span>
-                <span className="focus-meta">{run.branch ?? "branch"} {shortSha(run.commitSha)}</span>
-              </span>
-              <span className="muted-line">{formatRelative(run.runStartedAt ?? run.createdAt)}</span>
-              <span className={cx("state-chip", statusTone(run.status, run.conclusion))}>
-                {run.conclusion ?? run.status ?? "run"}
-              </span>
-            </button>
-          )}
-        />
-      )}
+        ) : (
+          <StackedList
+            empty="No runs for this workflow"
+            items={relatedRuns}
+            render={(run) => (
+              <button className="workflow-run-row" key={run.id} onClick={() => props.onSelectRun(run)}>
+                <StatusIcon status={run.status} conclusion={run.conclusion} />
+                <span className="focus-main">
+                  <span className="focus-title">{run.displayTitle || run.name || `Run ${run.id}`}</span>
+                  <span className="focus-meta">{run.branch ?? "branch"} {shortSha(run.commitSha)}</span>
+                </span>
+                <span className="muted-line">{formatRelative(run.runStartedAt ?? run.createdAt)}</span>
+                <span className={cx("state-chip", statusTone(run.status, run.conclusion))}>
+                  {run.conclusion ?? run.status ?? "run"}
+                </span>
+              </button>
+            )}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -2886,79 +2894,83 @@ function WorkflowRunContent(props: {
   const tabs = ["Summary", "Jobs", "Artifacts", "Logs"];
 
   return (
-    <div className="content-scroll">
-      <div className="detail-heading">
-        <div>
-          <span className="eyebrow">Workflow run</span>
-          <h1>{run.displayTitle || run.name || `Run ${run.id}`}</h1>
+    <div className="content-detail-shell">
+      <div className="detail-fixed">
+        <div className="detail-heading">
+          <div>
+            <span className="eyebrow">Workflow run</span>
+            <h1>{run.displayTitle || run.name || `Run ${run.id}`}</h1>
+          </div>
+          <span className={cx("state-chip large-chip", statusTone(run.status, run.conclusion))}>
+            {run.conclusion ?? run.status ?? "run"}
+          </span>
         </div>
-        <span className={cx("state-chip large-chip", statusTone(run.status, run.conclusion))}>
-          {run.conclusion ?? run.status ?? "run"}
-        </span>
+        <TabBar tabs={tabs} selected={props.tab} onSelect={props.onTab} />
       </div>
-      <TabBar tabs={tabs} selected={props.tab} onSelect={props.onTab} />
-      {!props.detail ? (
-        <Skeleton />
-      ) : props.tab === "Summary" ? (
-        <div className="stat-grid">
-          <div className="stat">
-            <span>Trigger</span>
-            <strong>{run.event ?? "unknown"}</strong>
-          </div>
-          <div className="stat">
-            <span>Branch</span>
-            <strong>{run.branch ?? "unknown"}</strong>
-          </div>
-          <div className="stat">
-            <span>Commit</span>
-            <strong>{shortSha(run.commitSha)}</strong>
-          </div>
-          <div className="stat">
-            <span>Duration</span>
-            <strong>{formatDuration(run.durationMs) || "running"}</strong>
-          </div>
-          <div className="stat">
-            <span>Started</span>
-            <strong>{formatRelative(run.runStartedAt)}</strong>
-          </div>
-          <div className="stat">
-            <span>Actor</span>
-            <strong>{run.actor?.login ?? "unknown"}</strong>
-          </div>
-        </div>
-      ) : props.tab === "Jobs" ? (
-        <StackedList
-          empty="No jobs"
-          items={props.detail.jobs}
-          render={(job) => (
-            <ArticleCard key={job.id} title={job.name} meta={job.conclusion ?? job.status ?? ""}>
-              {job.steps.map((step) => (
-                <div className="check-row" key={`${job.id}-${step.number}-${step.name}`}>
-                  <StatusIcon status={step.status} conclusion={step.conclusion} />
-                  <span>{step.name}</span>
-                  <span className={cx("state-chip", statusTone(step.status, step.conclusion))}>
-                    {step.conclusion ?? step.status ?? "step"}
-                  </span>
-                </div>
-              ))}
-            </ArticleCard>
-          )}
-        />
-      ) : props.tab === "Artifacts" ? (
-        <StackedList
-          empty="No artifacts"
-          items={props.detail.artifacts}
-          render={(artifact) => (
-            <div className="file-row" key={artifact.id}>
-              <FileText size={15} />
-              <span>{artifact.name}</span>
-              <span className="muted-line">{artifact.expired ? "expired" : formatRelative(artifact.createdAt)}</span>
+      <div className="detail-body-scroll">
+        {!props.detail ? (
+          <Skeleton />
+        ) : props.tab === "Summary" ? (
+          <div className="stat-grid">
+            <div className="stat">
+              <span>Trigger</span>
+              <strong>{run.event ?? "unknown"}</strong>
             </div>
-          )}
-        />
-      ) : (
-        <WorkflowLogsList focusedJobId={props.focusedJobId ?? null} jobs={props.detail.jobs} repo={props.repo} />
-      )}
+            <div className="stat">
+              <span>Branch</span>
+              <strong>{run.branch ?? "unknown"}</strong>
+            </div>
+            <div className="stat">
+              <span>Commit</span>
+              <strong>{shortSha(run.commitSha)}</strong>
+            </div>
+            <div className="stat">
+              <span>Duration</span>
+              <strong>{formatDuration(run.durationMs) || "running"}</strong>
+            </div>
+            <div className="stat">
+              <span>Started</span>
+              <strong>{formatRelative(run.runStartedAt)}</strong>
+            </div>
+            <div className="stat">
+              <span>Actor</span>
+              <strong>{run.actor?.login ?? "unknown"}</strong>
+            </div>
+          </div>
+        ) : props.tab === "Jobs" ? (
+          <StackedList
+            empty="No jobs"
+            items={props.detail.jobs}
+            render={(job) => (
+              <ArticleCard key={job.id} title={job.name} meta={job.conclusion ?? job.status ?? ""}>
+                {job.steps.map((step) => (
+                  <div className="check-row" key={`${job.id}-${step.number}-${step.name}`}>
+                    <StatusIcon status={step.status} conclusion={step.conclusion} />
+                    <span>{step.name}</span>
+                    <span className={cx("state-chip", statusTone(step.status, step.conclusion))}>
+                      {step.conclusion ?? step.status ?? "step"}
+                    </span>
+                  </div>
+                ))}
+              </ArticleCard>
+            )}
+          />
+        ) : props.tab === "Artifacts" ? (
+          <StackedList
+            empty="No artifacts"
+            items={props.detail.artifacts}
+            render={(artifact) => (
+              <div className="file-row" key={artifact.id}>
+                <FileText size={15} />
+                <span>{artifact.name}</span>
+                <span className="muted-line">{artifact.expired ? "expired" : formatRelative(artifact.createdAt)}</span>
+              </div>
+            )}
+          />
+        ) : (
+          <WorkflowLogsList focusedJobId={props.focusedJobId ?? null} jobs={props.detail.jobs} repo={props.repo} />
+        )}
+      </div>
     </div>
   );
 }
