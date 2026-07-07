@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, nativeImage, safeStorage, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, shell, type MenuItemConstructorOptions } from "electron";
 import { Octokit } from "@octokit/rest";
 import { graphql } from "@octokit/graphql";
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,6 +53,7 @@ app.setName(appDisplayName);
 app.setAppUserModelId("com.magnusopera.forge");
 
 let mainWindow: BrowserWindow | null = null;
+let aboutWindow: BrowserWindow | null = null;
 let octokitClient: Octokit | null = null;
 let graphqlClient: GraphqlClient | null = null;
 let activeTokenHash: string | null = null;
@@ -118,6 +120,175 @@ function configureAppPresentation(): void {
   if (process.platform === "darwin" && app.dock && !icon.isEmpty()) {
     app.dock.setIcon(icon);
   }
+}
+
+function loadAppIconDataUrl(): string {
+  try {
+    return `data:image/png;base64,${readFileSync(appIconPath("png")).toString("base64")}`;
+  } catch {
+    return "";
+  }
+}
+
+function showAboutWindow(): void {
+  if (aboutWindow) {
+    aboutWindow.show();
+    aboutWindow.focus();
+    return;
+  }
+
+  const iconDataUrl = loadAppIconDataUrl();
+
+  aboutWindow = new BrowserWindow({
+    width: 440,
+    height: 270,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: `About ${appDisplayName}`,
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 16 },
+    backgroundColor: "#eef0f3",
+    parent: mainWindow ?? undefined,
+    show: false,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  aboutWindow.once("ready-to-show", () => {
+    aboutWindow?.show();
+  });
+  aboutWindow.on("closed", () => {
+    aboutWindow = null;
+  });
+
+  const version = app.getVersion();
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        padding-top: 20px;
+        background: #eef0f3;
+        color: #202124;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        user-select: none;
+      }
+
+      main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      img {
+        width: 96px;
+        height: 96px;
+        margin-bottom: 4px;
+        object-fit: contain;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.3;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="${iconDataUrl}" alt="" />
+      <h1>${appDisplayName}</h1>
+      <p>Version ${version} (${version})</p>
+    </main>
+  </body>
+</html>`;
+
+  void aboutWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+}
+
+function createApplicationMenu(): void {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  const viewMenu: MenuItemConstructorOptions[] = [
+    ...(isDev
+      ? ([
+          { role: "reload" },
+          { role: "forceReload" },
+          { role: "toggleDevTools" },
+          { type: "separator" }
+        ] satisfies MenuItemConstructorOptions[])
+      : []),
+    { role: "resetZoom" },
+    { role: "zoomIn" },
+    { role: "zoomOut" },
+    { type: "separator" },
+    { role: "togglefullscreen" }
+  ];
+
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: appDisplayName,
+      submenu: [
+        { label: `About ${appDisplayName}`, click: () => showAboutWindow() },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" }
+      ]
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "pasteAndMatchStyle" },
+        { role: "delete" },
+        { role: "selectAll" }
+      ]
+    },
+    { label: "View", submenu: viewMenu },
+    {
+      label: "Window",
+      submenu: [{ role: "close" }, { role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }]
+    }
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function tokenPath(): string {
@@ -1461,6 +1632,7 @@ registerIpc();
 app.whenReady().then(async () => {
   await migrateLegacyUserData();
   configureAppPresentation();
+  createApplicationMenu();
   createWindow();
 
   app.on("activate", () => {

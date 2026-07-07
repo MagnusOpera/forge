@@ -386,12 +386,6 @@ input {
   font-weight: 650;
 }
 
-.brand-icon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-}
-
 .pane-title,
 .content-title {
   color: var(--text-strong);

@@ -40,7 +40,6 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
-import forgeIconUrl from "../assets/forge-icon.svg";
 import type {
   AuthStatus,
   CheckSummary,
@@ -1633,7 +1632,7 @@ function Sidebar(props: SidebarProps) {
     >
       <div className="pane-header app-drag">
         <div className="brand-mark">
-          <img className="brand-icon" src={forgeIconUrl} alt="" aria-hidden="true" />
+          <Github size={18} />
           <span>Forge</span>
         </div>
         <button className="icon-button" title="Collapse sidebar" onClick={props.onToggle}>
