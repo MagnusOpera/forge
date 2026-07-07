@@ -1818,6 +1818,7 @@ function RepoSection(props: {
               onDragEnd={clearDragState}
               onSelect={() => props.onSelectRepo(repo)}
               onToggleFavorite={() => props.onToggleFavorite(repo)}
+              showOwner
             />
           );
         })
@@ -1835,6 +1836,7 @@ function RepoButton(props: {
   draggable?: boolean;
   dragging?: boolean;
   dragOver?: boolean;
+  showOwner?: boolean;
   onDragStart?(event: React.DragEvent<HTMLDivElement>): void;
   onDragOver?(event: React.DragEvent<HTMLDivElement>): void;
   onDrop?(event: React.DragEvent<HTMLDivElement>): void;
@@ -1842,6 +1844,16 @@ function RepoButton(props: {
   onSelect(): void;
   onToggleFavorite(): void;
 }) {
+  const displayName = props.showOwner ? props.repo.fullName : props.repo.name;
+  const repoLabel = props.showOwner ? (
+    <>
+      <span className="repo-owner">{props.repo.owner}/</span>
+      <span className="repo-short-name">{props.repo.name}</span>
+    </>
+  ) : (
+    <span className="repo-short-name">{props.repo.name}</span>
+  );
+
   return (
     <div
       className={cx(
@@ -1858,7 +1870,7 @@ function RepoButton(props: {
       onDragEnd={props.onDragEnd}
     >
       <button className="repo-button" onClick={props.onSelect}>
-        <span className="repo-name">{props.repo.name}</span>
+        <span className="repo-name" title={displayName}>{repoLabel}</span>
         <span className="repo-meta">{formatRelative(props.repo.updatedAt)}</span>
       </button>
       <button className="star-button" title={props.favorite ? "Remove favorite" : "Add favorite"} onClick={props.onToggleFavorite}>

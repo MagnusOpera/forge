@@ -840,6 +840,10 @@ input {
   font-size: 12px;
 }
 
+.repo-short-name {
+  font-weight: 700;
+}
+
 .repo-meta {
   flex: 0 0 auto;
   color: var(--text-dim);
