@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.5]
+
+
 - Added Homebrew tap cask publishing for signed Forge releases.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.4...0.0.5
 
 ## [0.0.4]
 
