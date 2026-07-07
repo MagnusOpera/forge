@@ -87,6 +87,8 @@
   --terminal-border: #444c56;
   --terminal-text: #adbac7;
   --terminal-muted: #768390;
+  --inline-code-bg: #373e47;
+  --inline-code-text: var(--text-strong);
   color-scheme: var(--color-scheme);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -186,6 +188,8 @@
   --terminal-border: #242a31;
   --terminal-text: #e5e7eb;
   --terminal-muted: #98a2ad;
+  --inline-code-bg: var(--hover-bg);
+  --inline-code-text: var(--text-strong);
 }
 
 .app-shell[data-theme="dark"] {
@@ -1277,7 +1281,7 @@ p {
 }
 
 .markdown-block a {
-  color: var(--code-text);
+  color: var(--inline-code-text);
   text-decoration: none;
   overflow-wrap: anywhere;
 }
@@ -1312,8 +1316,8 @@ p {
   max-width: 100%;
   padding: 2px 5px;
   border-radius: 5px;
-  background: var(--hover-bg);
-  color: var(--code-text);
+  background: var(--inline-code-bg);
+  color: var(--inline-code-text);
   overflow-wrap: anywhere;
   white-space: normal;
 }
