@@ -25,6 +25,15 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install signing dependencies
+        run: npm ci
+
       - name: Download unsigned macOS artifact
         uses: robinraju/release-downloader@v1.11
         with:
@@ -65,21 +74,8 @@ jobs:
           MAC_DEV_TEAM_ID: ${{ secrets.MAC_DEV_TEAM_ID }}
         run: |
           set -euo pipefail
-          if [[ -z "${MAC_DEV_TEAM_ID:-}" ]]; then
-            echo "::error::MAC_DEV_TEAM_ID secret is not configured."
-            exit 1
-          fi
 
-          codesign \
-            --force \
-            --deep \
-            --timestamp \
-            --options runtime \
-            --entitlements build/entitlements.mac.plist \
-            --sign "Developer ID Application: Magnus Opera (${MAC_DEV_TEAM_ID})" \
-            "${APP_PATH}"
-
-          codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
+          node .github/scripts/sign-electron-app.mjs
 
       - name: Pack app for notarization
         shell: bash
@@ -101,13 +97,39 @@ jobs:
             exit 1
           fi
 
-          xcrun notarytool submit ".out/release/forge-${RELEASE_TAG}-mac-arm64.zip" \
+          set +e
+          submit_output="$(xcrun notarytool submit ".out/release/forge-${RELEASE_TAG}-mac-arm64.zip" \
             --apple-id "${MAC_DEV_LOGIN}" \
             --password "${MAC_DEV_PASSWORD}" \
             --team-id "${MAC_DEV_TEAM_ID}" \
-            --wait
+            --wait \
+            --output-format json 2>&1)"
+          submit_status=$?
+          set -e
 
-          xcrun stapler staple "${APP_PATH}"
+          printf '%s\n' "${submit_output}"
+
+          submission_id="$(printf '%s\n' "${submit_output}" | node -e 'const fs = require("node:fs"); const input = fs.readFileSync(0, "utf8"); try { const data = JSON.parse(input); process.stdout.write(data.id || ""); } catch { process.exit(0); }')"
+          notarization_status="$(printf '%s\n' "${submit_output}" | node -e 'const fs = require("node:fs"); const input = fs.readFileSync(0, "utf8"); try { const data = JSON.parse(input); process.stdout.write(data.status || ""); } catch { process.exit(0); }')"
+
+          if [[ -n "${submission_id}" && "${notarization_status}" != "Accepted" ]]; then
+            echo "::group::Apple notarization log"
+            xcrun notarytool log \
+              --apple-id "${MAC_DEV_LOGIN}" \
+              --password "${MAC_DEV_PASSWORD}" \
+              --team-id "${MAC_DEV_TEAM_ID}" \
+              "${submission_id}" \
+              notary-log.json || true
+            if [[ -f notary-log.json ]]; then
+              cat notary-log.json
+            fi
+            echo "::endgroup::"
+          fi
+
+          if [[ "${submit_status}" -ne 0 || "${notarization_status}" != "Accepted" ]]; then
+            echo "::error::Notarization failed with status '${notarization_status:-unknown}'."
+            exit 1
+          fi
 
       - name: Pack signed app
         shell: bash

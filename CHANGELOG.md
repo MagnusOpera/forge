@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Switched release signing to Electron-aware macOS signing and made notarization failures print Apple's rejection log without stapling.
+
 ## [0.0.2]
 
 
