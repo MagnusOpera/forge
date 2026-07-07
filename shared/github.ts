@@ -1,0 +1,244 @@
+export type CacheSource = "network" | "cache";
+
+export interface CacheEnvelope<T> {
+  data: T;
+  fetchedAt: string;
+  stale: boolean;
+  source: CacheSource;
+}
+
+export interface AuthStatus {
+  configured: boolean;
+  encryptionAvailable: boolean;
+}
+
+export interface RepoRef {
+  owner: string;
+  name: string;
+}
+
+export interface ActorSummary {
+  login: string;
+  avatarUrl?: string | null;
+  url?: string | null;
+}
+
+export interface LabelSummary {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface RepoSummary extends RepoRef {
+  id: string;
+  fullName: string;
+  description?: string | null;
+  defaultBranch?: string | null;
+  isPrivate: boolean;
+  isArchived: boolean;
+  isFork: boolean;
+  ownerAvatarUrl?: string | null;
+  updatedAt?: string | null;
+  pushedAt?: string | null;
+  url: string;
+}
+
+export interface OrganizationSummary {
+  id: string;
+  login: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+  url: string;
+}
+
+export type PullRequestReviewDecision =
+  | "APPROVED"
+  | "CHANGES_REQUESTED"
+  | "REVIEW_REQUIRED"
+  | null;
+
+export type PullRequestMergeable = "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null;
+
+export type CheckState =
+  | "SUCCESS"
+  | "FAILURE"
+  | "ERROR"
+  | "PENDING"
+  | "EXPECTED"
+  | "NEUTRAL"
+  | "CANCELLED"
+  | "SKIPPED"
+  | "TIMED_OUT"
+  | "ACTION_REQUIRED"
+  | "UNKNOWN"
+  | null;
+
+export interface PullRequestSummary {
+  id: string;
+  number: number;
+  title: string;
+  author?: ActorSummary | null;
+  labels: LabelSummary[];
+  state: string;
+  isDraft: boolean;
+  reviewDecision: PullRequestReviewDecision;
+  mergeable: PullRequestMergeable;
+  ciState: CheckState;
+  headRefName: string;
+  baseRefName: string;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+}
+
+export interface IssueSummary {
+  id: string;
+  number: number;
+  title: string;
+  author?: ActorSummary | null;
+  labels: LabelSummary[];
+  state: string;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+}
+
+export interface WorkflowSummary {
+  id: number;
+  nodeId?: string;
+  name: string;
+  path: string;
+  state: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  url: string;
+  htmlUrl?: string | null;
+  badgeUrl?: string | null;
+}
+
+export interface WorkflowRunSummary {
+  id: number;
+  workflowId: number;
+  name?: string | null;
+  displayTitle?: string | null;
+  status?: string | null;
+  conclusion?: string | null;
+  event?: string | null;
+  branch?: string | null;
+  commitSha?: string | null;
+  commitMessage?: string | null;
+  actor?: ActorSummary | null;
+  runStartedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  durationMs?: number | null;
+  url: string;
+}
+
+export interface TimelineComment {
+  id: string;
+  author?: ActorSummary | null;
+  body: string;
+  createdAt: string;
+  updatedAt?: string | null;
+  url?: string | null;
+}
+
+export interface PullRequestReview {
+  id: string;
+  state: string;
+  author?: ActorSummary | null;
+  body?: string | null;
+  submittedAt?: string | null;
+  url?: string | null;
+}
+
+export interface CommitSummary {
+  oid: string;
+  messageHeadline: string;
+  authoredDate?: string | null;
+  authorName?: string | null;
+  url: string;
+}
+
+export interface ChangedFileSummary {
+  path: string;
+  additions: number;
+  deletions: number;
+  changeType: string;
+}
+
+export interface CheckSummary {
+  name: string;
+  status?: string | null;
+  conclusion?: string | null;
+  url?: string | null;
+}
+
+export interface PullRequestDetail extends PullRequestSummary {
+  body: string;
+  comments: TimelineComment[];
+  reviews: PullRequestReview[];
+  commits: CommitSummary[];
+  files: ChangedFileSummary[];
+  checks: CheckSummary[];
+}
+
+export interface WorkflowJobSummary {
+  id: number;
+  name: string;
+  status?: string | null;
+  conclusion?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  url?: string | null;
+  steps: Array<{
+    name: string;
+    status?: string | null;
+    conclusion?: string | null;
+    number?: number;
+  }>;
+}
+
+export interface ArtifactSummary {
+  id: number;
+  name: string;
+  sizeInBytes?: number | null;
+  expired?: boolean | null;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  url?: string | null;
+}
+
+export interface WorkflowRunDetail extends WorkflowRunSummary {
+  jobs: WorkflowJobSummary[];
+  artifacts: ArtifactSummary[];
+}
+
+export interface DispatchWorkflowPayload {
+  repo: RepoRef;
+  workflowId: number | string;
+  ref: string;
+  inputs?: Record<string, string>;
+}
+
+export interface GithubFocusApi {
+  getAuthStatus(): Promise<AuthStatus>;
+  saveToken(token: string): Promise<AuthStatus>;
+  clearToken(): Promise<AuthStatus>;
+  getRepositories(): Promise<CacheEnvelope<RepoSummary[]>>;
+  getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>>;
+  getRecentRepos(): Promise<CacheEnvelope<RepoSummary[]>>;
+  getOrganizations(): Promise<CacheEnvelope<OrganizationSummary[]>>;
+  getRepo(repo: RepoRef): Promise<CacheEnvelope<RepoSummary>>;
+  getPullRequests(repo: RepoRef): Promise<CacheEnvelope<PullRequestSummary[]>>;
+  getIssues(repo: RepoRef): Promise<CacheEnvelope<IssueSummary[]>>;
+  getWorkflows(repo: RepoRef): Promise<CacheEnvelope<WorkflowSummary[]>>;
+  getWorkflowRuns(repo: RepoRef): Promise<CacheEnvelope<WorkflowRunSummary[]>>;
+  getPullRequest(repo: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>>;
+  getWorkflowRun(repo: RepoRef, runId: number): Promise<CacheEnvelope<WorkflowRunDetail>>;
+  dispatchWorkflow(payload: DispatchWorkflowPayload): Promise<void>;
+  openInGitHub(url: string): Promise<void>;
+  onCacheUpdated(callback: (key: string) => void): () => void;
+  platform: string;
+}
