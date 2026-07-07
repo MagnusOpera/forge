@@ -1,6 +1,8 @@
 import {
   Activity,
   AlertCircle,
+  ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -88,9 +90,23 @@ interface PaletteItem {
 
 type ThemeMode = "dark" | "light";
 type SidebarRepoTab = "favorites" | "all";
+type ProjectFocusView = "pull-requests" | "workflow-runs" | "issues" | "workflows";
+type StoredProjectFocusView = ProjectFocusView | "starred-actions";
+type ProjectWorkflowTab = "favorites" | "all";
 type PatchDiffOptions = NonNullable<PatchDiffProps<unknown>["options"]>;
+type NavigationEntry = {
+  focusView: ProjectFocusView;
+  repo: RepoSummary | null;
+  selection: ContentSelection;
+  workflowTab: ProjectWorkflowTab;
+};
+type NavigationState = {
+  entries: NavigationEntry[];
+  index: number;
+};
 type WorkflowJobLogLoadState = {
   loading: boolean;
+  refreshing?: boolean;
   error?: string | null;
   detail?: WorkflowJobLogDetail | null;
 };
@@ -209,6 +225,26 @@ function workflowRunFallbackFromCheck(repo: RepoRef, check: CheckSummary): Workf
   };
 }
 
+function selectionRouteKey(selection: ContentSelection): string {
+  if (selection.kind === "pr") {
+    return `pr:${selection.pr.number}`;
+  }
+  if (selection.kind === "issue") {
+    return `issue:${selection.issue.number}`;
+  }
+  if (selection.kind === "run") {
+    return `run:${selection.run.id}`;
+  }
+  if (selection.kind === "workflow") {
+    return `workflow:${selection.workflow.id}`;
+  }
+  return "repo";
+}
+
+function navigationEntryKey(entry: NavigationEntry): string {
+  return `${entry.repo ? repoKey(entry.repo) : "none"}:${selectionRouteKey(entry.selection)}`;
+}
+
 function uniqueRepos(repos: RepoSummary[]): RepoSummary[] {
   const seen = new Set<string>();
   return repos.filter((repo) => {
@@ -312,6 +348,10 @@ function statusTone(status?: string | null, conclusion?: string | null): string 
   return "unknown";
 }
 
+function isLiveStatus(status?: string | null): boolean {
+  return ["queued", "waiting", "pending", "requested", "in_progress"].includes((status ?? "").toLowerCase());
+}
+
 function StatusIcon({ status, conclusion }: { status?: string | null; conclusion?: string | null }) {
   const tone = statusTone(status, conclusion);
   if (tone === "good") {
@@ -403,6 +443,14 @@ export function App() {
     "github-focus:starred-workflows",
     {}
   );
+  const [storedProjectFocusView, setStoredProjectFocusView] = useStoredState<StoredProjectFocusView>(
+    "github-focus:project-focus-view",
+    "pull-requests"
+  );
+  const [projectWorkflowTab, setProjectWorkflowTab] = useStoredState<ProjectWorkflowTab>(
+    "github-focus:project-workflow-tab",
+    "favorites"
+  );
   const [theme, setTheme] = useStoredState<ThemeMode>("github-focus:theme", "dark");
   const [accentColor, setAccentColor] = useStoredState<string>("github-focus:accent-color", defaultAccentColor);
   const [leftWidth, setLeftWidth] = useStoredState("github-focus:left-width", 280);
@@ -411,7 +459,9 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const [navigation, setNavigation] = useState<NavigationState>({ entries: [], index: -1 });
   const lastGPress = useRef(0);
+  const restoringNavigation = useRef(false);
 
   const allRepos = useMemo(() => uniqueRepos([...(selectedRepo ? [selectedRepo] : []), ...starredRepos, ...recentRepos, ...repositories]), [
     selectedRepo,
@@ -430,6 +480,8 @@ export function App() {
   const selectedRepoKey = selectedRepo ? repoKey(selectedRepo) : "";
   const selectedWorkflowStars = selectedRepoKey ? starredWorkflowKeys[selectedRepoKey] ?? [] : [];
   const starredWorkflows = workflows.filter((workflow) => selectedWorkflowStars.includes(workflow.id));
+  const projectFocusView: ProjectFocusView =
+    storedProjectFocusView === "starred-actions" ? "workflows" : storedProjectFocusView;
 
   const visibleRepos = useMemo(() => {
     const needle = sidebarSearch.trim().toLowerCase();
@@ -450,22 +502,31 @@ export function App() {
   }, [visibleRepos]);
 
   const middleItems = useMemo<MiddleItem[]>(() => {
-    return [
-      ...starredWorkflows.map((workflow) => ({
-        id: `workflow:${workflow.id}`,
-        kind: "workflow" as const,
-        workflow
-      })),
-      ...pullRequests.map((pr) => ({ id: `pr:${pr.number}`, kind: "pr" as const, pr })),
-      ...workflowRuns.map((run) => ({ id: `run:${run.id}`, kind: "run" as const, run })),
-      ...issues.map((issue) => ({ id: `issue:${issue.number}`, kind: "issue" as const, issue })),
-      ...workflows
-        .filter((workflow) => !selectedWorkflowStars.includes(workflow.id))
-        .map((workflow) => ({ id: `workflow:${workflow.id}`, kind: "workflow" as const, workflow }))
-    ];
-  }, [issues, pullRequests, selectedWorkflowStars, starredWorkflows, workflowRuns, workflows]);
+    if (projectFocusView === "workflow-runs") {
+      return workflowRuns.map((run) => ({ id: `run:${run.id}`, kind: "run" as const, run }));
+    }
+    if (projectFocusView === "issues") {
+      return issues.map((issue) => ({ id: `issue:${issue.number}`, kind: "issue" as const, issue }));
+    }
+    if (projectFocusView === "workflows") {
+      const visibleWorkflows = projectWorkflowTab === "favorites" ? starredWorkflows : workflows;
+      return visibleWorkflows.map((workflow) => ({ id: `workflow:${workflow.id}`, kind: "workflow" as const, workflow }));
+    }
+    return pullRequests.map((pr) => ({ id: `pr:${pr.number}`, kind: "pr" as const, pr }));
+  }, [issues, projectFocusView, projectWorkflowTab, pullRequests, starredWorkflows, workflowRuns, workflows]);
 
   const currentGithubUrl = openUrlForSelection(selection, selectedRepo);
+  const currentNavigationEntry = useMemo<NavigationEntry>(
+    () => ({
+      focusView: projectFocusView,
+      repo: selectedRepo,
+      selection,
+      workflowTab: projectWorkflowTab
+    }),
+    [projectFocusView, projectWorkflowTab, selectedRepo, selection]
+  );
+  const canNavigateBack = navigation.index > 0;
+  const canNavigateForward = navigation.index >= 0 && navigation.index < navigation.entries.length - 1;
 
   const flash = useCallback((message: string) => {
     setToast(message);
@@ -646,6 +707,50 @@ export function App() {
     void api.openInGitHub(url);
   }, []);
 
+  const restoreNavigationEntry = useCallback(
+    (entry: NavigationEntry) => {
+      restoringNavigation.current = true;
+      setSelectedRepo(entry.repo);
+      setSelection(entry.selection);
+      setStoredProjectFocusView(entry.focusView);
+      setProjectWorkflowTab(entry.workflowTab);
+      if (entry.selection.kind === "pr") {
+        setPrTab("Description");
+      }
+      if (entry.selection.kind === "run") {
+        const restoredRun = entry.selection.run;
+        setRunTab("Summary");
+        setWorkflowRuns((current) =>
+          current.some((run) => run.id === restoredRun.id)
+            ? current
+            : [restoredRun, ...current]
+        );
+      }
+      if (entry.selection.kind === "repo") {
+        setPrDetail(null);
+        setRunDetail(null);
+      }
+    },
+    [setProjectWorkflowTab, setStoredProjectFocusView]
+  );
+
+  const navigateHistory = useCallback(
+    (delta: -1 | 1) => {
+      const nextIndex = navigation.index + delta;
+      const entry = navigation.entries[nextIndex];
+      if (!entry) {
+        return;
+      }
+
+      setNavigation((current) => ({
+        entries: current.entries,
+        index: nextIndex
+      }));
+      restoreNavigationEntry(entry);
+    },
+    [navigation, restoreNavigationEntry]
+  );
+
   const openWorkflowRunFromCheck = useCallback(
     (check: CheckSummary) => {
       if (!selectedRepo || !check.workflowRunId) {
@@ -658,10 +763,12 @@ export function App() {
       const run =
         workflowRuns.find((item) => item.id === check.workflowRunId)
         ?? workflowRunFallbackFromCheck(selectedRepo, check);
+      setStoredProjectFocusView("workflow-runs");
+      setWorkflowRuns((current) => (current.some((item) => item.id === run.id) ? current : [run, ...current]));
       setSelection({ kind: "run", run, focusedJobId: null });
       setRunTab("Summary");
     },
-    [selectedRepo, workflowRuns]
+    [selectedRepo, setStoredProjectFocusView, workflowRuns]
   );
 
   const moveMiddleSelection = useCallback(
@@ -680,8 +787,13 @@ export function App() {
               : selection.kind === "workflow"
                 ? `workflow:${selection.workflow.id}`
                 : "";
-      const index = Math.max(0, middleItems.findIndex((item) => item.id === currentId));
-      const nextIndex = (index + delta + middleItems.length) % middleItems.length;
+      const index = middleItems.findIndex((item) => item.id === currentId);
+      const nextIndex =
+        index === -1
+          ? delta > 0
+            ? 0
+            : middleItems.length - 1
+          : (index + delta + middleItems.length) % middleItems.length;
       selectMiddleItem(middleItems[nextIndex]);
     },
     [middleItems, selectMiddleItem, selection]
@@ -795,6 +907,33 @@ export function App() {
   }, [auth?.configured, loadInitial]);
 
   useEffect(() => {
+    if (!currentNavigationEntry.repo) {
+      return;
+    }
+
+    if (restoringNavigation.current) {
+      restoringNavigation.current = false;
+      return;
+    }
+
+    setNavigation((current) => {
+      const active = current.entries[current.index];
+      const nextKey = navigationEntryKey(currentNavigationEntry);
+      if (active && navigationEntryKey(active) === nextKey) {
+        const entries = [...current.entries];
+        entries[current.index] = currentNavigationEntry;
+        return { entries, index: current.index };
+      }
+
+      const entries = [...current.entries.slice(0, current.index + 1), currentNavigationEntry].slice(-80);
+      return {
+        entries,
+        index: entries.length - 1
+      };
+    });
+  }, [currentNavigationEntry]);
+
+  useEffect(() => {
     if (selectedRepo && auth?.configured) {
       void loadProject(selectedRepo);
     }
@@ -897,6 +1036,18 @@ export function App() {
         return;
       }
 
+      if ((event.metaKey || event.ctrlKey) && event.key === "[") {
+        event.preventDefault();
+        navigateHistory(-1);
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key === "]") {
+        event.preventDefault();
+        navigateHistory(1);
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && ["1", "2", "3"].includes(event.key)) {
         event.preventDefault();
         const selector = event.key === "1" ? ".sidebar" : event.key === "2" ? ".project-pane" : ".content-pane";
@@ -939,7 +1090,7 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [moveMiddleSelection, openGithub, paletteOpen, selection.kind, setSidebarCollapsed]);
+  }, [moveMiddleSelection, navigateHistory, openGithub, paletteOpen, selection.kind, setSidebarCollapsed]);
 
   const saveToken = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1031,9 +1182,13 @@ export function App() {
         workflows={workflows}
         starredWorkflows={starredWorkflows}
         starredWorkflowIds={selectedWorkflowStars}
+        focusView={projectFocusView}
+        workflowTab={projectWorkflowTab}
         loading={projectLoading}
         error={projectError}
         selection={selection}
+        onFocusView={setStoredProjectFocusView}
+        onWorkflowTab={setProjectWorkflowTab}
         onRefresh={() => selectedRepo && loadProject(selectedRepo)}
         onToggleSidebar={() => setSidebarCollapsed(false)}
         onOpenGithub={openGithub}
@@ -1063,7 +1218,11 @@ export function App() {
         loading={contentLoading}
         error={contentError}
         theme={theme}
+        canNavigateBack={canNavigateBack}
+        canNavigateForward={canNavigateForward}
         accentColor={selectedAccent}
+        onNavigateBack={() => navigateHistory(-1)}
+        onNavigateForward={() => navigateHistory(1)}
         onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
         onAccentChange={setAccentColor}
         onOpenGithub={openGithub}
@@ -1312,9 +1471,13 @@ function ProjectPane(props: {
   workflows: WorkflowSummary[];
   starredWorkflows: WorkflowSummary[];
   starredWorkflowIds: number[];
+  focusView: ProjectFocusView;
+  workflowTab: ProjectWorkflowTab;
   loading: boolean;
   error: string | null;
   selection: ContentSelection;
+  onFocusView(view: ProjectFocusView): void;
+  onWorkflowTab(tab: ProjectWorkflowTab): void;
   onRefresh(): void;
   onToggleSidebar(): void;
   onOpenGithub(): void;
@@ -1338,6 +1501,18 @@ function ProjectPane(props: {
           {props.loading && <Loader2 className="spin" size={14} />}
         </div>
         <div className="header-actions">
+          <ProjectFocusToolbar
+            disabled={!props.repo}
+            view={props.focusView}
+            counts={{
+              "pull-requests": props.pullRequests.length,
+              "workflow-runs": props.workflowRuns.length,
+              issues: props.issues.length,
+              workflows: props.workflows.length
+            }}
+            onView={props.onFocusView}
+          />
+          <span className="toolbar-divider" />
           <button className="icon-button" title="Refresh" onClick={props.onRefresh} disabled={!props.repo}>
             <RefreshCw size={16} />
           </button>
@@ -1360,112 +1535,232 @@ function ProjectPane(props: {
               <span>{props.error}</span>
             </div>
           )}
-          <WorkflowSection
-            title="Starred Actions"
-            workflows={props.starredWorkflows}
-            starredIds={props.starredWorkflowIds}
-            selected={props.selection}
-            onSelect={props.onSelectWorkflow}
-            onToggleStar={props.onToggleWorkflowStar}
-            onRun={props.onRunWorkflow}
-            empty="No starred actions"
-          />
-          <div className="focus-section">
-            <div className="section-title">
-              <GitPullRequest size={15} />
-              <span>Pull Requests</span>
-              <span className="count">{props.pullRequests.length}</span>
-            </div>
-            {props.pullRequests.length ? (
-              props.pullRequests.map((pr) => (
-                <button
-                  key={pr.id}
-                  className={cx("focus-row", props.selection.kind === "pr" && props.selection.pr.id === pr.id && "active")}
-                  onClick={() => props.onSelectPr(pr)}
-                >
-                  <StatusIcon status={pr.ciState} conclusion={pr.reviewDecision ?? undefined} />
-                  <span className="focus-main">
-                    <span className="focus-title">#{pr.number} {pr.title}</span>
-                    <span className="focus-meta">{pr.author?.login ?? "unknown"} to {pr.baseRefName}</span>
-                  </span>
-                  <span className={cx("state-chip", statusTone(pr.mergeable, pr.reviewDecision))}>
-                    {pr.isDraft ? "draft" : pr.reviewDecision ?? pr.mergeable ?? "open"}
-                  </span>
-                </button>
-              ))
-            ) : (
-              <div className="empty-row">No open PRs</div>
-            )}
-          </div>
-          <div className="focus-section">
-            <div className="section-title">
-              <Activity size={15} />
-              <span>Workflow Runs</span>
-              <span className="count">{props.workflowRuns.length}</span>
-            </div>
-            {props.workflowRuns.length ? (
-              props.workflowRuns.map((run) => (
-                <button
-                  key={run.id}
-                  className={cx("focus-row", props.selection.kind === "run" && props.selection.run.id === run.id && "active")}
-                  onClick={() => props.onSelectRun(run)}
-                >
-                  <StatusIcon status={run.status} conclusion={run.conclusion} />
-                  <span className="focus-main">
-                    <span className="focus-title">{run.displayTitle || run.name || `Run ${run.id}`}</span>
-                    <span className="focus-meta">{run.branch ?? "branch"} {shortSha(run.commitSha)}</span>
-                  </span>
-                  <span className={cx("state-chip", statusTone(run.status, run.conclusion))}>
-                    {run.conclusion ?? run.status ?? "run"}
-                  </span>
-                </button>
-              ))
-            ) : (
-              <div className="empty-row">No workflow runs</div>
-            )}
-          </div>
-          <div className="focus-section">
-            <div className="section-title">
-              <Inbox size={15} />
-              <span>Issues</span>
-              <span className="count">{props.issues.length}</span>
-            </div>
-            {props.issues.length ? (
-              props.issues.map((issue) => (
-                <button
-                  key={issue.id}
-                  className={cx("focus-row", props.selection.kind === "issue" && props.selection.issue.id === issue.id && "active")}
-                  onClick={() => props.onSelectIssue(issue)}
-                >
-                  <Circle size={15} />
-                  <span className="focus-main">
-                    <span className="focus-title">#{issue.number} {issue.title}</span>
-                    <span className="focus-meta">{issue.author?.login ?? "unknown"} {formatRelative(issue.updatedAt)}</span>
-                  </span>
-                </button>
-              ))
-            ) : (
-              <div className="empty-row">No open issues</div>
-            )}
-          </div>
-          <WorkflowSection
-            title="Workflows"
-            workflows={props.workflows}
-            starredIds={props.starredWorkflowIds}
-            selected={props.selection}
-            onSelect={props.onSelectWorkflow}
-            onToggleStar={props.onToggleWorkflowStar}
-            onRun={props.onRunWorkflow}
-            empty="No workflows"
-          />
+          {props.focusView === "workflow-runs" ? (
+            <WorkflowRunsSection
+              runs={props.workflowRuns}
+              selected={props.selection}
+              onSelect={props.onSelectRun}
+            />
+          ) : props.focusView === "issues" ? (
+            <IssuesSection issues={props.issues} selected={props.selection} onSelect={props.onSelectIssue} />
+          ) : props.focusView === "workflows" ? (
+            <WorkflowFocusSection
+              allWorkflows={props.workflows}
+              favoriteWorkflows={props.starredWorkflows}
+              tab={props.workflowTab}
+              starredIds={props.starredWorkflowIds}
+              selected={props.selection}
+              onTab={props.onWorkflowTab}
+              onSelect={props.onSelectWorkflow}
+              onToggleStar={props.onToggleWorkflowStar}
+              onRun={props.onRunWorkflow}
+            />
+          ) : (
+            <PullRequestsSection
+              pullRequests={props.pullRequests}
+              selected={props.selection}
+              onSelect={props.onSelectPr}
+            />
+          )}
         </div>
       )}
     </section>
   );
 }
 
+function ProjectFocusToolbar(props: {
+  counts: Record<ProjectFocusView, number>;
+  disabled: boolean;
+  view: ProjectFocusView;
+  onView(view: ProjectFocusView): void;
+}) {
+  const items: Array<{ view: ProjectFocusView; label: string; icon: React.ReactNode }> = [
+    { view: "pull-requests", label: "Pull Requests", icon: <GitPullRequest size={15} /> },
+    { view: "workflow-runs", label: "Workflow Runs", icon: <Activity size={15} /> },
+    { view: "issues", label: "Issues", icon: <Inbox size={15} /> },
+    { view: "workflows", label: "Workflows", icon: <Workflow size={15} /> }
+  ];
+
+  return (
+    <div className="project-view-switcher" role="toolbar" aria-label="Project focus view">
+      {items.map((item) => (
+        <button
+          key={item.view}
+          type="button"
+          className={cx("icon-button project-view-button", props.view === item.view && "active")}
+          title={`${item.label} (${props.counts[item.view]})`}
+          aria-label={`${item.label} (${props.counts[item.view]})`}
+          aria-pressed={props.view === item.view}
+          disabled={props.disabled}
+          onClick={() => props.onView(item.view)}
+        >
+          {item.icon}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PullRequestsSection(props: {
+  pullRequests: PullRequestSummary[];
+  selected: ContentSelection;
+  onSelect(pr: PullRequestSummary): void;
+}) {
+  return (
+    <div className="focus-section">
+      <div className="section-title">
+        <GitPullRequest size={15} />
+        <span>Pull Requests</span>
+        <span className="count">{props.pullRequests.length}</span>
+      </div>
+      {props.pullRequests.length ? (
+        props.pullRequests.map((pr) => (
+          <button
+            key={pr.id}
+            className={cx("focus-row", props.selected.kind === "pr" && props.selected.pr.id === pr.id && "active")}
+            onClick={() => props.onSelect(pr)}
+          >
+            <StatusIcon status={pr.ciState} conclusion={pr.reviewDecision ?? undefined} />
+            <span className="focus-main">
+              <span className="focus-title">#{pr.number} {pr.title}</span>
+              <span className="focus-meta">{pr.author?.login ?? "unknown"} to {pr.baseRefName}</span>
+            </span>
+            <span className={cx("state-chip", statusTone(pr.mergeable, pr.reviewDecision))}>
+              {pr.isDraft ? "draft" : pr.reviewDecision ?? pr.mergeable ?? "open"}
+            </span>
+          </button>
+        ))
+      ) : (
+        <div className="empty-row">No open PRs</div>
+      )}
+    </div>
+  );
+}
+
+function WorkflowRunsSection(props: {
+  runs: WorkflowRunSummary[];
+  selected: ContentSelection;
+  onSelect(run: WorkflowRunSummary): void;
+}) {
+  return (
+    <div className="focus-section">
+      <div className="section-title">
+        <Activity size={15} />
+        <span>Workflow Runs</span>
+        <span className="count">{props.runs.length}</span>
+      </div>
+      {props.runs.length ? (
+        props.runs.map((run) => (
+          <button
+            key={run.id}
+            className={cx("focus-row", props.selected.kind === "run" && props.selected.run.id === run.id && "active")}
+            onClick={() => props.onSelect(run)}
+          >
+            <StatusIcon status={run.status} conclusion={run.conclusion} />
+            <span className="focus-main">
+              <span className="focus-title">{run.displayTitle || run.name || `Run ${run.id}`}</span>
+              <span className="focus-meta">{run.branch ?? "branch"} {shortSha(run.commitSha)}</span>
+            </span>
+            <span className={cx("state-chip", statusTone(run.status, run.conclusion))}>
+              {run.conclusion ?? run.status ?? "run"}
+            </span>
+          </button>
+        ))
+      ) : (
+        <div className="empty-row">No workflow runs</div>
+      )}
+    </div>
+  );
+}
+
+function IssuesSection(props: {
+  issues: IssueSummary[];
+  selected: ContentSelection;
+  onSelect(issue: IssueSummary): void;
+}) {
+  return (
+    <div className="focus-section">
+      <div className="section-title">
+        <Inbox size={15} />
+        <span>Issues</span>
+        <span className="count">{props.issues.length}</span>
+      </div>
+      {props.issues.length ? (
+        props.issues.map((issue) => (
+          <button
+            key={issue.id}
+            className={cx("focus-row", props.selected.kind === "issue" && props.selected.issue.id === issue.id && "active")}
+            onClick={() => props.onSelect(issue)}
+          >
+            <Circle size={15} />
+            <span className="focus-main">
+              <span className="focus-title">#{issue.number} {issue.title}</span>
+              <span className="focus-meta">{issue.author?.login ?? "unknown"} {formatRelative(issue.updatedAt)}</span>
+            </span>
+          </button>
+        ))
+      ) : (
+        <div className="empty-row">No open issues</div>
+      )}
+    </div>
+  );
+}
+
+function WorkflowFocusSection(props: {
+  allWorkflows: WorkflowSummary[];
+  favoriteWorkflows: WorkflowSummary[];
+  tab: ProjectWorkflowTab;
+  starredIds: number[];
+  selected: ContentSelection;
+  onTab(tab: ProjectWorkflowTab): void;
+  onSelect(workflow: WorkflowSummary): void;
+  onToggleStar(workflow: WorkflowSummary): void;
+  onRun(workflow: WorkflowSummary): void;
+}) {
+  const visibleWorkflows = props.tab === "favorites" ? props.favoriteWorkflows : props.allWorkflows;
+
+  return (
+    <div className="workflow-focus">
+      <div className="workflow-tabs" role="tablist" aria-label="Workflow view">
+        <button
+          className={cx("workflow-tab", props.tab === "favorites" && "active")}
+          role="tab"
+          aria-selected={props.tab === "favorites"}
+          onClick={() => props.onTab("favorites")}
+        >
+          <Star size={14} />
+          Favorites
+          <span>{props.favoriteWorkflows.length}</span>
+        </button>
+        <button
+          className={cx("workflow-tab", props.tab === "all" && "active")}
+          role="tab"
+          aria-selected={props.tab === "all"}
+          onClick={() => props.onTab("all")}
+        >
+          <Workflow size={14} />
+          All
+          <span>{props.allWorkflows.length}</span>
+        </button>
+      </div>
+      <WorkflowSection
+        title={props.tab === "favorites" ? "Favorite Workflows" : "Workflows"}
+        icon={props.tab === "favorites" ? <Star size={15} /> : <Workflow size={15} />}
+        workflows={visibleWorkflows}
+        starredIds={props.starredIds}
+        selected={props.selected}
+        onSelect={props.onSelect}
+        onToggleStar={props.onToggleStar}
+        onRun={props.onRun}
+        empty={props.tab === "favorites" ? "No favorite workflows" : "No workflows"}
+      />
+    </div>
+  );
+}
+
 function WorkflowSection(props: {
   title: string;
+  icon?: React.ReactNode;
   workflows: WorkflowSummary[];
   starredIds: number[];
   selected: ContentSelection;
@@ -1477,7 +1772,7 @@ function WorkflowSection(props: {
   return (
     <div className="focus-section">
       <div className="section-title">
-        <Workflow size={15} />
+        {props.icon ?? <Workflow size={15} />}
         <span>{props.title}</span>
         <span className="count">{props.workflows.length}</span>
       </div>
@@ -1523,12 +1818,16 @@ function ContentPane(props: {
   error: string | null;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
+  canNavigateBack: boolean;
+  canNavigateForward: boolean;
   accentColor: string;
   onTokenChange(value: string): void;
   onSaveToken(event: React.FormEvent): void;
   onClearToken(): void;
   onPrTabChange(tab: string): void;
   onRunTabChange(tab: string): void;
+  onNavigateBack(): void;
+  onNavigateForward(): void;
   onToggleTheme(): void;
   onAccentChange(color: string): void;
   onOpenGithub(): void;
@@ -1539,9 +1838,29 @@ function ContentPane(props: {
   return (
     <main className="content-pane" tabIndex={0}>
       <div className="content-header app-drag">
-        <div className="content-title">
-          <ContentTitle selection={props.selection} repo={props.repo} />
-          {props.loading && <Loader2 className="spin" size={15} />}
+        <div className="content-header-left">
+          <div className="navigation-controls" aria-label="Navigation">
+            <button
+              className="icon-button navigation-button"
+              title="Back"
+              onClick={props.onNavigateBack}
+              disabled={!props.canNavigateBack}
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <button
+              className="icon-button navigation-button"
+              title="Forward"
+              onClick={props.onNavigateForward}
+              disabled={!props.canNavigateForward}
+            >
+              <ArrowRight size={16} />
+            </button>
+          </div>
+          <div className="content-title">
+            <ContentTitle selection={props.selection} repo={props.repo} />
+            {props.loading && <Loader2 className="spin" size={15} />}
+          </div>
         </div>
         <div className="header-actions">
           {props.auth?.configured && (
@@ -2198,24 +2517,29 @@ function WorkflowLogsList({
   }, [details]);
 
   const loadJob = useCallback(
-    (job: WorkflowRunDetail["jobs"][number]) => {
+    (job: WorkflowRunDetail["jobs"][number], options: { force?: boolean; quiet?: boolean } = {}) => {
       const key = String(job.id);
       const current = detailsRef.current[key];
-      if (loadingJobKeys.current.has(key) || current?.loading || current?.detail) {
+      if (loadingJobKeys.current.has(key) || current?.loading || (!options.force && current?.detail)) {
         return;
       }
 
       loadingJobKeys.current.add(key);
       setDetails((current) => ({
         ...current,
-        [key]: { loading: true, error: null, detail: current[key]?.detail ?? null }
+        [key]: {
+          loading: !options.quiet && !current[key]?.detail,
+          refreshing: Boolean(options.quiet && current[key]?.detail),
+          error: null,
+          detail: current[key]?.detail ?? null
+        }
       }));
       void api
         .getWorkflowJob(repo, job.id)
         .then((response) => {
           setDetails((current) => ({
             ...current,
-            [key]: { loading: false, detail: response.data, error: null }
+            [key]: { loading: false, refreshing: false, detail: response.data, error: null }
           }));
         })
         .catch((error) => {
@@ -2223,6 +2547,7 @@ function WorkflowLogsList({
             ...current,
             [key]: {
               loading: false,
+              refreshing: false,
               detail: current[key]?.detail ?? null,
               error: error instanceof Error ? error.message : "Unable to load workflow job logs."
             }
@@ -2249,6 +2574,21 @@ function WorkflowLogsList({
       loadJob(focusedJob);
     }
   }, [focusedJobId, jobs, jobsKey, loadJob]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      for (const job of jobs) {
+        const key = String(job.id);
+        const collapsed = collapsedJobs[key] ?? true;
+        const detail = detailsRef.current[key]?.detail;
+        if (!collapsed && detail && isLiveStatus(detail.status)) {
+          loadJob(job, { force: true, quiet: true });
+        }
+      }
+    }, 6000);
+
+    return () => window.clearInterval(interval);
+  }, [collapsedJobs, jobs, loadJob]);
 
   if (!jobs.length) {
     return <div className="empty-content">No jobs</div>;
@@ -2308,6 +2648,12 @@ function WorkflowLogsList({
                 ) : (
                   <div className="empty-row">No logs loaded.</div>
                 )}
+                {state?.refreshing ? (
+                  <div className="log-refreshing">
+                    <Loader2 className="spin" size={13} />
+                    <span>Checking for logs...</span>
+                  </div>
+                ) : null}
               </div>
             )}
           </article>
@@ -2323,6 +2669,8 @@ function WorkflowJobSteps(props: {
   jobKey: string;
   onToggleStep(stepKey: string): void;
 }) {
+  const unavailableReason = props.detail.logUnavailableReason;
+
   if (!props.detail.steps.length && props.detail.rawLog?.trim()) {
     return (
       <pre className="terminal-output standalone" aria-label="Raw job output">
@@ -2332,11 +2680,17 @@ function WorkflowJobSteps(props: {
   }
 
   if (!props.detail.steps.length) {
-    return <div className="empty-row">No steps found for this job.</div>;
+    return <div className="empty-row">{unavailableReason ?? "No steps found for this job."}</div>;
   }
 
   return (
     <div className="check-steps">
+      {unavailableReason ? (
+        <div className="log-pending">
+          {isLiveStatus(props.detail.status) ? <Loader2 className="spin" size={14} /> : <AlertCircle size={14} />}
+          <span>{unavailableReason}</span>
+        </div>
+      ) : null}
       {props.detail.steps.map((step, index) => {
         const stepKey = `${props.jobKey}:${step.number ?? index}:${step.name}`;
         const collapsed = props.collapsedSteps[stepKey] ?? true;
@@ -2352,7 +2706,7 @@ function WorkflowJobSteps(props: {
             </button>
             {!collapsed && (
               <pre className="terminal-output" aria-label={`${step.name} output`}>
-                {step.log?.trim() || "No output captured for this step."}
+                {step.log?.trim() || unavailableReason || "No output captured for this step."}
               </pre>
             )}
           </article>

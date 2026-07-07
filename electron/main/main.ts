@@ -925,16 +925,28 @@ async function getWorkflowJob(repoRef: RepoRef, jobId: number): Promise<CacheEnv
     throw new Error("A valid GitHub Actions job id is required.");
   }
 
-  return cached(`repo:${repo.owner}/${repo.name}:workflow-job:${jobId}:v1`, async () => {
+  return cached(`repo:${repo.owner}/${repo.name}:workflow-job:${jobId}:v2`, async () => {
     const { octokit } = await getClients();
-    const [job, rawLog] = await Promise.all([
-      octokit.actions.getJobForWorkflowRun({
-        owner: repo.owner,
-        repo: repo.name,
-        job_id: jobId
-      }),
-      downloadActionsJobLog(repo, jobId)
-    ]);
+    const job = await octokit.actions.getJobForWorkflowRun({
+      owner: repo.owner,
+      repo: repo.name,
+      job_id: jobId
+    });
+    let rawLog: string | null = null;
+    let logUnavailableReason: string | null = null;
+
+    try {
+      rawLog = await downloadActionsJobLog(repo, jobId);
+    } catch (error) {
+      if (error instanceof GitHubHttpStatusError && error.status === 404) {
+        logUnavailableReason = isLiveWorkflowJobStatus(job.data.status)
+          ? "GitHub does not expose live logs for running jobs through the public API. This will refresh automatically after the job completes."
+          : "GitHub did not return logs for this job.";
+      } else {
+        throw error;
+      }
+    }
+
     const stepLogs = splitActionsLogByStep(job.data.steps ?? [], rawLog);
 
     return {
@@ -954,9 +966,14 @@ async function getWorkflowJob(repoRef: RepoRef, jobId: number): Promise<CacheEnv
         completedAt: step.completed_at,
         log: stepLogs.get(step.number ?? index) ?? null
       })),
-      rawLog
+      rawLog,
+      logUnavailableReason
     };
-  }, 30 * 1000);
+  }, 5 * 1000);
+}
+
+function isLiveWorkflowJobStatus(status?: string | null): boolean {
+  return ["queued", "waiting", "pending", "requested", "in_progress"].includes((status ?? "").toLowerCase());
 }
 
 async function downloadActionsJobLog(repo: RepoRef, jobId: number): Promise<string | null> {
@@ -983,17 +1000,24 @@ async function downloadActionsJobLog(repo: RepoRef, jobId: number): Promise<stri
 
   const location = response.headers.get("location");
   if (!location) {
-    throw new Error(`Unable to download job logs (${response.status}).`);
+    throw new GitHubHttpStatusError(`Unable to download job logs (${response.status}).`, response.status);
   }
 
   const logResponse = await fetchWithTimeout(location, {
     headers: {}
   });
   if (!logResponse.ok) {
-    throw new Error(`Unable to download job logs (${logResponse.status}).`);
+    throw new GitHubHttpStatusError(`Unable to download job logs (${logResponse.status}).`, logResponse.status);
   }
 
   return logResponse.text();
+}
+
+class GitHubHttpStatusError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "GitHubHttpStatusError";
+  }
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30_000): Promise<Response> {

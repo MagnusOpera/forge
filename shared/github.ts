@@ -239,6 +239,7 @@ export interface WorkflowJobLogDetail {
   url?: string | null;
   steps: WorkflowJobStepSummary[];
   rawLog?: string | null;
+  logUnavailableReason?: string | null;
 }
 
 export interface DispatchWorkflowPayload {
