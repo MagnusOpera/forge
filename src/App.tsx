@@ -265,6 +265,23 @@ function uniqueRepos(repos: RepoSummary[]): RepoSummary[] {
   });
 }
 
+function moveListItem<T>(items: T[], source: T, target: T): T[] {
+  if (source === target) {
+    return items;
+  }
+
+  const sourceIndex = items.indexOf(source);
+  const targetIndex = items.indexOf(target);
+  if (sourceIndex === -1 || targetIndex === -1) {
+    return items;
+  }
+
+  const next = [...items];
+  const [item] = next.splice(sourceIndex, 1);
+  next.splice(targetIndex, 0, item);
+  return next;
+}
+
 function formatRelative(value?: string | null): string {
   if (!value) {
     return "";
@@ -496,8 +513,15 @@ export function App() {
   );
 
   const selectedRepoKey = selectedRepo ? repoKey(selectedRepo) : "";
-  const selectedWorkflowStars = selectedRepoKey ? starredWorkflowKeys[selectedRepoKey] ?? [] : [];
-  const starredWorkflows = workflows.filter((workflow) => selectedWorkflowStars.includes(workflow.id));
+  const selectedWorkflowStars = useMemo(
+    () => (selectedRepoKey ? starredWorkflowKeys[selectedRepoKey] ?? [] : []),
+    [selectedRepoKey, starredWorkflowKeys]
+  );
+  const workflowsById = useMemo(() => new Map(workflows.map((workflow) => [workflow.id, workflow])), [workflows]);
+  const starredWorkflows = useMemo(
+    () => selectedWorkflowStars.map((id) => workflowsById.get(id)).filter(Boolean) as WorkflowSummary[],
+    [selectedWorkflowStars, workflowsById]
+  );
   const projectFocusView: ProjectFocusView =
     storedProjectFocusView === "starred-actions" ? "workflows" : storedProjectFocusView;
   const openPullRequests = useMemo(
@@ -673,6 +697,13 @@ export function App() {
     [setFavoriteKeys]
   );
 
+  const reorderFavoriteRepos = useCallback(
+    (sourceKey: string, targetKey: string) => {
+      setFavoriteKeys((current) => moveListItem(current, sourceKey, targetKey));
+    },
+    [setFavoriteKeys]
+  );
+
   const toggleWorkflowStar = useCallback(
     (workflow: WorkflowSummary) => {
       if (!selectedRepo) {
@@ -690,6 +721,21 @@ export function App() {
           [key]: next
         };
       });
+    },
+    [selectedRepo, setStarredWorkflowKeys]
+  );
+
+  const reorderFavoriteWorkflows = useCallback(
+    (sourceId: number, targetId: number) => {
+      if (!selectedRepo) {
+        return;
+      }
+
+      const key = repoKey(selectedRepo);
+      setStarredWorkflowKeys((current) => ({
+        ...current,
+        [key]: moveListItem(current[key] ?? [], sourceId, targetId)
+      }));
     },
     [selectedRepo, setStarredWorkflowKeys]
   );
@@ -1243,6 +1289,7 @@ export function App() {
         onToggle={() => setSidebarCollapsedWithAnimation(true)}
         onSelectRepo={selectRepo}
         onToggleFavorite={toggleFavorite}
+        onReorderFavoriteRepo={reorderFavoriteRepos}
         favoriteKeys={favoriteKeys}
         loading={initialLoading}
       />
@@ -1284,6 +1331,7 @@ export function App() {
         onSelectRun={(run) => setSelection({ kind: "run", run })}
         onSelectWorkflow={(workflow) => setSelection({ kind: "workflow", workflow })}
         onToggleWorkflowStar={toggleWorkflowStar}
+        onReorderFavoriteWorkflow={reorderFavoriteWorkflows}
         onRunWorkflow={runWorkflow}
       />
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
@@ -1345,6 +1393,7 @@ interface SidebarProps {
   onToggle(): void;
   onSelectRepo(repo: RepoSummary): void;
   onToggleFavorite(repo: RepoSummary): void;
+  onReorderFavoriteRepo(sourceKey: string, targetKey: string): void;
 }
 
 function Sidebar(props: SidebarProps) {
@@ -1424,6 +1473,7 @@ function Sidebar(props: SidebarProps) {
             favoriteKeys={props.favoriteKeys}
             onSelectRepo={props.onSelectRepo}
             onToggleFavorite={props.onToggleFavorite}
+            onReorderFavoriteRepo={props.onReorderFavoriteRepo}
           />
         ) : (
           <RepoGroupList
@@ -1509,7 +1559,16 @@ function RepoSection(props: {
   favoriteKeys: string[];
   onSelectRepo(repo: RepoSummary): void;
   onToggleFavorite(repo: RepoSummary): void;
+  onReorderFavoriteRepo(sourceKey: string, targetKey: string): void;
 }) {
+  const [draggingRepoKey, setDraggingRepoKey] = useState<string | null>(null);
+  const [dragOverRepoKey, setDragOverRepoKey] = useState<string | null>(null);
+
+  const clearDragState = () => {
+    setDraggingRepoKey(null);
+    setDragOverRepoKey(null);
+  };
+
   return (
     <div className="repo-section">
       <div className="section-title">
@@ -1518,16 +1577,44 @@ function RepoSection(props: {
         <span className="count">{props.repos.length}</span>
       </div>
       {props.repos.length ? (
-        props.repos.map((repo) => (
-          <RepoButton
-            key={repo.fullName}
-            repo={repo}
-            selected={props.selectedRepo ? repoKey(repo) === repoKey(props.selectedRepo) : false}
-            favorite={props.favoriteKeys.includes(repoKey(repo))}
-            onSelect={() => props.onSelectRepo(repo)}
-            onToggleFavorite={() => props.onToggleFavorite(repo)}
-          />
-        ))
+        props.repos.map((repo) => {
+          const key = repoKey(repo);
+          return (
+            <RepoButton
+              key={repo.fullName}
+              repo={repo}
+              selected={props.selectedRepo ? key === repoKey(props.selectedRepo) : false}
+              favorite={props.favoriteKeys.includes(key)}
+              draggable
+              dragging={draggingRepoKey === key}
+              dragOver={dragOverRepoKey === key && draggingRepoKey !== key}
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", key);
+                setDraggingRepoKey(key);
+              }}
+              onDragOver={(event) => {
+                if (!draggingRepoKey || draggingRepoKey === key) {
+                  return;
+                }
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDragOverRepoKey(key);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const sourceKey = draggingRepoKey ?? event.dataTransfer.getData("text/plain");
+                clearDragState();
+                if (sourceKey && sourceKey !== key) {
+                  props.onReorderFavoriteRepo(sourceKey, key);
+                }
+              }}
+              onDragEnd={clearDragState}
+              onSelect={() => props.onSelectRepo(repo)}
+              onToggleFavorite={() => props.onToggleFavorite(repo)}
+            />
+          );
+        })
       ) : (
         <div className="empty-row">{props.emptyText}</div>
       )}
@@ -1539,11 +1626,31 @@ function RepoButton(props: {
   repo: RepoSummary;
   selected: boolean;
   favorite: boolean;
+  draggable?: boolean;
+  dragging?: boolean;
+  dragOver?: boolean;
+  onDragStart?(event: React.DragEvent<HTMLDivElement>): void;
+  onDragOver?(event: React.DragEvent<HTMLDivElement>): void;
+  onDrop?(event: React.DragEvent<HTMLDivElement>): void;
+  onDragEnd?(): void;
   onSelect(): void;
   onToggleFavorite(): void;
 }) {
   return (
-    <div className={cx("repo-button-wrap", props.selected && "selected")}>
+    <div
+      className={cx(
+        "repo-button-wrap",
+        props.selected && "selected",
+        props.draggable && "draggable",
+        props.dragging && "dragging",
+        props.dragOver && "drag-over"
+      )}
+      draggable={props.draggable}
+      onDragStart={props.onDragStart}
+      onDragOver={props.onDragOver}
+      onDrop={props.onDrop}
+      onDragEnd={props.onDragEnd}
+    >
       <button className="repo-button" onClick={props.onSelect}>
         <span className="repo-name">{props.repo.name}</span>
         <span className="repo-meta">{formatRelative(props.repo.updatedAt)}</span>
@@ -1582,6 +1689,7 @@ function ProjectPane(props: {
   onSelectRun(run: WorkflowRunSummary): void;
   onSelectWorkflow(workflow: WorkflowSummary): void;
   onToggleWorkflowStar(workflow: WorkflowSummary): void;
+  onReorderFavoriteWorkflow(sourceId: number, targetId: number): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
   return (
@@ -1649,6 +1757,7 @@ function ProjectPane(props: {
               onTab={props.onWorkflowTab}
               onSelect={props.onSelectWorkflow}
               onToggleStar={props.onToggleWorkflowStar}
+              onReorderFavoriteWorkflow={props.onReorderFavoriteWorkflow}
               onRun={props.onRunWorkflow}
             />
           ) : (
@@ -1873,6 +1982,7 @@ function WorkflowFocusSection(props: {
   onTab(tab: ProjectWorkflowTab): void;
   onSelect(workflow: WorkflowSummary): void;
   onToggleStar(workflow: WorkflowSummary): void;
+  onReorderFavoriteWorkflow(sourceId: number, targetId: number): void;
   onRun(workflow: WorkflowSummary): void;
 }) {
   const visibleWorkflows = props.tab === "favorites" ? props.favoriteWorkflows : props.allWorkflows;
@@ -1909,6 +2019,8 @@ function WorkflowFocusSection(props: {
         selected={props.selected}
         onSelect={props.onSelect}
         onToggleStar={props.onToggleStar}
+        reorderable={props.tab === "favorites"}
+        onReorder={props.onReorderFavoriteWorkflow}
         onRun={props.onRun}
         empty={props.tab === "favorites" ? "No favorite workflows" : "No workflows"}
       />
@@ -1923,10 +2035,20 @@ function WorkflowSection(props: {
   starredIds: number[];
   selected: ContentSelection;
   empty: string;
+  reorderable?: boolean;
   onSelect(workflow: WorkflowSummary): void;
   onToggleStar(workflow: WorkflowSummary): void;
+  onReorder?(sourceId: number, targetId: number): void;
   onRun(workflow: WorkflowSummary): void;
 }) {
+  const [draggingWorkflowId, setDraggingWorkflowId] = useState<number | null>(null);
+  const [dragOverWorkflowId, setDragOverWorkflowId] = useState<number | null>(null);
+
+  const clearDragState = () => {
+    setDraggingWorkflowId(null);
+    setDragOverWorkflowId(null);
+  };
+
   return (
     <div className="focus-section">
       <div className="section-title">
@@ -1938,7 +2060,42 @@ function WorkflowSection(props: {
         props.workflows.map((workflow) => (
           <div
             key={workflow.id}
-            className={cx("workflow-row", props.selected.kind === "workflow" && props.selected.workflow.id === workflow.id && "active")}
+            className={cx(
+              "workflow-row",
+              props.selected.kind === "workflow" && props.selected.workflow.id === workflow.id && "active",
+              props.reorderable && "draggable",
+              draggingWorkflowId === workflow.id && "dragging",
+              dragOverWorkflowId === workflow.id && draggingWorkflowId !== workflow.id && "drag-over"
+            )}
+            draggable={props.reorderable}
+            onDragStart={(event) => {
+              if (!props.reorderable) {
+                return;
+              }
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", String(workflow.id));
+              setDraggingWorkflowId(workflow.id);
+            }}
+            onDragOver={(event) => {
+              if (!props.reorderable || !draggingWorkflowId || draggingWorkflowId === workflow.id) {
+                return;
+              }
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              setDragOverWorkflowId(workflow.id);
+            }}
+            onDrop={(event) => {
+              if (!props.reorderable) {
+                return;
+              }
+              event.preventDefault();
+              const sourceId = draggingWorkflowId ?? Number(event.dataTransfer.getData("text/plain"));
+              clearDragState();
+              if (Number.isSafeInteger(sourceId) && sourceId !== workflow.id) {
+                props.onReorder?.(sourceId, workflow.id);
+              }
+            }}
+            onDragEnd={clearDragState}
           >
             <button className="workflow-main" onClick={() => props.onSelect(workflow)}>
               <Workflow size={15} />

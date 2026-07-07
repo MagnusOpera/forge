@@ -689,6 +689,26 @@ input {
   background: var(--hover-bg);
 }
 
+.repo-button-wrap.draggable,
+.workflow-row.draggable {
+  cursor: grab;
+}
+
+.repo-button-wrap.draggable .repo-button,
+.workflow-row.draggable .workflow-main {
+  cursor: grab;
+}
+
+.repo-button-wrap.dragging,
+.workflow-row.dragging {
+  opacity: 0.48;
+}
+
+.repo-button-wrap.drag-over,
+.workflow-row.drag-over {
+  background: var(--accent-muted-bg);
+}
+
 .repo-button-wrap.selected {
   color: var(--active-text);
 }
