@@ -1,0 +1,70 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="forgeGlow" x1="232" y1="206" x2="852" y2="762" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8be9fd" />
+      <stop offset="0.36" stop-color="#d8b4fe" />
+      <stop offset="0.68" stop-color="#f9a8d4" />
+      <stop offset="1" stop-color="#7ee787" />
+    </linearGradient>
+    <filter id="softGlow" x="160" y="86" width="792" height="792" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="15" result="blur" />
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1.45 0"
+        result="glow"
+      />
+      <feMerge>
+        <feMergeNode in="glow" />
+      </feMerge>
+    </filter>
+  </defs>
+  <path
+    d="M365 604C295 590 253 536 253 448C253 390 269 340 304 299C295 256 298 216 312 179C366 184 420 217 458 247C494 238 530 234 566 234C602 234 638 238 674 247C712 217 766 184 820 179C834 216 837 256 828 299C863 340 879 390 879 448C879 536 837 590 767 604C730 615 706 618 696 640C687 658 696 672 696 700V778"
+    stroke="url(#forgeGlow)"
+    stroke-width="80"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.72"
+    filter="url(#softGlow)"
+  />
+  <path
+    d="M365 604C402 615 426 618 436 640C445 658 436 672 436 700V778"
+    stroke="url(#forgeGlow)"
+    stroke-width="80"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.72"
+    filter="url(#softGlow)"
+  />
+  <path
+    d="M436 708C371 729 300 713 256 630"
+    stroke="url(#forgeGlow)"
+    stroke-width="80"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.72"
+    filter="url(#softGlow)"
+  />
+  <path
+    d="M365 604C295 590 253 536 253 448C253 390 269 340 304 299C295 256 298 216 312 179C366 184 420 217 458 247C494 238 530 234 566 234C602 234 638 238 674 247C712 217 766 184 820 179C834 216 837 256 828 299C863 340 879 390 879 448C879 536 837 590 767 604C730 615 706 618 696 640C687 658 696 672 696 700V778"
+    stroke="#111827"
+    stroke-width="52"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M365 604C402 615 426 618 436 640C445 658 436 672 436 700V778"
+    stroke="#111827"
+    stroke-width="52"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M436 708C371 729 300 713 256 630"
+    stroke="#111827"
+    stroke-width="52"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

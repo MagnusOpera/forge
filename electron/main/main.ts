@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, safeStorage, shell } from "electron";
 import { Octokit } from "@octokit/rest";
 import { graphql } from "@octokit/graphql";
 import crypto from "node:crypto";
@@ -42,14 +42,83 @@ interface CacheRecord<T> {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const appDisplayName = "Forge";
+const legacyAppName = "github-focus";
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
 const defaultTtlMs = 5 * 60 * 1000;
+
+app.setName(appDisplayName);
+app.setAppUserModelId("com.magnusopera.forge");
 
 let mainWindow: BrowserWindow | null = null;
 let octokitClient: Octokit | null = null;
 let graphqlClient: GraphqlClient | null = null;
 let activeTokenHash: string | null = null;
+
+function appIconPath(extension: "png" | "icns" = "png"): string {
+  return path.join(app.getAppPath(), "assets", `forge-icon.${extension}`);
+}
+
+async function pathExists(candidatePath: string): Promise<boolean> {
+  try {
+    await fs.access(candidatePath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function copyPathIfMissing(sourcePath: string, targetPath: string): Promise<void> {
+  if (await pathExists(targetPath)) {
+    return;
+  }
+  if (!(await pathExists(sourcePath))) {
+    return;
+  }
+
+  await fs.mkdir(path.dirname(targetPath), { recursive: true });
+  await fs.cp(sourcePath, targetPath, { recursive: true, errorOnExist: false, force: false });
+}
+
+async function migrateLegacyUserData(): Promise<void> {
+  const currentUserDataDir = app.getPath("userData");
+  const legacyUserDataDir = path.join(app.getPath("appData"), legacyAppName);
+
+  if (legacyUserDataDir === currentUserDataDir || !(await pathExists(legacyUserDataDir))) {
+    return;
+  }
+
+  if (!(await pathExists(currentUserDataDir))) {
+    await fs.cp(legacyUserDataDir, currentUserDataDir, { recursive: true, errorOnExist: false, force: false });
+    return;
+  }
+
+  await Promise.all([
+    copyPathIfMissing(path.join(legacyUserDataDir, "github-token.bin"), path.join(currentUserDataDir, "github-token.bin")),
+    copyPathIfMissing(path.join(legacyUserDataDir, "cache"), path.join(currentUserDataDir, "cache")),
+    copyPathIfMissing(path.join(legacyUserDataDir, "Local Storage"), path.join(currentUserDataDir, "Local Storage"))
+  ]);
+}
+
+function configureAppPresentation(): void {
+  const iconPath = appIconPath("png");
+  const icon = nativeImage.createFromPath(iconPath);
+
+  app.setAboutPanelOptions({
+    applicationName: appDisplayName,
+    applicationVersion: app.getVersion(),
+    version: app.getVersion(),
+    iconPath
+  });
+
+  if (process.platform === "darwin" && app.dock && !icon.isEmpty()) {
+    app.dock.setIcon(icon);
+  }
+}
 
 function tokenPath(): string {
   return path.join(app.getPath("userData"), "github-token.bin");
@@ -1299,7 +1368,8 @@ function createWindow(): void {
     height: 920,
     minWidth: 980,
     minHeight: 640,
-    title: "GitHub Focus",
+    title: appDisplayName,
+    icon: appIconPath("png"),
     backgroundColor: "#0c0e12",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 14, y: 14 },
@@ -1388,7 +1458,9 @@ function registerIpc(): void {
 
 registerIpc();
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await migrateLegacyUserData();
+  configureAppPresentation();
   createWindow();
 
   app.on("activate", () => {

@@ -5,7 +5,7 @@ SHELL := /bin/bash
 .PHONY: help install dev build run check typecheck audit preview clean
 
 help:
-	@printf "GitHub Focus\n\n"
+	@printf "Forge\n\n"
 	@printf "Targets:\n"
 	@printf "  make install    Install npm dependencies\n"
 	@printf "  make dev        Run Vite, Electron main watcher, and Electron app\n"
