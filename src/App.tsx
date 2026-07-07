@@ -32,6 +32,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   Workflow,
+  X,
   XCircle
 } from "lucide-react";
 import type { PatchDiffProps } from "@pierre/diffs/react";
@@ -1600,6 +1601,7 @@ interface SidebarProps {
 
 function Sidebar(props: SidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useStoredState<Record<string, boolean>>(
     "github-focus:collapsed-orgs",
     {}
@@ -1637,10 +1639,30 @@ function Sidebar(props: SidebarProps) {
           <PanelLeftClose size={18} />
         </button>
       </div>
-      <label className="search-box">
+      <div className="search-box">
         <Search size={16} />
-        <input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="Search" />
-      </label>
+        <input
+          ref={searchInputRef}
+          value={props.search}
+          onChange={(event) => props.onSearch(event.target.value)}
+          placeholder="Search"
+          aria-label="Search repositories"
+        />
+        {searchActive && (
+          <button
+            className="search-clear-button"
+            type="button"
+            title="Clear search"
+            aria-label="Clear search"
+            onClick={() => {
+              props.onSearch("");
+              searchInputRef.current?.focus();
+            }}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
       {!searchActive && (
         <div ref={repoTabsUnderline.containerRef} className="sidebar-tabs" role="tablist" aria-label="Repository view">
           <button

@@ -552,6 +552,25 @@ input {
   color: var(--text-dim);
 }
 
+.search-clear-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted-alt);
+}
+
+.search-clear-button:hover {
+  background: var(--hover-subtle-bg);
+  color: var(--text-strong);
+}
+
 .sidebar-tabs {
   position: relative;
   display: grid;
