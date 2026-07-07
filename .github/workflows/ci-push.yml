@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Publish unit test report
+        uses: dorny/test-reporter@v3
+        if: ${{ !cancelled() && hashFiles('.out/test-results/*.xml') != '' }}
+        with:
+          name: Unit Tests
+          path: .out/test-results/*.xml
+          reporter: java-junit
+          use-actions-summary: 'true'
+          report-title: Unit Tests
+          fail-on-error: 'true'

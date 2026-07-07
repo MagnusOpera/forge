@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added branch-push CI for typechecking, building, unit tests, and GitHub test summaries.
 - Added GitHub Actions release packaging for unsigned macOS arm64 draft artifacts and signed/notarized macOS arm64 release artifacts.
 
 ## [0.1.0]

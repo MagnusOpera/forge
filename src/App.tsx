@@ -40,6 +40,15 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
+import {
+  canSubmitPullRequestReview,
+  formatDuration,
+  isLiveStatus,
+  pullRequestTabForState,
+  shortSha,
+  statusTone,
+  type ProjectPullRequestTab
+} from "./appLogic";
 import type {
   AuthStatus,
   CheckSummary,
@@ -96,7 +105,6 @@ type ThemeMode = "dark" | "light";
 type SidebarRepoTab = "favorites" | "all";
 type ProjectFocusView = "pull-requests" | "workflow-runs" | "issues" | "workflows";
 type StoredProjectFocusView = ProjectFocusView | "starred-actions";
-type ProjectPullRequestTab = "open" | "closed";
 type ProjectWorkflowTab = "favorites" | "all";
 type PatchDiffOptions = NonNullable<PatchDiffProps<unknown>["options"]>;
 type NavigationEntry = {
@@ -422,29 +430,6 @@ async function copyTextToClipboard(value: string): Promise<void> {
   }
 }
 
-function formatDuration(value?: number | null): string {
-  if (!value) {
-    return "";
-  }
-
-  const seconds = Math.floor(value / 1000);
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  if (minutes < 60) {
-    return `${minutes}m ${remainder}s`;
-  }
-
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
-function shortSha(value?: string | null): string {
-  return value ? value.slice(0, 7) : "";
-}
-
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
 }
@@ -456,35 +441,6 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
   const tagName = target.tagName.toLowerCase();
   return tagName === "input" || tagName === "textarea" || target.isContentEditable;
-}
-
-function statusTone(status?: string | null, conclusion?: string | null): string {
-  const value = (conclusion || status || "").toLowerCase();
-  if (["success", "completed", "approved", "mergeable", "merged"].includes(value)) {
-    return "good";
-  }
-  if (["failure", "error", "timed_out", "cancelled", "changes_requested", "conflicting"].includes(value)) {
-    return "bad";
-  }
-  if (["in_progress", "queued", "pending", "requested", "waiting"].includes(value)) {
-    return "running";
-  }
-  if (["neutral", "skipped", "closed", "draft"].includes(value)) {
-    return "muted";
-  }
-  return "unknown";
-}
-
-function pullRequestTabForState(pr: PullRequestSummary): ProjectPullRequestTab {
-  return pr.state === "CLOSED" || pr.state === "MERGED" ? "closed" : "open";
-}
-
-function canSubmitPullRequestReview(repo: RepoSummary): boolean {
-  return ["ADMIN", "MAINTAIN", "WRITE"].includes(repo.viewerPermission ?? "");
-}
-
-function isLiveStatus(status?: string | null): boolean {
-  return ["queued", "waiting", "pending", "requested", "in_progress"].includes((status ?? "").toLowerCase());
 }
 
 function StatusIcon({ status, conclusion }: { status?: string | null; conclusion?: string | null }) {

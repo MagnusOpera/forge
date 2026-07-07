@@ -14,6 +14,7 @@
     "dev:electron": "wait-on tcp:5173 dist-electron/electron/main/main.js && electron .",
     "build": "tsc -p tsconfig.electron.json && vite build",
     "dist:mac": "npm run build && electron-builder --mac zip --arm64",
+    "test": "vitest run --reporter=default --reporter=junit --outputFile.junit=.out/test-results/unit.xml",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
     "preview": "vite preview --host 127.0.0.1 --port 4173"
   },
@@ -70,6 +71,7 @@
     "electron-builder": "^26.15.3",
     "typescript": "^5.7.2",
     "vite": "^6.0.6",
+    "vitest": "^4.1.10",
     "wait-on": "^8.0.1"
   }
 }
