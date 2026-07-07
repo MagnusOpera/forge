@@ -435,8 +435,17 @@ input {
 }
 
 .project-view-button.active {
-  background: var(--tab-active-bg);
-  color: var(--accent);
+  color: var(--text-strong);
+}
+
+.project-view-button.active::after {
+  position: absolute;
+  right: 5px;
+  bottom: -4px;
+  left: 5px;
+  height: 2px;
+  background: var(--accent);
+  content: "";
 }
 
 .toolbar-divider {
