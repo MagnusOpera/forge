@@ -138,7 +138,10 @@ const accentColors = [
   "#ffa198",
   "#f2cc60"
 ] as const;
-const defaultAccentColor = accentColors[0];
+const defaultAccentByTheme: Record<ThemeMode, AccentColor> = {
+  dark: accentColors[0],
+  light: accentColors[1]
+};
 type AccentColor = (typeof accentColors)[number];
 type AppCssVars = React.CSSProperties & Record<"--accent", string>;
 type SwatchCssVars = React.CSSProperties & Record<"--swatch-color", string>;
@@ -199,6 +202,24 @@ function useStoredState<T>(key: string, initialValue: T): [T, (next: T | ((value
   );
 
   return [value, setStoredValue];
+}
+
+function readStoredAccentColor(key: string): string | null {
+  const stored = localStorage.getItem(key);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    const value = JSON.parse(stored);
+    return typeof value === "string" && accentColors.includes(value as AccentColor) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeAccentColor(value: string, fallback: string): string {
+  return accentColors.includes(value as AccentColor) ? value : fallback;
 }
 
 function repoKey(repo: { owner: string; name: string }): string {
@@ -519,7 +540,15 @@ export function App() {
     "favorites"
   );
   const [theme, setTheme] = useStoredState<ThemeMode>("github-focus:theme", "dark");
-  const [accentColor, setAccentColor] = useStoredState<string>("github-focus:accent-color", defaultAccentColor);
+  const legacyAccentColor = useMemo(() => readStoredAccentColor("github-focus:accent-color"), []);
+  const [darkAccentColor, setDarkAccentColor] = useStoredState<string>(
+    "github-focus:accent-color:dark",
+    theme === "dark" ? legacyAccentColor ?? defaultAccentByTheme.dark : defaultAccentByTheme.dark
+  );
+  const [lightAccentColor, setLightAccentColor] = useStoredState<string>(
+    "github-focus:accent-color:light",
+    theme === "light" ? legacyAccentColor ?? defaultAccentByTheme.light : defaultAccentByTheme.light
+  );
   const [leftWidth, setLeftWidth] = useStoredState("github-focus:left-width", 280);
   const [middleWidth, setMiddleWidth] = useStoredState("github-focus:middle-width", 392);
   const [sidebarSearch, setSidebarSearch] = useState("");
@@ -630,6 +659,17 @@ export function App() {
       }
     },
     [flash]
+  );
+
+  const setActiveAccentColor = useCallback(
+    (color: string) => {
+      if (theme === "light") {
+        setLightAccentColor(color);
+      } else {
+        setDarkAccentColor(color);
+      }
+    },
+    [setDarkAccentColor, setLightAccentColor, theme]
   );
 
   const setSidebarCollapsedWithAnimation = useCallback(
@@ -1376,14 +1416,16 @@ export function App() {
   const gridTemplateColumns = sidebarCollapsed
     ? `0px 0px ${middleWidth}px 5px minmax(0, 1fr)`
     : `${leftWidth}px 5px ${middleWidth}px 5px minmax(0, 1fr)`;
-  const selectedAccent = accentColors.includes(accentColor as AccentColor) ? accentColor : defaultAccentColor;
+  const activeTheme: ThemeMode = theme === "light" ? "light" : "dark";
+  const activeAccentColor = activeTheme === "dark" ? darkAccentColor : lightAccentColor;
+  const selectedAccent = normalizeAccentColor(activeAccentColor, defaultAccentByTheme[activeTheme]);
   const appStyle: AppCssVars = {
     gridTemplateColumns,
     "--accent": selectedAccent
   };
 
   return (
-    <div className={cx("app-shell", layoutAnimating && "layout-animating")} data-theme={theme} style={appStyle}>
+    <div className={cx("app-shell", layoutAnimating && "layout-animating")} data-theme={activeTheme} style={appStyle}>
       <Sidebar
         collapsed={sidebarCollapsed}
         favoriteRepos={favoriteRepos}
@@ -1458,14 +1500,14 @@ export function App() {
         loading={contentLoading}
         error={contentError}
         reviewSubmitting={reviewSubmitting}
-        theme={theme}
+        theme={activeTheme}
         canNavigateBack={canNavigateBack}
         canNavigateForward={canNavigateForward}
         accentColor={selectedAccent}
         onNavigateBack={() => navigateHistory(-1)}
         onNavigateForward={() => navigateHistory(1)}
-        onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
-        onAccentChange={setAccentColor}
+        onToggleTheme={() => setTheme(activeTheme === "dark" ? "light" : "dark")}
+        onAccentChange={setActiveAccentColor}
         onOpenGithub={openGithub}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
