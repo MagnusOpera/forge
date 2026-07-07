@@ -476,7 +476,9 @@ export function App() {
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [navigation, setNavigation] = useState<NavigationState>({ entries: [], index: -1 });
+  const [layoutAnimating, setLayoutAnimating] = useState(false);
   const lastGPress = useRef(0);
+  const layoutAnimationTimer = useRef<number | null>(null);
   const restoringNavigation = useRef(false);
 
   const allRepos = useMemo(() => uniqueRepos([...(selectedRepo ? [selectedRepo] : []), ...starredRepos, ...recentRepos, ...repositories]), [
@@ -558,6 +560,21 @@ export function App() {
     setToast(message);
     window.setTimeout(() => setToast(null), 2600);
   }, []);
+
+  const setSidebarCollapsedWithAnimation = useCallback(
+    (next: boolean | ((value: boolean) => boolean)) => {
+      setLayoutAnimating(true);
+      if (layoutAnimationTimer.current) {
+        window.clearTimeout(layoutAnimationTimer.current);
+      }
+      layoutAnimationTimer.current = window.setTimeout(() => {
+        setLayoutAnimating(false);
+        layoutAnimationTimer.current = null;
+      }, 220);
+      setSidebarCollapsed(next);
+    },
+    [setSidebarCollapsed]
+  );
 
   const loadInitial = useCallback(
     async (showSpinner = true) => {
@@ -833,7 +850,7 @@ export function App() {
         id: "action:toggle-sidebar",
         kind: "action",
         title: "Toggle sidebar",
-        run: () => setSidebarCollapsed((value) => !value)
+        run: () => setSidebarCollapsedWithAnimation((value) => !value)
       }
     ];
 
@@ -913,7 +930,7 @@ export function App() {
     selectRepo,
     selectedRepo,
     setProjectPullRequestTab,
-    setSidebarCollapsed,
+    setSidebarCollapsedWithAnimation,
     setStoredProjectFocusView,
     workflowRuns,
     workflows
@@ -933,6 +950,15 @@ export function App() {
   useEffect(() => {
     void api.getAuthStatus().then(setAuth);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (layoutAnimationTimer.current) {
+        window.clearTimeout(layoutAnimationTimer.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (auth?.configured) {
@@ -1066,7 +1092,7 @@ export function App() {
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
         event.preventDefault();
-        setSidebarCollapsed((value) => !value);
+        setSidebarCollapsedWithAnimation((value) => !value);
         return;
       }
 
@@ -1084,6 +1110,11 @@ export function App() {
 
       if ((event.metaKey || event.ctrlKey) && ["1", "2", "3"].includes(event.key)) {
         event.preventDefault();
+        if (event.key === "1" && sidebarCollapsed) {
+          setSidebarCollapsedWithAnimation(false);
+          return;
+        }
+
         const selector = event.key === "1" ? ".sidebar" : event.key === "2" ? ".project-pane" : ".content-pane";
         (document.querySelector(selector) as HTMLElement | null)?.focus();
         return;
@@ -1124,7 +1155,15 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [moveMiddleSelection, navigateHistory, openGithub, paletteOpen, selection.kind, setSidebarCollapsed]);
+  }, [
+    moveMiddleSelection,
+    navigateHistory,
+    openGithub,
+    paletteOpen,
+    selection.kind,
+    setSidebarCollapsedWithAnimation,
+    sidebarCollapsed
+  ]);
 
   const saveToken = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1183,7 +1222,7 @@ export function App() {
   };
 
   const gridTemplateColumns = sidebarCollapsed
-    ? `58px ${middleWidth}px 5px minmax(0, 1fr)`
+    ? `0px 0px ${middleWidth}px 5px minmax(0, 1fr)`
     : `${leftWidth}px 5px ${middleWidth}px 5px minmax(0, 1fr)`;
   const selectedAccent = accentColors.includes(accentColor as AccentColor) ? accentColor : defaultAccentColor;
   const appStyle: AppCssVars = {
@@ -1192,7 +1231,7 @@ export function App() {
   };
 
   return (
-    <div className="app-shell" data-theme={theme} style={appStyle}>
+    <div className={cx("app-shell", layoutAnimating && "layout-animating")} data-theme={theme} style={appStyle}>
       <Sidebar
         collapsed={sidebarCollapsed}
         favoriteRepos={favoriteRepos}
@@ -1200,13 +1239,20 @@ export function App() {
         selectedRepo={selectedRepo}
         search={sidebarSearch}
         onSearch={setSidebarSearch}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onToggle={() => setSidebarCollapsedWithAnimation(true)}
         onSelectRepo={selectRepo}
         onToggleFavorite={toggleFavorite}
         favoriteKeys={favoriteKeys}
         loading={initialLoading}
       />
-      {!sidebarCollapsed && <div className="resize-handle" onPointerDown={(event) => startResize("left", event)} />}
+      <div
+        className={cx("resize-handle", "left-resize-handle", sidebarCollapsed && "collapsed")}
+        onPointerDown={(event) => {
+          if (!sidebarCollapsed) {
+            startResize("left", event);
+          }
+        }}
+      />
       <ProjectPane
         repo={selectedRepo}
         sidebarCollapsed={sidebarCollapsed}
@@ -1227,7 +1273,7 @@ export function App() {
         onPullRequestTab={setProjectPullRequestTab}
         onWorkflowTab={setProjectWorkflowTab}
         onRefresh={() => selectedRepo && loadProject(selectedRepo)}
-        onToggleSidebar={() => setSidebarCollapsed(false)}
+        onToggleSidebar={() => setSidebarCollapsedWithAnimation(false)}
         onOpenGithub={openGithub}
         onSelectPr={(pr) => {
           setProjectPullRequestTab(pullRequestTabForState(pr));
@@ -1301,6 +1347,7 @@ interface SidebarProps {
 }
 
 function Sidebar(props: SidebarProps) {
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useStoredState<Record<string, boolean>>(
     "github-focus:collapsed-orgs",
     {}
@@ -1309,20 +1356,25 @@ function Sidebar(props: SidebarProps) {
   const searchActive = props.search.trim().length > 0;
   const allRepoCount = props.repoGroups.reduce((total, [, repos]) => total + repos.length, 0);
 
-  if (props.collapsed) {
-    return (
-      <aside className="sidebar collapsed-pane" tabIndex={0}>
-        <div className="collapsed-stack">
-          <Github size={18} />
-          <Star size={18} />
-          <Search size={18} />
-        </div>
-      </aside>
-    );
-  }
+  useEffect(() => {
+    const sidebar = sidebarRef.current;
+    if (!sidebar) {
+      return;
+    }
+    if (props.collapsed) {
+      sidebar.setAttribute("inert", "");
+    } else {
+      sidebar.removeAttribute("inert");
+    }
+  }, [props.collapsed]);
 
   return (
-    <aside className="sidebar" tabIndex={0}>
+    <aside
+      ref={sidebarRef}
+      className={cx("sidebar", props.collapsed && "sidebar-hidden")}
+      tabIndex={props.collapsed ? -1 : 0}
+      aria-hidden={props.collapsed}
+    >
       <div className="pane-header app-drag">
         <div className="brand-mark">
           <Github size={18} />
