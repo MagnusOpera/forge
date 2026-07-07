@@ -516,13 +516,38 @@ async function getRepo(repoRef: RepoRef): Promise<CacheEnvelope<RepoSummary>> {
 
 async function getPullRequests(repoRef: RepoRef): Promise<CacheEnvelope<PullRequestSummary[]>> {
   const repo = ensureRepo(repoRef);
-  return cached(`repo:${repo.owner}/${repo.name}:pulls`, async () => {
+  return cached(`repo:${repo.owner}/${repo.name}:pulls:v2`, async () => {
     const { gql } = await getClients();
     const result: any = await gql(
       `
         query PullRequests($owner: String!, $name: String!) {
           repository(owner: $owner, name: $name) {
-            pullRequests(first: 50, states: OPEN, orderBy: { field: UPDATED_AT, direction: DESC }) {
+            openPullRequests: pullRequests(first: 50, states: OPEN, orderBy: { field: UPDATED_AT, direction: DESC }) {
+              nodes {
+                id
+                number
+                title
+                state
+                isDraft
+                reviewDecision
+                mergeable
+                headRefName
+                baseRefName
+                createdAt
+                updatedAt
+                url
+                author { login avatarUrl url }
+                labels(first: 10) { nodes { id name color } }
+                commits(last: 1) {
+                  nodes {
+                    commit {
+                      statusCheckRollup { state }
+                    }
+                  }
+                }
+              }
+            }
+            closedPullRequests: pullRequests(first: 50, states: [CLOSED, MERGED], orderBy: { field: UPDATED_AT, direction: DESC }) {
               nodes {
                 id
                 number
@@ -552,7 +577,12 @@ async function getPullRequests(repoRef: RepoRef): Promise<CacheEnvelope<PullRequ
       `,
       { owner: repo.owner, name: repo.name }
     );
-    return nodeList<any>(result.repository.pullRequests).map(toPullRequest);
+    return [
+      ...nodeList<any>(result.repository.openPullRequests),
+      ...nodeList<any>(result.repository.closedPullRequests)
+    ]
+      .map(toPullRequest)
+      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   });
 }
 

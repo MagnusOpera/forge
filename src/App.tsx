@@ -92,10 +92,12 @@ type ThemeMode = "dark" | "light";
 type SidebarRepoTab = "favorites" | "all";
 type ProjectFocusView = "pull-requests" | "workflow-runs" | "issues" | "workflows";
 type StoredProjectFocusView = ProjectFocusView | "starred-actions";
+type ProjectPullRequestTab = "open" | "closed";
 type ProjectWorkflowTab = "favorites" | "all";
 type PatchDiffOptions = NonNullable<PatchDiffProps<unknown>["options"]>;
 type NavigationEntry = {
   focusView: ProjectFocusView;
+  pullRequestTab: ProjectPullRequestTab;
   repo: RepoSummary | null;
   selection: ContentSelection;
   workflowTab: ProjectWorkflowTab;
@@ -242,7 +244,13 @@ function selectionRouteKey(selection: ContentSelection): string {
 }
 
 function navigationEntryKey(entry: NavigationEntry): string {
-  return `${entry.repo ? repoKey(entry.repo) : "none"}:${selectionRouteKey(entry.selection)}`;
+  return [
+    entry.repo ? repoKey(entry.repo) : "none",
+    entry.focusView,
+    entry.pullRequestTab,
+    entry.workflowTab,
+    selectionRouteKey(entry.selection)
+  ].join(":");
 }
 
 function uniqueRepos(repos: RepoSummary[]): RepoSummary[] {
@@ -333,7 +341,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 function statusTone(status?: string | null, conclusion?: string | null): string {
   const value = (conclusion || status || "").toLowerCase();
-  if (["success", "completed", "approved", "mergeable"].includes(value)) {
+  if (["success", "completed", "approved", "mergeable", "merged"].includes(value)) {
     return "good";
   }
   if (["failure", "error", "timed_out", "cancelled", "changes_requested", "conflicting"].includes(value)) {
@@ -342,10 +350,14 @@ function statusTone(status?: string | null, conclusion?: string | null): string 
   if (["in_progress", "queued", "pending", "requested", "waiting"].includes(value)) {
     return "running";
   }
-  if (value === "neutral" || value === "skipped") {
+  if (["neutral", "skipped", "closed", "draft"].includes(value)) {
     return "muted";
   }
   return "unknown";
+}
+
+function pullRequestTabForState(pr: PullRequestSummary): ProjectPullRequestTab {
+  return pr.state === "CLOSED" || pr.state === "MERGED" ? "closed" : "open";
 }
 
 function isLiveStatus(status?: string | null): boolean {
@@ -447,6 +459,10 @@ export function App() {
     "github-focus:project-focus-view",
     "pull-requests"
   );
+  const [projectPullRequestTab, setProjectPullRequestTab] = useStoredState<ProjectPullRequestTab>(
+    "github-focus:project-pull-request-tab",
+    "open"
+  );
   const [projectWorkflowTab, setProjectWorkflowTab] = useStoredState<ProjectWorkflowTab>(
     "github-focus:project-workflow-tab",
     "favorites"
@@ -482,6 +498,15 @@ export function App() {
   const starredWorkflows = workflows.filter((workflow) => selectedWorkflowStars.includes(workflow.id));
   const projectFocusView: ProjectFocusView =
     storedProjectFocusView === "starred-actions" ? "workflows" : storedProjectFocusView;
+  const openPullRequests = useMemo(
+    () => pullRequests.filter((pr) => pr.state !== "CLOSED" && pr.state !== "MERGED"),
+    [pullRequests]
+  );
+  const closedPullRequests = useMemo(
+    () => pullRequests.filter((pr) => pr.state === "CLOSED" || pr.state === "MERGED"),
+    [pullRequests]
+  );
+  const visiblePullRequests = projectPullRequestTab === "closed" ? closedPullRequests : openPullRequests;
 
   const visibleRepos = useMemo(() => {
     const needle = sidebarSearch.trim().toLowerCase();
@@ -512,18 +537,19 @@ export function App() {
       const visibleWorkflows = projectWorkflowTab === "favorites" ? starredWorkflows : workflows;
       return visibleWorkflows.map((workflow) => ({ id: `workflow:${workflow.id}`, kind: "workflow" as const, workflow }));
     }
-    return pullRequests.map((pr) => ({ id: `pr:${pr.number}`, kind: "pr" as const, pr }));
-  }, [issues, projectFocusView, projectWorkflowTab, pullRequests, starredWorkflows, workflowRuns, workflows]);
+    return visiblePullRequests.map((pr) => ({ id: `pr:${pr.number}`, kind: "pr" as const, pr }));
+  }, [issues, projectFocusView, projectWorkflowTab, starredWorkflows, visiblePullRequests, workflowRuns, workflows]);
 
   const currentGithubUrl = openUrlForSelection(selection, selectedRepo);
   const currentNavigationEntry = useMemo<NavigationEntry>(
     () => ({
       focusView: projectFocusView,
+      pullRequestTab: projectPullRequestTab,
       repo: selectedRepo,
       selection,
       workflowTab: projectWorkflowTab
     }),
-    [projectFocusView, projectWorkflowTab, selectedRepo, selection]
+    [projectFocusView, projectPullRequestTab, projectWorkflowTab, selectedRepo, selection]
   );
   const canNavigateBack = navigation.index > 0;
   const canNavigateForward = navigation.index >= 0 && navigation.index < navigation.entries.length - 1;
@@ -680,6 +706,7 @@ export function App() {
   const selectMiddleItem = useCallback(
     (item: MiddleItem) => {
       if (item.kind === "pr") {
+        setProjectPullRequestTab(pullRequestTabForState(item.pr));
         setSelection({ kind: "pr", pr: item.pr });
         setPrTab("Description");
       }
@@ -694,7 +721,7 @@ export function App() {
         setSelection({ kind: "workflow", workflow: item.workflow });
       }
     },
-    []
+    [setProjectPullRequestTab]
   );
 
   const openGithub = useCallback(() => {
@@ -713,6 +740,7 @@ export function App() {
       setSelectedRepo(entry.repo);
       setSelection(entry.selection);
       setStoredProjectFocusView(entry.focusView);
+      setProjectPullRequestTab(entry.pullRequestTab);
       setProjectWorkflowTab(entry.workflowTab);
       if (entry.selection.kind === "pr") {
         setPrTab("Description");
@@ -731,7 +759,7 @@ export function App() {
         setRunDetail(null);
       }
     },
-    [setProjectWorkflowTab, setStoredProjectFocusView]
+    [setProjectPullRequestTab, setProjectWorkflowTab, setStoredProjectFocusView]
   );
 
   const navigateHistory = useCallback(
@@ -836,7 +864,11 @@ export function App() {
           kind: "pr",
           title: `#${pr.number} ${pr.title}`,
           subtitle: selectedRepo.fullName,
-          run: () => setSelection({ kind: "pr", pr })
+          run: () => {
+            setStoredProjectFocusView("pull-requests");
+            setProjectPullRequestTab(pullRequestTabForState(pr));
+            setSelection({ kind: "pr", pr });
+          }
         });
       }
 
@@ -880,7 +912,9 @@ export function App() {
     pullRequests,
     selectRepo,
     selectedRepo,
+    setProjectPullRequestTab,
     setSidebarCollapsed,
+    setStoredProjectFocusView,
     workflowRuns,
     workflows
   ]);
@@ -1176,23 +1210,29 @@ export function App() {
       <ProjectPane
         repo={selectedRepo}
         sidebarCollapsed={sidebarCollapsed}
-        pullRequests={pullRequests}
         issues={issues}
         workflowRuns={workflowRuns}
         workflows={workflows}
         starredWorkflows={starredWorkflows}
         starredWorkflowIds={selectedWorkflowStars}
+        openPullRequests={openPullRequests}
+        closedPullRequests={closedPullRequests}
         focusView={projectFocusView}
+        pullRequestTab={projectPullRequestTab}
         workflowTab={projectWorkflowTab}
         loading={projectLoading}
         error={projectError}
         selection={selection}
         onFocusView={setStoredProjectFocusView}
+        onPullRequestTab={setProjectPullRequestTab}
         onWorkflowTab={setProjectWorkflowTab}
         onRefresh={() => selectedRepo && loadProject(selectedRepo)}
         onToggleSidebar={() => setSidebarCollapsed(false)}
         onOpenGithub={openGithub}
-        onSelectPr={(pr) => setSelection({ kind: "pr", pr })}
+        onSelectPr={(pr) => {
+          setProjectPullRequestTab(pullRequestTabForState(pr));
+          setSelection({ kind: "pr", pr });
+        }}
         onSelectIssue={(issue) => setSelection({ kind: "issue", issue })}
         onSelectRun={(run) => setSelection({ kind: "run", run })}
         onSelectWorkflow={(workflow) => setSelection({ kind: "workflow", workflow })}
@@ -1465,18 +1505,21 @@ function RepoButton(props: {
 function ProjectPane(props: {
   repo: RepoSummary | null;
   sidebarCollapsed: boolean;
-  pullRequests: PullRequestSummary[];
   issues: IssueSummary[];
   workflowRuns: WorkflowRunSummary[];
   workflows: WorkflowSummary[];
   starredWorkflows: WorkflowSummary[];
   starredWorkflowIds: number[];
+  openPullRequests: PullRequestSummary[];
+  closedPullRequests: PullRequestSummary[];
   focusView: ProjectFocusView;
+  pullRequestTab: ProjectPullRequestTab;
   workflowTab: ProjectWorkflowTab;
   loading: boolean;
   error: string | null;
   selection: ContentSelection;
   onFocusView(view: ProjectFocusView): void;
+  onPullRequestTab(tab: ProjectPullRequestTab): void;
   onWorkflowTab(tab: ProjectWorkflowTab): void;
   onRefresh(): void;
   onToggleSidebar(): void;
@@ -1505,7 +1548,7 @@ function ProjectPane(props: {
             disabled={!props.repo}
             view={props.focusView}
             counts={{
-              "pull-requests": props.pullRequests.length,
+              "pull-requests": props.openPullRequests.length,
               "workflow-runs": props.workflowRuns.length,
               issues: props.issues.length,
               workflows: props.workflows.length
@@ -1556,9 +1599,12 @@ function ProjectPane(props: {
               onRun={props.onRunWorkflow}
             />
           ) : (
-            <PullRequestsSection
-              pullRequests={props.pullRequests}
+            <PullRequestFocusSection
+              openPullRequests={props.openPullRequests}
+              closedPullRequests={props.closedPullRequests}
+              tab={props.pullRequestTab}
               selected={props.selection}
+              onTab={props.onPullRequestTab}
               onSelect={props.onSelectPr}
             />
           )}
@@ -1601,7 +1647,54 @@ function ProjectFocusToolbar(props: {
   );
 }
 
+function PullRequestFocusSection(props: {
+  openPullRequests: PullRequestSummary[];
+  closedPullRequests: PullRequestSummary[];
+  tab: ProjectPullRequestTab;
+  selected: ContentSelection;
+  onTab(tab: ProjectPullRequestTab): void;
+  onSelect(pr: PullRequestSummary): void;
+}) {
+  const visiblePullRequests = props.tab === "closed" ? props.closedPullRequests : props.openPullRequests;
+
+  return (
+    <div className="pull-request-focus">
+      <div className="pull-request-tabs" role="tablist" aria-label="Pull request view">
+        <button
+          className={cx("pull-request-tab", props.tab === "open" && "active")}
+          role="tab"
+          aria-selected={props.tab === "open"}
+          onClick={() => props.onTab("open")}
+        >
+          <GitPullRequest size={14} />
+          Open
+          <span>{props.openPullRequests.length}</span>
+        </button>
+        <button
+          className={cx("pull-request-tab", props.tab === "closed" && "active")}
+          role="tab"
+          aria-selected={props.tab === "closed"}
+          onClick={() => props.onTab("closed")}
+        >
+          <XCircle size={14} />
+          Closed
+          <span>{props.closedPullRequests.length}</span>
+        </button>
+      </div>
+      <PullRequestsSection
+        title={props.tab === "closed" ? "Closed Pull Requests" : "Open Pull Requests"}
+        empty={props.tab === "closed" ? "No closed PRs" : "No open PRs"}
+        pullRequests={visiblePullRequests}
+        selected={props.selected}
+        onSelect={props.onSelect}
+      />
+    </div>
+  );
+}
+
 function PullRequestsSection(props: {
+  title: string;
+  empty: string;
   pullRequests: PullRequestSummary[];
   selected: ContentSelection;
   onSelect(pr: PullRequestSummary): void;
@@ -1610,28 +1703,40 @@ function PullRequestsSection(props: {
     <div className="focus-section">
       <div className="section-title">
         <GitPullRequest size={15} />
-        <span>Pull Requests</span>
+        <span>{props.title}</span>
         <span className="count">{props.pullRequests.length}</span>
       </div>
       {props.pullRequests.length ? (
-        props.pullRequests.map((pr) => (
-          <button
-            key={pr.id}
-            className={cx("focus-row", props.selected.kind === "pr" && props.selected.pr.id === pr.id && "active")}
-            onClick={() => props.onSelect(pr)}
-          >
-            <StatusIcon status={pr.ciState} conclusion={pr.reviewDecision ?? undefined} />
-            <span className="focus-main">
-              <span className="focus-title">#{pr.number} {pr.title}</span>
-              <span className="focus-meta">{pr.author?.login ?? "unknown"} to {pr.baseRefName}</span>
-            </span>
-            <span className={cx("state-chip", statusTone(pr.mergeable, pr.reviewDecision))}>
-              {pr.isDraft ? "draft" : pr.reviewDecision ?? pr.mergeable ?? "open"}
-            </span>
-          </button>
-        ))
+        props.pullRequests.map((pr) => {
+          const badge =
+            pr.isDraft && pr.state === "OPEN"
+              ? "draft"
+              : pr.state === "MERGED"
+                ? "merged"
+                : pr.state === "CLOSED"
+                  ? "closed"
+                  : pr.reviewDecision ?? pr.mergeable ?? "open";
+          const iconStatus = pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : pr.ciState;
+
+          return (
+            <button
+              key={pr.id}
+              className={cx("focus-row", props.selected.kind === "pr" && props.selected.pr.id === pr.id && "active")}
+              onClick={() => props.onSelect(pr)}
+            >
+              <StatusIcon status={iconStatus} conclusion={pr.state === "OPEN" ? pr.reviewDecision ?? undefined : undefined} />
+              <span className="focus-main">
+                <span className="focus-title">#{pr.number} {pr.title}</span>
+                <span className="focus-meta">{pr.author?.login ?? "unknown"} to {pr.baseRefName}</span>
+              </span>
+              <span className={cx("state-chip", statusTone(badge))}>
+                {badge}
+              </span>
+            </button>
+          );
+        })
       ) : (
-        <div className="empty-row">No open PRs</div>
+        <div className="empty-row">{props.empty}</div>
       )}
     </div>
   );

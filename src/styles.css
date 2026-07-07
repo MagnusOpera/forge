@@ -527,6 +527,7 @@ input {
   -webkit-app-region: no-drag;
 }
 
+.pull-request-tabs,
 .workflow-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -538,6 +539,7 @@ input {
 }
 
 .sidebar-tab,
+.pull-request-tab,
 .workflow-tab {
   display: inline-flex;
   align-items: center;
@@ -555,6 +557,8 @@ input {
 
 .sidebar-tab:hover,
 .sidebar-tab.active,
+.pull-request-tab:hover,
+.pull-request-tab.active,
 .workflow-tab:hover,
 .workflow-tab.active {
   background: var(--tab-active-bg);
@@ -562,6 +566,7 @@ input {
 }
 
 .sidebar-tab span,
+.pull-request-tab span,
 .workflow-tab span {
   color: var(--text-dim);
   font-size: 11px;
@@ -569,6 +574,7 @@ input {
 }
 
 .sidebar-tab svg,
+.pull-request-tab svg,
 .workflow-tab svg {
   flex: 0 0 auto;
 }
