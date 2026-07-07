@@ -1083,6 +1083,8 @@ p {
 
 .markdown-block {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: 14px;
   border: 1px solid var(--card-border);
@@ -1091,13 +1093,18 @@ p {
   color: var(--markdown-text);
   font-size: 13px;
   line-height: 1.55;
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .markdown-block.compact {
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+.markdown-block * {
+  min-width: 0;
 }
 
 .markdown-block > *:first-child,
@@ -1120,8 +1127,9 @@ p {
 }
 
 .markdown-block p {
-  max-width: none;
+  max-width: 100%;
   color: inherit;
+  overflow-wrap: anywhere;
 }
 
 .markdown-block h1,
@@ -1157,6 +1165,7 @@ p {
 .markdown-block a {
   color: var(--code-text);
   text-decoration: none;
+  overflow-wrap: anywhere;
 }
 
 .markdown-block a:hover {
@@ -1169,7 +1178,9 @@ p {
 }
 
 .markdown-block li {
+  min-width: 0;
   margin: 4px 0;
+  overflow-wrap: anywhere;
 }
 
 .markdown-block input[type="checkbox"] {
@@ -1184,18 +1195,23 @@ p {
 }
 
 .markdown-block code {
+  max-width: 100%;
   padding: 2px 5px;
   border-radius: 5px;
   background: var(--hover-bg);
   color: var(--code-text);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .markdown-block pre {
+  max-width: 100%;
   overflow: auto;
   padding: 12px;
   border: 1px solid var(--card-border);
   border-radius: 8px;
   background: var(--card-bg);
+  overscroll-behavior-x: contain;
 }
 
 .markdown-block pre code {
@@ -1204,11 +1220,13 @@ p {
   border-radius: 0;
   background: transparent;
   color: var(--markdown-text);
+  overflow-wrap: normal;
   white-space: pre;
 }
 
 .markdown-block table {
   display: block;
+  max-width: 100%;
   width: 100%;
   overflow: auto;
   border-collapse: collapse;
@@ -1247,6 +1265,8 @@ p {
 
 .article-card {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--card-border);
