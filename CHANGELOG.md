@@ -4,8 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
-## [0.0.1]
+- Disabled electron-builder's implicit tag publishing so release builds use the GitHub release workflow without a `GH_TOKEN` secret.
 
+## [0.0.1]
 
 - Added Forge contributor guidance and CI changelog enforcement for branch builds.
 - Added a release preparation target that materializes changelog entries, commits them, and creates the release tag.

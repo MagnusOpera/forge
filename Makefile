@@ -36,7 +36,7 @@ run: build
 package-mac-arm64:
 	rm -rf .out/electron
 	npm run build
-	npx electron-builder --mac zip --arm64 --config.extraMetadata.version=$(app_version)
+	npx electron-builder --mac zip --arm64 --publish never --config.extraMetadata.version=$(app_version)
 	mkdir -p .out
 	@artifact=$$(find .out/electron -maxdepth 1 -type f -name '*.zip' -print -quit); \
 	if [[ -z "$$artifact" ]]; then \

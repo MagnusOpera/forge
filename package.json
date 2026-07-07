@@ -13,7 +13,7 @@
     "dev:main": "tsc -p tsconfig.electron.json --watch --preserveWatchOutput",
     "dev:electron": "wait-on tcp:5173 dist-electron/electron/main/main.js && electron .",
     "build": "tsc -p tsconfig.electron.json && vite build",
-    "dist:mac": "npm run build && electron-builder --mac zip --arm64",
+    "dist:mac": "npm run build && electron-builder --mac zip --arm64 --publish never",
     "test": "vitest run --reporter=default --reporter=junit --outputFile.junit=.out/test-results/unit.xml",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
     "preview": "vite preview --host 127.0.0.1 --port 4173"
