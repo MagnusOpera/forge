@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
-  Clock3,
   Code2,
   Command,
   ExternalLink,
@@ -29,7 +28,6 @@ import {
   Star,
   StarOff,
   Sun,
-  Users,
   Workflow,
   XCircle
 } from "lucide-react";
@@ -79,6 +77,7 @@ interface PaletteItem {
 }
 
 type ThemeMode = "dark" | "light";
+type SidebarRepoTab = "favorites" | "all";
 
 const accentColors = [
   "#7ee787",
@@ -370,11 +369,6 @@ export function App() {
   const favoriteRepos = useMemo(
     () => favoriteKeys.map((key) => reposByKey.get(key)).filter(Boolean) as RepoSummary[],
     [favoriteKeys, reposByKey]
-  );
-
-  const localRecentRepos = useMemo(
-    () => localRecentKeys.map((key) => reposByKey.get(key)).filter(Boolean) as RepoSummary[],
-    [localRecentKeys, reposByKey]
   );
 
   const selectedRepoKey = selectedRepo ? repoKey(selectedRepo) : "";
@@ -939,10 +933,8 @@ export function App() {
       <Sidebar
         collapsed={sidebarCollapsed}
         favoriteRepos={favoriteRepos}
-        recentRepos={localRecentRepos}
         repoGroups={repoGroups}
         selectedRepo={selectedRepo}
-        organizations={organizations}
         search={sidebarSearch}
         onSearch={setSidebarSearch}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -1017,9 +1009,7 @@ export function App() {
 interface SidebarProps {
   collapsed: boolean;
   favoriteRepos: RepoSummary[];
-  recentRepos: RepoSummary[];
   repoGroups: Array<[string, RepoSummary[]]>;
-  organizations: OrganizationSummary[];
   selectedRepo: RepoSummary | null;
   search: string;
   favoriteKeys: string[];
@@ -1035,6 +1025,9 @@ function Sidebar(props: SidebarProps) {
     "github-focus:collapsed-orgs",
     {}
   );
+  const [repoTab, setRepoTab] = useStoredState<SidebarRepoTab>("github-focus:sidebar-repo-tab", "favorites");
+  const searchActive = props.search.trim().length > 0;
+  const allRepoCount = props.repoGroups.reduce((total, [, repos]) => total + repos.length, 0);
 
   if (props.collapsed) {
     return (
@@ -1063,43 +1056,93 @@ function Sidebar(props: SidebarProps) {
         <Search size={16} />
         <input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="Search" />
       </label>
-      <nav className="sidebar-scroll">
-        <RepoSection
-          title="Favorites"
-          icon={<Star size={15} />}
-          repos={props.favoriteRepos}
-          selectedRepo={props.selectedRepo}
-          favoriteKeys={props.favoriteKeys}
-          onSelectRepo={props.onSelectRepo}
-          onToggleFavorite={props.onToggleFavorite}
-        />
-        <RepoSection
-          title="Recent"
-          icon={<Clock3 size={15} />}
-          repos={props.recentRepos}
-          selectedRepo={props.selectedRepo}
-          favoriteKeys={props.favoriteKeys}
-          onSelectRepo={props.onSelectRepo}
-          onToggleFavorite={props.onToggleFavorite}
-        />
-        <div className="section-title">
-          <Users size={15} />
-          <span>Repositories</span>
-          {props.loading && <Loader2 className="spin" size={14} />}
+      {!searchActive && (
+        <div className="sidebar-tabs" role="tablist" aria-label="Repository view">
+          <button
+            className={cx("sidebar-tab", repoTab === "favorites" && "active")}
+            role="tab"
+            aria-selected={repoTab === "favorites"}
+            onClick={() => setRepoTab("favorites")}
+          >
+            <Star size={14} />
+            Favorites
+            <span>{props.favoriteRepos.length}</span>
+          </button>
+          <button
+            className={cx("sidebar-tab", repoTab === "all" && "active")}
+            role="tab"
+            aria-selected={repoTab === "all"}
+            onClick={() => setRepoTab("all")}
+          >
+            <Code2 size={14} />
+            All
+            <span>{allRepoCount}</span>
+          </button>
         </div>
-        {props.repoGroups.map(([owner, repos]) => {
-          const isCollapsed = collapsedGroups[owner] ?? false;
+      )}
+      <nav className="sidebar-scroll">
+        {!searchActive && repoTab === "favorites" ? (
+          <RepoSection
+            title="Favorites"
+            icon={<Star size={15} />}
+            repos={props.favoriteRepos}
+            emptyText="No favorite repositories."
+            selectedRepo={props.selectedRepo}
+            favoriteKeys={props.favoriteKeys}
+            onSelectRepo={props.onSelectRepo}
+            onToggleFavorite={props.onToggleFavorite}
+          />
+        ) : (
+          <RepoGroupList
+            title={searchActive ? "Results" : "Repositories"}
+            repoGroups={props.repoGroups}
+            collapsedGroups={collapsedGroups}
+            loading={props.loading}
+            emptyText={searchActive ? "No matching repositories." : "No repositories."}
+            selectedRepo={props.selectedRepo}
+            favoriteKeys={props.favoriteKeys}
+            onSelectRepo={props.onSelectRepo}
+            onToggleFavorite={props.onToggleFavorite}
+            onToggleGroup={(owner) =>
+              setCollapsedGroups((current) => ({
+                ...current,
+                [owner]: !(current[owner] ?? false)
+              }))
+            }
+          />
+        )}
+      </nav>
+    </aside>
+  );
+}
+
+function RepoGroupList(props: {
+  title: string;
+  repoGroups: Array<[string, RepoSummary[]]>;
+  collapsedGroups: Record<string, boolean>;
+  loading: boolean;
+  emptyText: string;
+  selectedRepo: RepoSummary | null;
+  favoriteKeys: string[];
+  onSelectRepo(repo: RepoSummary): void;
+  onToggleFavorite(repo: RepoSummary): void;
+  onToggleGroup(owner: string): void;
+}) {
+  const repoCount = props.repoGroups.reduce((total, [, repos]) => total + repos.length, 0);
+
+  return (
+    <div className="repo-section">
+      <div className="section-title">
+        <Github size={15} />
+        <span>{props.title}</span>
+        {props.loading ? <Loader2 className="spin" size={14} /> : <span className="count">{repoCount}</span>}
+      </div>
+      {props.repoGroups.length ? (
+        props.repoGroups.map(([owner, repos]) => {
+          const isCollapsed = props.collapsedGroups[owner] ?? false;
           return (
             <div key={owner} className="repo-group">
-              <button
-                className="repo-group-toggle"
-                onClick={() =>
-                  setCollapsedGroups((current) => ({
-                    ...current,
-                    [owner]: !isCollapsed
-                  }))
-                }
-              >
+              <button className="repo-group-toggle" onClick={() => props.onToggleGroup(owner)}>
                 {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                 <span>{owner}</span>
               </button>
@@ -1116,22 +1159,11 @@ function Sidebar(props: SidebarProps) {
                 ))}
             </div>
           );
-        })}
-        {!!props.organizations.length && (
-          <div className="org-list">
-            <div className="section-title">
-              <Users size={15} />
-              <span>Organizations</span>
-            </div>
-            {props.organizations.map((org) => (
-              <div className="org-row" key={org.id}>
-                <span>{org.login}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </nav>
-    </aside>
+        })
+      ) : (
+        <div className="empty-row">{props.emptyText}</div>
+      )}
+    </div>
   );
 }
 
@@ -1139,31 +1171,33 @@ function RepoSection(props: {
   title: string;
   icon: React.ReactNode;
   repos: RepoSummary[];
+  emptyText: string;
   selectedRepo: RepoSummary | null;
   favoriteKeys: string[];
   onSelectRepo(repo: RepoSummary): void;
   onToggleFavorite(repo: RepoSummary): void;
 }) {
-  if (!props.repos.length) {
-    return null;
-  }
-
   return (
     <div className="repo-section">
       <div className="section-title">
         {props.icon}
         <span>{props.title}</span>
+        <span className="count">{props.repos.length}</span>
       </div>
-      {props.repos.map((repo) => (
-        <RepoButton
-          key={repo.fullName}
-          repo={repo}
-          selected={props.selectedRepo ? repoKey(repo) === repoKey(props.selectedRepo) : false}
-          favorite={props.favoriteKeys.includes(repoKey(repo))}
-          onSelect={() => props.onSelectRepo(repo)}
-          onToggleFavorite={() => props.onToggleFavorite(repo)}
-        />
-      ))}
+      {props.repos.length ? (
+        props.repos.map((repo) => (
+          <RepoButton
+            key={repo.fullName}
+            repo={repo}
+            selected={props.selectedRepo ? repoKey(repo) === repoKey(props.selectedRepo) : false}
+            favorite={props.favoriteKeys.includes(repoKey(repo))}
+            onSelect={() => props.onSelectRepo(repo)}
+            onToggleFavorite={() => props.onToggleFavorite(repo)}
+          />
+        ))
+      ) : (
+        <div className="empty-row">{props.emptyText}</div>
+      )}
     </div>
   );
 }
