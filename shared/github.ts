@@ -7,6 +7,10 @@ export interface CacheEnvelope<T> {
   source: CacheSource;
 }
 
+export interface CacheRequestOptions {
+  force?: boolean;
+}
+
 export interface AuthStatus {
   configured: boolean;
   encryptionAvailable: boolean;
@@ -257,11 +261,11 @@ export interface GithubFocusApi {
   getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>>;
   getRecentRepos(): Promise<CacheEnvelope<RepoSummary[]>>;
   getOrganizations(): Promise<CacheEnvelope<OrganizationSummary[]>>;
-  getRepo(repo: RepoRef): Promise<CacheEnvelope<RepoSummary>>;
-  getPullRequests(repo: RepoRef): Promise<CacheEnvelope<PullRequestSummary[]>>;
-  getIssues(repo: RepoRef): Promise<CacheEnvelope<IssueSummary[]>>;
-  getWorkflows(repo: RepoRef): Promise<CacheEnvelope<WorkflowSummary[]>>;
-  getWorkflowRuns(repo: RepoRef): Promise<CacheEnvelope<WorkflowRunSummary[]>>;
+  getRepo(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<RepoSummary>>;
+  getPullRequests(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<PullRequestSummary[]>>;
+  getIssues(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<IssueSummary[]>>;
+  getWorkflows(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowSummary[]>>;
+  getWorkflowRuns(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowRunSummary[]>>;
   getPullRequest(repo: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>>;
   getWorkflowRun(repo: RepoRef, runId: number): Promise<CacheEnvelope<WorkflowRunDetail>>;
   getWorkflowJob(repo: RepoRef, jobId: number): Promise<CacheEnvelope<WorkflowJobLogDetail>>;

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { DispatchWorkflowPayload, GithubFocusApi, RepoRef } from "../../shared/github.js";
+import type { CacheRequestOptions, DispatchWorkflowPayload, GithubFocusApi, RepoRef } from "../../shared/github.js";
 
 const api: GithubFocusApi = {
   platform: process.platform,
@@ -10,11 +10,15 @@ const api: GithubFocusApi = {
   getStarredRepos: () => ipcRenderer.invoke("github:get-starred-repos"),
   getRecentRepos: () => ipcRenderer.invoke("github:get-recent-repos"),
   getOrganizations: () => ipcRenderer.invoke("github:get-organizations"),
-  getRepo: (repo: RepoRef) => ipcRenderer.invoke("github:get-repo", repo),
-  getPullRequests: (repo: RepoRef) => ipcRenderer.invoke("github:get-pull-requests", repo),
-  getIssues: (repo: RepoRef) => ipcRenderer.invoke("github:get-issues", repo),
-  getWorkflows: (repo: RepoRef) => ipcRenderer.invoke("github:get-workflows", repo),
-  getWorkflowRuns: (repo: RepoRef) => ipcRenderer.invoke("github:get-workflow-runs", repo),
+  getRepo: (repo: RepoRef, options?: CacheRequestOptions) => ipcRenderer.invoke("github:get-repo", repo, options),
+  getPullRequests: (repo: RepoRef, options?: CacheRequestOptions) =>
+    ipcRenderer.invoke("github:get-pull-requests", repo, options),
+  getIssues: (repo: RepoRef, options?: CacheRequestOptions) =>
+    ipcRenderer.invoke("github:get-issues", repo, options),
+  getWorkflows: (repo: RepoRef, options?: CacheRequestOptions) =>
+    ipcRenderer.invoke("github:get-workflows", repo, options),
+  getWorkflowRuns: (repo: RepoRef, options?: CacheRequestOptions) =>
+    ipcRenderer.invoke("github:get-workflow-runs", repo, options),
   getPullRequest: (repo: RepoRef, number: number) =>
     ipcRenderer.invoke("github:get-pull-request", repo, number),
   getWorkflowRun: (repo: RepoRef, runId: number) =>

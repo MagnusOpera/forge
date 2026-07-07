@@ -620,19 +620,20 @@ export function App() {
   );
 
   const loadProject = useCallback(
-    async (repo: RepoSummary, showSpinner = true) => {
+    async (repo: RepoSummary, showSpinner = true, force = false) => {
       if (showSpinner) {
         setProjectLoading(true);
       }
       setProjectError(null);
+      const options = force ? { force: true } : undefined;
 
       try {
         const [repoDetail, prs, repoIssues, repoWorkflows, runs] = await Promise.all([
-          api.getRepo(repo),
-          api.getPullRequests(repo),
-          api.getIssues(repo),
-          api.getWorkflows(repo),
-          api.getWorkflowRuns(repo)
+          api.getRepo(repo, options),
+          api.getPullRequests(repo, options),
+          api.getIssues(repo, options),
+          api.getWorkflows(repo, options),
+          api.getWorkflowRuns(repo, options)
         ]);
 
         setSelectedRepo(repoDetail.data);
@@ -1272,7 +1273,7 @@ export function App() {
         onFocusView={setStoredProjectFocusView}
         onPullRequestTab={setProjectPullRequestTab}
         onWorkflowTab={setProjectWorkflowTab}
-        onRefresh={() => selectedRepo && loadProject(selectedRepo)}
+        onRefresh={() => selectedRepo && loadProject(selectedRepo, true, true)}
         onToggleSidebar={() => setSidebarCollapsedWithAnimation(false)}
         onOpenGithub={openGithub}
         onSelectPr={(pr) => {

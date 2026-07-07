@@ -10,6 +10,7 @@ import type {
   ArtifactSummary,
   AuthStatus,
   CacheEnvelope,
+  CacheRequestOptions,
   ChangedFileSummary,
   CheckSummary,
   CommitSummary,
@@ -190,8 +191,20 @@ async function writeCache<T>(key: string, data: T): Promise<CacheRecord<T>> {
 async function cached<T>(
   key: string,
   fetcher: () => Promise<T>,
-  ttlMs = defaultTtlMs
+  ttlMs = defaultTtlMs,
+  options: CacheRequestOptions = {}
 ): Promise<CacheEnvelope<T>> {
+  if (options.force) {
+    const data = await fetcher();
+    const fresh = await writeCache(key, data);
+    return {
+      data: fresh.data,
+      fetchedAt: fresh.fetchedAt,
+      stale: false,
+      source: "network"
+    };
+  }
+
   const record = await readCache<T>(key);
   const now = Date.now();
 
@@ -485,7 +498,7 @@ async function getOrganizations(): Promise<CacheEnvelope<OrganizationSummary[]>>
   });
 }
 
-async function getRepo(repoRef: RepoRef): Promise<CacheEnvelope<RepoSummary>> {
+async function getRepo(repoRef: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<RepoSummary>> {
   const repo = ensureRepo(repoRef);
   return cached(`repo:${repo.owner}/${repo.name}`, async () => {
     const { gql } = await getClients();
@@ -511,10 +524,13 @@ async function getRepo(repoRef: RepoRef): Promise<CacheEnvelope<RepoSummary>> {
       { owner: repo.owner, name: repo.name }
     );
     return toRepo(result.repository);
-  });
+  }, defaultTtlMs, options);
 }
 
-async function getPullRequests(repoRef: RepoRef): Promise<CacheEnvelope<PullRequestSummary[]>> {
+async function getPullRequests(
+  repoRef: RepoRef,
+  options?: CacheRequestOptions
+): Promise<CacheEnvelope<PullRequestSummary[]>> {
   const repo = ensureRepo(repoRef);
   return cached(`repo:${repo.owner}/${repo.name}:pulls:v2`, async () => {
     const { gql } = await getClients();
@@ -583,10 +599,10 @@ async function getPullRequests(repoRef: RepoRef): Promise<CacheEnvelope<PullRequ
     ]
       .map(toPullRequest)
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
-  });
+  }, defaultTtlMs, options);
 }
 
-async function getIssues(repoRef: RepoRef): Promise<CacheEnvelope<IssueSummary[]>> {
+async function getIssues(repoRef: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<IssueSummary[]>> {
   const repo = ensureRepo(repoRef);
   return cached(`repo:${repo.owner}/${repo.name}:issues`, async () => {
     const { gql } = await getClients();
@@ -613,10 +629,10 @@ async function getIssues(repoRef: RepoRef): Promise<CacheEnvelope<IssueSummary[]
       { owner: repo.owner, name: repo.name }
     );
     return nodeList<any>(result.repository.issues).map(toIssue);
-  });
+  }, defaultTtlMs, options);
 }
 
-async function getWorkflows(repoRef: RepoRef): Promise<CacheEnvelope<WorkflowSummary[]>> {
+async function getWorkflows(repoRef: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowSummary[]>> {
   const repo = ensureRepo(repoRef);
   return cached(`repo:${repo.owner}/${repo.name}:workflows`, async () => {
     const { octokit } = await getClients();
@@ -637,10 +653,13 @@ async function getWorkflows(repoRef: RepoRef): Promise<CacheEnvelope<WorkflowSum
       htmlUrl: workflow.html_url,
       badgeUrl: workflow.badge_url
     }));
-  });
+  }, defaultTtlMs, options);
 }
 
-async function getWorkflowRuns(repoRef: RepoRef): Promise<CacheEnvelope<WorkflowRunSummary[]>> {
+async function getWorkflowRuns(
+  repoRef: RepoRef,
+  options?: CacheRequestOptions
+): Promise<CacheEnvelope<WorkflowRunSummary[]>> {
   const repo = ensureRepo(repoRef);
   return cached(`repo:${repo.owner}/${repo.name}:workflow-runs`, async () => {
     const { octokit } = await getClients();
@@ -650,7 +669,7 @@ async function getWorkflowRuns(repoRef: RepoRef): Promise<CacheEnvelope<Workflow
       per_page: 50
     });
     return response.data.workflow_runs.map(toWorkflowRun);
-  }, 60 * 1000);
+  }, 60 * 1000, options);
 }
 
 async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>> {
@@ -1241,11 +1260,21 @@ function registerIpc(): void {
   ipcMain.handle("github:get-starred-repos", () => getStarredRepos());
   ipcMain.handle("github:get-recent-repos", () => getRecentRepos());
   ipcMain.handle("github:get-organizations", () => getOrganizations());
-  ipcMain.handle("github:get-repo", (_event, repo: RepoRef) => getRepo(repo));
-  ipcMain.handle("github:get-pull-requests", (_event, repo: RepoRef) => getPullRequests(repo));
-  ipcMain.handle("github:get-issues", (_event, repo: RepoRef) => getIssues(repo));
-  ipcMain.handle("github:get-workflows", (_event, repo: RepoRef) => getWorkflows(repo));
-  ipcMain.handle("github:get-workflow-runs", (_event, repo: RepoRef) => getWorkflowRuns(repo));
+  ipcMain.handle("github:get-repo", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
+    getRepo(repo, options)
+  );
+  ipcMain.handle("github:get-pull-requests", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
+    getPullRequests(repo, options)
+  );
+  ipcMain.handle("github:get-issues", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
+    getIssues(repo, options)
+  );
+  ipcMain.handle("github:get-workflows", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
+    getWorkflows(repo, options)
+  );
+  ipcMain.handle("github:get-workflow-runs", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
+    getWorkflowRuns(repo, options)
+  );
   ipcMain.handle("github:get-pull-request", (_event, repo: RepoRef, number: number) =>
     getPullRequest(repo, number)
   );

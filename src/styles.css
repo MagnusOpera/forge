@@ -188,6 +188,18 @@
   --terminal-muted: #98a2ad;
 }
 
+.app-shell[data-theme="dark"] {
+  --accent-muted-bg: color-mix(in srgb, var(--accent) 13%, var(--hover-bg));
+  --accent-panel-bg: color-mix(in srgb, var(--accent) 14%, var(--panel-bg));
+  --accent-border: color-mix(in srgb, var(--accent) 44%, var(--border));
+  --accent-text: color-mix(in srgb, var(--accent) 86%, var(--text-strong));
+  --accent-solid: color-mix(in srgb, var(--accent) 86%, #22272e);
+  --accent-solid-hover: color-mix(in srgb, var(--accent) 94%, #22272e);
+  --token-accent: var(--accent-text);
+  --primary-bg: var(--accent-solid);
+  --primary-hover-bg: var(--accent-solid-hover);
+}
+
 * {
   box-sizing: border-box;
 }
