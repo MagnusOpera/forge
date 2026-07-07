@@ -324,6 +324,11 @@ function formatRelative(value?: string | null): string {
   return `${Math.floor(months / 12)}y`;
 }
 
+function formatReviewMeta(state: string, submittedAt?: string | null): string {
+  const date = formatRelative(submittedAt);
+  return date ? `${state} - ${date}` : state;
+}
+
 function formatDuration(value?: number | null): string {
   if (!value) {
     return "";
@@ -2516,7 +2521,7 @@ function PullRequestContent(props: {
           empty="No reviews"
           items={detail.reviews}
           render={(review) => (
-            <ArticleCard key={review.id} title={review.author?.login ?? "unknown"} meta={review.state}>
+            <ArticleCard key={review.id} title={review.author?.login ?? "unknown"} meta={formatReviewMeta(review.state, review.submittedAt)}>
               <MarkdownBlock value={review.body || "No review body."} compact />
             </ArticleCard>
           )}
