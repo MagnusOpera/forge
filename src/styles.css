@@ -1528,7 +1528,8 @@ p {
 
 .file-row,
 .commit-row,
-.check-row {
+.check-row,
+.workflow-run-row {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) auto auto;
   align-items: center;
@@ -1540,6 +1541,15 @@ p {
   background: var(--card-bg);
   color: var(--row-strong);
   font-size: 12px;
+}
+
+.workflow-run-row {
+  width: 100%;
+  text-align: left;
+}
+
+.workflow-run-row:hover {
+  background: var(--hover-bg);
 }
 
 .commit-row {

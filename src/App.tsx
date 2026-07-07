@@ -767,6 +767,15 @@ export function App() {
     [flash, loadProject, selectedRepo]
   );
 
+  const selectRun = useCallback(
+    (run: WorkflowRunSummary) => {
+      setStoredProjectFocusView("workflow-runs");
+      setSelection({ kind: "run", run });
+      setRunTab("Summary");
+    },
+    [setStoredProjectFocusView]
+  );
+
   const selectMiddleItem = useCallback(
     (item: MiddleItem) => {
       if (item.kind === "pr") {
@@ -778,14 +787,13 @@ export function App() {
         setSelection({ kind: "issue", issue: item.issue });
       }
       if (item.kind === "run") {
-        setSelection({ kind: "run", run: item.run });
-        setRunTab("Summary");
+        selectRun(item.run);
       }
       if (item.kind === "workflow") {
         setSelection({ kind: "workflow", workflow: item.workflow });
       }
     },
-    [setProjectPullRequestTab]
+    [selectRun, setProjectPullRequestTab]
   );
 
   const openGithub = useCallback(() => {
@@ -1328,7 +1336,7 @@ export function App() {
           setSelection({ kind: "pr", pr });
         }}
         onSelectIssue={(issue) => setSelection({ kind: "issue", issue })}
-        onSelectRun={(run) => setSelection({ kind: "run", run })}
+        onSelectRun={selectRun}
         onSelectWorkflow={(workflow) => setSelection({ kind: "workflow", workflow })}
         onToggleWorkflowStar={toggleWorkflowStar}
         onReorderFavoriteWorkflow={reorderFavoriteWorkflows}
@@ -1363,6 +1371,7 @@ export function App() {
         onOpenGithub={openGithub}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
+        onSelectRun={selectRun}
         onRunWorkflow={runWorkflow}
         workflowRuns={workflowRuns}
       />
@@ -2148,6 +2157,7 @@ function ContentPane(props: {
   onOpenGithub(): void;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
+  onSelectRun(run: WorkflowRunSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
   return (
@@ -2258,7 +2268,13 @@ function ContentPane(props: {
           onTab={props.onRunTabChange}
         />
       ) : (
-        <WorkflowContent workflow={props.selection.workflow} repo={props.repo} onRun={props.onRunWorkflow} />
+        <WorkflowContent
+          workflow={props.selection.workflow}
+          repo={props.repo}
+          workflowRuns={props.workflowRuns}
+          onSelectRun={props.onSelectRun}
+          onRun={props.onRunWorkflow}
+        />
       )}
     </main>
   );
@@ -2687,7 +2703,23 @@ function IssueContent({ issue }: { issue: IssueSummary }) {
   );
 }
 
-function WorkflowContent(props: { workflow: WorkflowSummary; repo: RepoSummary; onRun(workflow: WorkflowSummary): void }) {
+function WorkflowContent(props: {
+  workflow: WorkflowSummary;
+  repo: RepoSummary;
+  workflowRuns: WorkflowRunSummary[];
+  onSelectRun(run: WorkflowRunSummary): void;
+  onRun(workflow: WorkflowSummary): void;
+}) {
+  const [tab, setTab] = useState("Description");
+  const relatedRuns = useMemo(
+    () => props.workflowRuns.filter((run) => run.workflowId === props.workflow.id),
+    [props.workflow.id, props.workflowRuns]
+  );
+
+  useEffect(() => {
+    setTab("Description");
+  }, [props.workflow.id]);
+
   return (
     <div className="content-scroll">
       <div className="detail-heading row-heading">
@@ -2700,24 +2732,45 @@ function WorkflowContent(props: { workflow: WorkflowSummary; repo: RepoSummary; 
           Run
         </button>
       </div>
-      <div className="stat-grid">
-        <div className="stat">
-          <span>State</span>
-          <strong>{props.workflow.state}</strong>
+      <TabBar tabs={["Description", "Runs"]} selected={tab} onSelect={setTab} />
+      {tab === "Description" ? (
+        <div className="stat-grid">
+          <div className="stat">
+            <span>State</span>
+            <strong>{props.workflow.state}</strong>
+          </div>
+          <div className="stat">
+            <span>Path</span>
+            <strong>{props.workflow.path}</strong>
+          </div>
+          <div className="stat">
+            <span>Default ref</span>
+            <strong>{props.repo.defaultBranch ?? "main"}</strong>
+          </div>
+          <div className="stat">
+            <span>Updated</span>
+            <strong>{formatRelative(props.workflow.updatedAt)}</strong>
+          </div>
         </div>
-        <div className="stat">
-          <span>Path</span>
-          <strong>{props.workflow.path}</strong>
-        </div>
-        <div className="stat">
-          <span>Default ref</span>
-          <strong>{props.repo.defaultBranch ?? "main"}</strong>
-        </div>
-        <div className="stat">
-          <span>Updated</span>
-          <strong>{formatRelative(props.workflow.updatedAt)}</strong>
-        </div>
-      </div>
+      ) : (
+        <StackedList
+          empty="No runs for this workflow"
+          items={relatedRuns}
+          render={(run) => (
+            <button className="workflow-run-row" key={run.id} onClick={() => props.onSelectRun(run)}>
+              <StatusIcon status={run.status} conclusion={run.conclusion} />
+              <span className="focus-main">
+                <span className="focus-title">{run.displayTitle || run.name || `Run ${run.id}`}</span>
+                <span className="focus-meta">{run.branch ?? "branch"} {shortSha(run.commitSha)}</span>
+              </span>
+              <span className="muted-line">{formatRelative(run.runStartedAt ?? run.createdAt)}</span>
+              <span className={cx("state-chip", statusTone(run.status, run.conclusion))}>
+                {run.conclusion ?? run.status ?? "run"}
+              </span>
+            </button>
+          )}
+        />
+      )}
     </div>
   );
 }
