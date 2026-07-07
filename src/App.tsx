@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import type {
   AuthStatus,
@@ -1883,10 +1884,12 @@ function TabBar(props: { tabs: string[]; selected: string; onSelect(tab: string)
 }
 
 function MarkdownBlock({ value, compact = false }: { value: string; compact?: boolean }) {
+  const renderedValue = value.replace(/<!--[\s\S]*?-->/g, "").trim();
+
   return (
     <div className={cx("markdown-block", compact && "compact")}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
           a: ({ href, children }) => (
             <a href={href} target="_blank" rel="noreferrer">
@@ -1898,7 +1901,7 @@ function MarkdownBlock({ value, compact = false }: { value: string; compact?: bo
           )
         }}
       >
-        {value}
+        {renderedValue}
       </ReactMarkdown>
     </div>
   );
