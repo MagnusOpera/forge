@@ -929,8 +929,8 @@ export function App() {
         ?? workflowRunFallbackFromCheck(selectedRepo, check);
       setStoredProjectFocusView("workflow-runs");
       setWorkflowRuns((current) => (current.some((item) => item.id === run.id) ? current : [run, ...current]));
-      setSelection({ kind: "run", run, focusedJobId: null });
-      setRunTab("Summary");
+      setSelection({ kind: "run", run, focusedJobId: check.jobId ?? null });
+      setRunTab("Jobs");
     },
     [selectedRepo, setStoredProjectFocusView, workflowRuns]
   );
@@ -2891,7 +2891,8 @@ function WorkflowRunContent(props: {
   onTab(tab: string): void;
 }) {
   const run = props.detail ?? props.fallback;
-  const tabs = ["Summary", "Jobs", "Artifacts", "Logs"];
+  const tabs = ["Summary", "Jobs", "Artifacts"];
+  const selectedTab = tabs.includes(props.tab) ? props.tab : "Jobs";
 
   return (
     <div className="content-detail-shell">
@@ -2905,12 +2906,12 @@ function WorkflowRunContent(props: {
             {run.conclusion ?? run.status ?? "run"}
           </span>
         </div>
-        <TabBar tabs={tabs} selected={props.tab} onSelect={props.onTab} />
+        <TabBar tabs={tabs} selected={selectedTab} onSelect={props.onTab} />
       </div>
       <div className="detail-body-scroll">
         {!props.detail ? (
           <Skeleton />
-        ) : props.tab === "Summary" ? (
+        ) : selectedTab === "Summary" ? (
           <div className="stat-grid">
             <div className="stat">
               <span>Trigger</span>
@@ -2937,25 +2938,9 @@ function WorkflowRunContent(props: {
               <strong>{run.actor?.login ?? "unknown"}</strong>
             </div>
           </div>
-        ) : props.tab === "Jobs" ? (
-          <StackedList
-            empty="No jobs"
-            items={props.detail.jobs}
-            render={(job) => (
-              <ArticleCard key={job.id} title={job.name} meta={job.conclusion ?? job.status ?? ""}>
-                {job.steps.map((step) => (
-                  <div className="check-row" key={`${job.id}-${step.number}-${step.name}`}>
-                    <StatusIcon status={step.status} conclusion={step.conclusion} />
-                    <span>{step.name}</span>
-                    <span className={cx("state-chip", statusTone(step.status, step.conclusion))}>
-                      {step.conclusion ?? step.status ?? "step"}
-                    </span>
-                  </div>
-                ))}
-              </ArticleCard>
-            )}
-          />
-        ) : props.tab === "Artifacts" ? (
+        ) : selectedTab === "Jobs" ? (
+          <WorkflowJobsList focusedJobId={props.focusedJobId ?? null} jobs={props.detail.jobs} repo={props.repo} />
+        ) : (
           <StackedList
             empty="No artifacts"
             items={props.detail.artifacts}
@@ -2967,15 +2952,13 @@ function WorkflowRunContent(props: {
               </div>
             )}
           />
-        ) : (
-          <WorkflowLogsList focusedJobId={props.focusedJobId ?? null} jobs={props.detail.jobs} repo={props.repo} />
         )}
       </div>
     </div>
   );
 }
 
-function WorkflowLogsList({
+function WorkflowJobsList({
   focusedJobId,
   jobs,
   repo
@@ -2984,8 +2967,7 @@ function WorkflowLogsList({
   jobs: WorkflowRunDetail["jobs"];
   repo: RepoRef;
 }) {
-  const [collapsedJobs, setCollapsedJobs] = useState<Record<string, boolean>>({});
-  const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({});
+  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [details, setDetails] = useState<Record<string, WorkflowJobLogLoadState>>({});
   const detailsRef = useRef(details);
   const loadingJobKeys = useRef<Set<string>>(new Set());
@@ -3042,8 +3024,7 @@ function WorkflowLogsList({
   useEffect(() => {
     loadingJobKeys.current.clear();
     detailsRef.current = {};
-    setCollapsedJobs(focusedJobId ? { [String(focusedJobId)]: false } : {});
-    setCollapsedSteps({});
+    setExpandedSteps({});
     setDetails({});
   }, [focusedJobId, jobsKey]);
 
@@ -3058,146 +3039,110 @@ function WorkflowLogsList({
     const interval = window.setInterval(() => {
       for (const job of jobs) {
         const key = String(job.id);
-        const collapsed = collapsedJobs[key] ?? true;
+        const hasExpandedStep = Object.keys(expandedSteps).some((stepKey) => stepKey.startsWith(`${key}:`) && expandedSteps[stepKey]);
         const detail = detailsRef.current[key]?.detail;
-        if (!collapsed && detail && isLiveStatus(detail.status)) {
+        if (hasExpandedStep && detail && isLiveStatus(detail.status)) {
           loadJob(job, { force: true, quiet: true });
         }
       }
     }, 6000);
 
     return () => window.clearInterval(interval);
-  }, [collapsedJobs, jobs, loadJob]);
+  }, [expandedSteps, jobs, loadJob]);
 
   if (!jobs.length) {
     return <div className="empty-content">No jobs</div>;
   }
 
   return (
-    <div className="checks-list">
+    <div className="stacked-list">
       {jobs.map((job) => {
         const key = String(job.id);
-        const collapsed = collapsedJobs[key] ?? true;
         const state = details[key];
+        const logDetail = state?.detail;
+        const steps = logDetail?.steps.length ? logDetail.steps : job.steps;
+        const unavailableReason = logDetail?.logUnavailableReason;
 
         return (
-          <article className="check-card" key={job.id}>
-            <button
-              className="check-header"
-              aria-expanded={!collapsed}
-              onClick={() => {
-                const nextCollapsed = !(collapsedJobs[key] ?? true);
-                setCollapsedJobs((current) => ({
-                  ...current,
-                  [key]: nextCollapsed
-                }));
-                if (!nextCollapsed) {
-                  loadJob(job);
-                }
-              }}
-            >
-              {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-              <StatusIcon status={job.status} conclusion={job.conclusion} />
-              <span className="check-title">{job.name}</span>
-              <span className={cx("state-chip", statusTone(job.status, job.conclusion))}>
-                {job.conclusion ?? job.status ?? "job"}
-              </span>
-            </button>
-            {!collapsed && (
-              <div className="check-body">
-                {state?.loading ? (
-                  <div className="diff-loading">Loading job logs...</div>
-                ) : state?.error ? (
-                  <div className="inline-error">
-                    <AlertCircle size={15} />
-                    <span>{state.error}</span>
-                  </div>
-                ) : state?.detail ? (
-                  <WorkflowJobSteps
-                    collapsedSteps={collapsedSteps}
-                    detail={state.detail}
-                    jobKey={key}
-                    onToggleStep={(stepKey) =>
-                      setCollapsedSteps((current) => ({
-                        ...current,
-                        [stepKey]: !(current[stepKey] ?? true)
-                      }))
-                    }
-                  />
-                ) : (
-                  <div className="empty-row">No logs loaded.</div>
-                )}
-                {state?.refreshing ? (
-                  <div className="log-refreshing">
-                    <Loader2 className="spin" size={13} />
-                    <span>Checking for logs...</span>
-                  </div>
-                ) : null}
+          <ArticleCard key={job.id} title={job.name} meta={job.conclusion ?? job.status ?? ""}>
+            {unavailableReason ? (
+              <div className="log-pending">
+                {isLiveStatus(logDetail?.status) ? <Loader2 className="spin" size={14} /> : <AlertCircle size={14} />}
+                <span>{unavailableReason}</span>
               </div>
-            )}
-          </article>
-        );
-      })}
-    </div>
-  );
-}
+            ) : null}
+            {steps.length ? (
+              <div className="job-steps-list">
+                {steps.map((step, index) => {
+                  const stepKey = `${key}:${step.number ?? index}:${step.name}`;
+                  const expanded = expandedSteps[stepKey] ?? false;
+                  const output = step.log?.trim() || unavailableReason || "No output captured for this step.";
 
-function WorkflowJobSteps(props: {
-  collapsedSteps: Record<string, boolean>;
-  detail: WorkflowJobLogDetail;
-  jobKey: string;
-  onToggleStep(stepKey: string): void;
-}) {
-  const unavailableReason = props.detail.logUnavailableReason;
-
-  if (!props.detail.steps.length && props.detail.rawLog?.trim()) {
-    return (
-      <pre className="terminal-output standalone" aria-label="Raw job output">
-        {props.detail.rawLog.trim()}
-      </pre>
-    );
-  }
-
-  if (!props.detail.steps.length) {
-    return <div className="empty-row">{unavailableReason ?? "No steps found for this job."}</div>;
-  }
-
-  return (
-    <div className="check-steps">
-      {unavailableReason ? (
-        <div className="log-pending">
-          {isLiveStatus(props.detail.status) ? <Loader2 className="spin" size={14} /> : <AlertCircle size={14} />}
-          <span>{unavailableReason}</span>
-        </div>
-      ) : null}
-      {props.detail.steps.map((step, index) => {
-        const stepKey = `${props.jobKey}:${step.number ?? index}:${step.name}`;
-        const collapsed = props.collapsedSteps[stepKey] ?? true;
-        return (
-          <article className="check-step-card" key={stepKey}>
-            <button className="check-step-header" aria-expanded={!collapsed} onClick={() => props.onToggleStep(stepKey)}>
-              {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-              <StatusIcon status={step.status} conclusion={step.conclusion} />
-              <span className="check-title">{step.name}</span>
-              <span className={cx("state-chip", statusTone(step.status, step.conclusion))}>
-                {step.conclusion ?? step.status ?? "step"}
-              </span>
-            </button>
-            {!collapsed && (
-              <pre className="terminal-output" aria-label={`${step.name} output`}>
-                {step.log?.trim() || unavailableReason || "No output captured for this step."}
+                  return (
+                    <div className="job-step" key={stepKey}>
+                      <button
+                        className="check-row step-log-row"
+                        aria-expanded={expanded}
+                        onClick={() => {
+                          setExpandedSteps((current) => ({
+                            ...current,
+                            [stepKey]: !(current[stepKey] ?? false)
+                          }));
+                          if (!expanded) {
+                            loadJob(job);
+                          }
+                        }}
+                      >
+                        {expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                        <span className="step-status">
+                          <StatusIcon status={step.status} conclusion={step.conclusion} />
+                          <span>{step.name}</span>
+                        </span>
+                        <span className={cx("state-chip", statusTone(step.status, step.conclusion))}>
+                          {step.conclusion ?? step.status ?? "step"}
+                        </span>
+                      </button>
+                      {expanded ? (
+                        state?.loading ? (
+                          <div className="diff-loading step-log-body">Loading job logs...</div>
+                        ) : state?.error ? (
+                          <div className="inline-error step-log-body">
+                            <AlertCircle size={15} />
+                            <span>{state.error}</span>
+                          </div>
+                        ) : logDetail ? (
+                          <pre className="terminal-output" aria-label={`${step.name} output`}>
+                            {output}
+                          </pre>
+                        ) : (
+                          <div className="empty-row step-log-body">No logs loaded.</div>
+                        )
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : logDetail?.rawLog?.trim() ? (
+              <pre className="terminal-output standalone" aria-label="Raw job output">
+                {logDetail.rawLog.trim()}
               </pre>
+            ) : (
+              <div className="empty-row">{unavailableReason ?? "No steps found for this job."}</div>
             )}
-          </article>
+            {logDetail && !logDetail.steps.some((step) => step.log?.trim()) && logDetail.rawLog?.trim() && steps.length ? (
+              <pre className="terminal-output standalone" aria-label="Raw job output">
+                {logDetail.rawLog.trim()}
+              </pre>
+            ) : null}
+            {state?.refreshing ? (
+              <div className="log-refreshing">
+                <Loader2 className="spin" size={13} />
+                <span>Checking for logs...</span>
+              </div>
+            ) : null}
+          </ArticleCard>
         );
       })}
-      {!props.detail.steps.some((step) => step.log?.trim()) && props.detail.rawLog?.trim() && (
-        <article className="check-step-card">
-          <pre className="terminal-output standalone" aria-label="Raw job output">
-            {props.detail.rawLog.trim()}
-          </pre>
-        </article>
-      )}
     </div>
   );
 }

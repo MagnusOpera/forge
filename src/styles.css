@@ -1721,6 +1721,48 @@ p {
   grid-template-columns: 20px minmax(0, 1fr) auto;
 }
 
+.job-steps-list {
+  display: grid;
+  gap: 8px;
+}
+
+.job-step {
+  min-width: 0;
+}
+
+.step-log-row {
+  width: 100%;
+  text-align: left;
+}
+
+.step-log-row:hover {
+  background: var(--hover-bg);
+}
+
+.step-log-row[aria-expanded="true"] {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.step-status {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.job-step .terminal-output,
+.step-log-body {
+  border: 1px solid var(--terminal-border);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+.step-log-body {
+  margin: 0;
+  padding: 12px;
+}
+
 code {
   color: var(--code-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
