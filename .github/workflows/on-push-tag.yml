@@ -1,0 +1,62 @@
+name: 📦 Prepare Release
+run-name: Prepare release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - '**'
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.ref_name }}
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve app version
+        shell: bash
+        run: |
+          APP_VERSION="${RELEASE_TAG#v}"
+          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Build unsigned macOS arm64 artifact
+        run: make package-mac-arm64 version="${RELEASE_TAG}" app_version="${APP_VERSION}"
+
+      - name: Extract version suffix
+        shell: bash
+        run: |
+          if [[ "${RELEASE_TAG}" == *-* ]]; then
+            echo "IS_PRERELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "IS_PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Extract release notes from changelog
+        shell: bash
+        run: ./.github/scripts/extract-release-notes.sh "${RELEASE_TAG}" > "${RUNNER_TEMP}/release-notes.md"
+
+      - name: Create draft GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          draft: true
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            .out/forge-${{ env.RELEASE_TAG }}-mac-arm64-unsigned.zip

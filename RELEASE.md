@@ -1,0 +1,31 @@
+# Release
+
+Forge follows the same two-step release model as FScript.
+
+1. Push a version tag.
+2. GitHub Actions creates a draft release with an unsigned macOS arm64 app ZIP.
+3. Publish the draft release.
+4. GitHub Actions signs and notarizes the app, uploads the signed ZIP, and removes the unsigned ZIP.
+
+## Version Tags
+
+Both `0.1.0` and `v0.1.0` style tags are supported.
+
+```sh
+git tag 0.1.0
+git push origin 0.1.0
+```
+
+Each release tag must have a matching `## [x.y.z]` section in `CHANGELOG.md`.
+
+## Required Secrets
+
+Configure these repository secrets before publishing a release:
+
+- `MAC_CERT_BASE64`: base64-encoded Developer ID Application `.p12` certificate.
+- `MAC_CERT_PASSWORD`: password for the `.p12` certificate.
+- `MAC_DEV_TEAM_ID`: Apple Developer Team ID.
+- `MAC_DEV_LOGIN`: Apple ID used for notarization.
+- `MAC_DEV_PASSWORD`: app-specific password for Apple notarization.
+
+The app is only signed after the GitHub release is published.
