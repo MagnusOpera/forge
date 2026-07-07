@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.2]
+
+
 - Disabled electron-builder's implicit tag publishing so release builds use the GitHub release workflow without a `GH_TOKEN` secret.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.1...0.0.2
 
 ## [0.0.1]
 
