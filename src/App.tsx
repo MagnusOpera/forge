@@ -329,6 +329,26 @@ function formatReviewMeta(state: string, submittedAt?: string | null): string {
   return date ? `${state} - ${date}` : state;
 }
 
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("Clipboard copy failed.");
+  }
+}
+
 function formatDuration(value?: number | null): string {
   if (!value) {
     return "";
@@ -598,6 +618,19 @@ export function App() {
     setToast(message);
     window.setTimeout(() => setToast(null), 2600);
   }, []);
+
+  const copyToClipboard = useCallback(
+    async (value: string) => {
+      try {
+        await copyTextToClipboard(value);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to copy to clipboard.");
+        return false;
+      }
+    },
+    [flash]
+  );
 
   const setSidebarCollapsedWithAnimation = useCallback(
     (next: boolean | ((value: boolean) => boolean)) => {
@@ -1436,6 +1469,7 @@ export function App() {
         onOpenGithub={openGithub}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
+        onCopyText={copyToClipboard}
         onSubmitPullRequestReview={submitPullRequestReview}
         onSelectRun={selectRun}
         onRunWorkflow={runWorkflow}
@@ -2224,6 +2258,7 @@ function ContentPane(props: {
   onOpenGithub(): void;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
+  onCopyText(value: string): Promise<boolean>;
   onSubmitPullRequestReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
   onSelectRun(run: WorkflowRunSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
@@ -2332,6 +2367,7 @@ function ContentPane(props: {
           workflowRuns={props.workflowRuns}
           onOpenGithubUrl={props.onOpenGithubUrl}
           onOpenWorkflowRunFromCheck={props.onOpenWorkflowRunFromCheck}
+          onCopyText={props.onCopyText}
           onTab={props.onPrTabChange}
         />
       ) : props.selection.kind === "issue" ? (
@@ -2490,17 +2526,84 @@ function PullRequestContent(props: {
   workflowRuns: WorkflowRunSummary[];
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
+  onCopyText(value: string): Promise<boolean>;
   onTab(tab: string): void;
 }) {
   const detail = props.detail;
   const tabs = ["Description", "Comments", "Reviews", "Files", "Commits", "Checks"];
+  const branchName = detail?.headRefName ?? props.fallback.headRefName;
+  const [copiedMeta, setCopiedMeta] = useState<"number" | "branch" | null>(null);
+  const copyFeedbackTimer = useRef<number | null>(null);
+  const copyFeedbackFrame = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyFeedbackTimer.current) {
+        window.clearTimeout(copyFeedbackTimer.current);
+      }
+      if (copyFeedbackFrame.current) {
+        window.cancelAnimationFrame(copyFeedbackFrame.current);
+      }
+    },
+    []
+  );
+
+  const copyMeta = useCallback(
+    async (value: string, target: "number" | "branch") => {
+      const copied = await props.onCopyText(value);
+      if (!copied) {
+        return;
+      }
+
+      if (copyFeedbackTimer.current) {
+        window.clearTimeout(copyFeedbackTimer.current);
+      }
+      if (copyFeedbackFrame.current) {
+        window.cancelAnimationFrame(copyFeedbackFrame.current);
+      }
+
+      setCopiedMeta(null);
+      copyFeedbackFrame.current = window.requestAnimationFrame(() => {
+        setCopiedMeta(target);
+        copyFeedbackFrame.current = null;
+        copyFeedbackTimer.current = window.setTimeout(() => {
+          setCopiedMeta(null);
+          copyFeedbackTimer.current = null;
+        }, 620);
+      });
+    },
+    [props.onCopyText]
+  );
 
   return (
     <div className="content-detail-shell">
       <div className="detail-fixed">
         <div className="detail-heading pr-detail-heading">
           <div>
-            <span className="eyebrow">Pull request #{props.fallback.number}</span>
+            <div className="pr-eyebrow-row">
+              <span>Pull request</span>
+              <button
+                type="button"
+                className={cx("copy-meta-button", copiedMeta === "number" && "copied")}
+                title="Copy pull request number"
+                onClick={() => copyMeta(String(props.fallback.number), "number")}
+              >
+                #{props.fallback.number}
+              </button>
+              {branchName ? (
+                <>
+                  <span className="eyebrow-separator">·</span>
+                  <button
+                    type="button"
+                    className={cx("copy-meta-button branch", copiedMeta === "branch" && "copied")}
+                    title="Copy branch"
+                    onClick={() => copyMeta(branchName, "branch")}
+                  >
+                    {branchName}
+                  </button>
+                </>
+              ) : null}
+            </div>
             <h1>{detail?.title ?? props.fallback.title}</h1>
           </div>
           <div className="pr-heading-meta">
