@@ -426,6 +426,7 @@ input {
 }
 
 .project-view-switcher {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -440,16 +441,6 @@ input {
 
 .project-view-button.active {
   color: var(--text-strong);
-}
-
-.project-view-button.active::after {
-  position: absolute;
-  right: 5px;
-  bottom: -4px;
-  left: 5px;
-  height: 2px;
-  background: var(--accent);
-  content: "";
 }
 
 .toolbar-divider {
@@ -562,6 +553,7 @@ input {
 }
 
 .sidebar-tabs {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
@@ -576,6 +568,7 @@ input {
 
 .pull-request-tabs,
 .workflow-tabs {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -620,16 +613,27 @@ input {
   color: var(--text-strong);
 }
 
-.sidebar-tab.active::after,
-.pull-request-tab.active::after,
-.workflow-tab.active::after {
+.sliding-tab-underline {
   position: absolute;
-  right: 0;
+  z-index: 1;
   bottom: 0;
   left: 0;
   height: 2px;
+  width: var(--tab-underline-width, 0);
+  border-radius: 999px;
   background: var(--accent);
-  content: "";
+  pointer-events: none;
+  transform: translateX(var(--tab-underline-left, 0));
+  transition:
+    transform 180ms cubic-bezier(0.2, 0, 0.2, 1),
+    width 180ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.project-view-switcher .sliding-tab-underline {
+  right: auto;
+  bottom: -4px;
+  width: calc(var(--tab-underline-width, 0px) - 10px);
+  transform: translateX(calc(var(--tab-underline-left, 0px) + 5px));
 }
 
 .sidebar-tab span,
@@ -1317,6 +1321,7 @@ p {
 }
 
 .tab-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -1347,16 +1352,6 @@ p {
 
 .tab-button.active {
   color: var(--text-strong);
-}
-
-.tab-button.active::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-  background: var(--accent);
-  content: "";
 }
 
 .markdown-block {

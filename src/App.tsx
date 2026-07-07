@@ -35,7 +35,7 @@ import {
   XCircle
 } from "lucide-react";
 import type { PatchDiffProps } from "@pierre/diffs/react";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
@@ -145,6 +145,7 @@ const defaultAccentByTheme: Record<ThemeMode, AccentColor> = {
 type AccentColor = (typeof accentColors)[number];
 type AppCssVars = React.CSSProperties & Record<"--accent", string>;
 type SwatchCssVars = React.CSSProperties & Record<"--swatch-color", string>;
+type SlidingUnderlineVars = React.CSSProperties & Record<"--tab-underline-left" | "--tab-underline-width", string>;
 
 function ipcUnavailable<T>(): Promise<T> {
   return Promise.reject(new Error("GitHub IPC is available only inside the Electron app."));
@@ -220,6 +221,56 @@ function readStoredAccentColor(key: string): string | null {
 
 function normalizeAccentColor(value: string, fallback: string): string {
   return accentColors.includes(value as AccentColor) ? value : fallback;
+}
+
+function useSlidingUnderline(layoutKey: string) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [underlineStyle, setUnderlineStyle] = useState<SlidingUnderlineVars>({
+    "--tab-underline-left": "0px",
+    "--tab-underline-width": "0px"
+  });
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return undefined;
+    }
+
+    let frame: number | null = null;
+    const update = () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+
+      frame = window.requestAnimationFrame(() => {
+        const active = container.querySelector<HTMLElement>('[data-active-tab="true"]');
+        frame = null;
+        setUnderlineStyle({
+          "--tab-underline-left": active ? `${active.offsetLeft}px` : "0px",
+          "--tab-underline-width": active ? `${active.offsetWidth}px` : "0px"
+        });
+      });
+    };
+
+    update();
+    const active = container.querySelector<HTMLElement>('[data-active-tab="true"]');
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(container);
+    if (active) {
+      observer?.observe(active);
+    }
+    window.addEventListener("resize", update);
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [layoutKey]);
+
+  return { containerRef, underlineStyle };
 }
 
 function repoKey(repo: { owner: string; name: string }): string {
@@ -1556,6 +1607,7 @@ function Sidebar(props: SidebarProps) {
   const [repoTab, setRepoTab] = useStoredState<SidebarRepoTab>("github-focus:sidebar-repo-tab", "favorites");
   const searchActive = props.search.trim().length > 0;
   const allRepoCount = props.repoGroups.reduce((total, [, repos]) => total + repos.length, 0);
+  const repoTabsUnderline = useSlidingUnderline(`${repoTab}:${props.favoriteRepos.length}:${allRepoCount}`);
 
   useEffect(() => {
     const sidebar = sidebarRef.current;
@@ -1590,9 +1642,10 @@ function Sidebar(props: SidebarProps) {
         <input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="Search" />
       </label>
       {!searchActive && (
-        <div className="sidebar-tabs" role="tablist" aria-label="Repository view">
+        <div ref={repoTabsUnderline.containerRef} className="sidebar-tabs" role="tablist" aria-label="Repository view">
           <button
             className={cx("sidebar-tab", repoTab === "favorites" && "active")}
+            data-active-tab={repoTab === "favorites" ? "true" : undefined}
             role="tab"
             aria-selected={repoTab === "favorites"}
             onClick={() => setRepoTab("favorites")}
@@ -1603,6 +1656,7 @@ function Sidebar(props: SidebarProps) {
           </button>
           <button
             className={cx("sidebar-tab", repoTab === "all" && "active")}
+            data-active-tab={repoTab === "all" ? "true" : undefined}
             role="tab"
             aria-selected={repoTab === "all"}
             onClick={() => setRepoTab("all")}
@@ -1611,6 +1665,7 @@ function Sidebar(props: SidebarProps) {
             All
             <span>{allRepoCount}</span>
           </button>
+          <span className="sliding-tab-underline" style={repoTabsUnderline.underlineStyle} aria-hidden="true" />
         </div>
       )}
       <nav className="sidebar-scroll">
@@ -1933,6 +1988,9 @@ function ProjectFocusToolbar(props: {
   view: ProjectFocusView;
   onView(view: ProjectFocusView): void;
 }) {
+  const toolbarUnderline = useSlidingUnderline(
+    `${props.view}:${props.disabled}:${props.counts["pull-requests"]}:${props.counts["workflow-runs"]}:${props.counts.issues}:${props.counts.workflows}`
+  );
   const items: Array<{ view: ProjectFocusView; label: string; icon: React.ReactNode }> = [
     { view: "pull-requests", label: "Pull Requests", icon: <GitPullRequest size={15} /> },
     { view: "workflow-runs", label: "Workflow Runs", icon: <Activity size={15} /> },
@@ -1941,12 +1999,13 @@ function ProjectFocusToolbar(props: {
   ];
 
   return (
-    <div className="project-view-switcher" role="toolbar" aria-label="Project focus view">
+    <div ref={toolbarUnderline.containerRef} className="project-view-switcher" role="toolbar" aria-label="Project focus view">
       {items.map((item) => (
         <button
           key={item.view}
           type="button"
           className={cx("icon-button project-view-button", props.view === item.view && "active")}
+          data-active-tab={props.view === item.view ? "true" : undefined}
           title={`${item.label} (${props.counts[item.view]})`}
           aria-label={`${item.label} (${props.counts[item.view]})`}
           aria-pressed={props.view === item.view}
@@ -1956,6 +2015,7 @@ function ProjectFocusToolbar(props: {
           {item.icon}
         </button>
       ))}
+      <span className="sliding-tab-underline" style={toolbarUnderline.underlineStyle} aria-hidden="true" />
     </div>
   );
 }
@@ -1969,12 +2029,16 @@ function PullRequestFocusSection(props: {
   onSelect(pr: PullRequestSummary): void;
 }) {
   const visiblePullRequests = props.tab === "closed" ? props.closedPullRequests : props.openPullRequests;
+  const pullRequestTabsUnderline = useSlidingUnderline(
+    `${props.tab}:${props.openPullRequests.length}:${props.closedPullRequests.length}`
+  );
 
   return (
     <div className="pull-request-focus">
-      <div className="pull-request-tabs" role="tablist" aria-label="Pull request view">
+      <div ref={pullRequestTabsUnderline.containerRef} className="pull-request-tabs" role="tablist" aria-label="Pull request view">
         <button
           className={cx("pull-request-tab", props.tab === "open" && "active")}
+          data-active-tab={props.tab === "open" ? "true" : undefined}
           role="tab"
           aria-selected={props.tab === "open"}
           onClick={() => props.onTab("open")}
@@ -1985,6 +2049,7 @@ function PullRequestFocusSection(props: {
         </button>
         <button
           className={cx("pull-request-tab", props.tab === "closed" && "active")}
+          data-active-tab={props.tab === "closed" ? "true" : undefined}
           role="tab"
           aria-selected={props.tab === "closed"}
           onClick={() => props.onTab("closed")}
@@ -1993,6 +2058,7 @@ function PullRequestFocusSection(props: {
           Closed
           <span>{props.closedPullRequests.length}</span>
         </button>
+        <span className="sliding-tab-underline" style={pullRequestTabsUnderline.underlineStyle} aria-hidden="true" />
       </div>
       <PullRequestsSection
         title={props.tab === "closed" ? "Closed Pull Requests" : "Open Pull Requests"}
@@ -2137,12 +2203,16 @@ function WorkflowFocusSection(props: {
   onRun(workflow: WorkflowSummary): void;
 }) {
   const visibleWorkflows = props.tab === "favorites" ? props.favoriteWorkflows : props.allWorkflows;
+  const workflowTabsUnderline = useSlidingUnderline(
+    `${props.tab}:${props.favoriteWorkflows.length}:${props.allWorkflows.length}`
+  );
 
   return (
     <div className="workflow-focus">
-      <div className="workflow-tabs" role="tablist" aria-label="Workflow view">
+      <div ref={workflowTabsUnderline.containerRef} className="workflow-tabs" role="tablist" aria-label="Workflow view">
         <button
           className={cx("workflow-tab", props.tab === "favorites" && "active")}
+          data-active-tab={props.tab === "favorites" ? "true" : undefined}
           role="tab"
           aria-selected={props.tab === "favorites"}
           onClick={() => props.onTab("favorites")}
@@ -2153,6 +2223,7 @@ function WorkflowFocusSection(props: {
         </button>
         <button
           className={cx("workflow-tab", props.tab === "all" && "active")}
+          data-active-tab={props.tab === "all" ? "true" : undefined}
           role="tab"
           aria-selected={props.tab === "all"}
           onClick={() => props.onTab("all")}
@@ -2161,6 +2232,7 @@ function WorkflowFocusSection(props: {
           All
           <span>{props.allWorkflows.length}</span>
         </button>
+        <span className="sliding-tab-underline" style={workflowTabsUnderline.underlineStyle} aria-hidden="true" />
       </div>
       <WorkflowSection
         title={props.tab === "favorites" ? "Favorite Workflows" : "Workflows"}
@@ -3304,13 +3376,22 @@ function WorkflowJobsList({
 }
 
 function TabBar(props: { tabs: string[]; selected: string; onSelect(tab: string): void }) {
+  const selected = props.tabs.includes(props.selected) ? props.selected : props.tabs[0] ?? "";
+  const tabsUnderline = useSlidingUnderline(`${selected}:${props.tabs.join("|")}`);
+
   return (
-    <div className="tab-bar">
+    <div ref={tabsUnderline.containerRef} className="tab-bar">
       {props.tabs.map((tab) => (
-        <button key={tab} className={cx("tab-button", props.selected === tab && "active")} onClick={() => props.onSelect(tab)}>
+        <button
+          key={tab}
+          className={cx("tab-button", selected === tab && "active")}
+          data-active-tab={selected === tab ? "true" : undefined}
+          onClick={() => props.onSelect(tab)}
+        >
           {tab}
         </button>
       ))}
+      <span className="sliding-tab-underline" style={tabsUnderline.underlineStyle} aria-hidden="true" />
     </div>
   );
 }
