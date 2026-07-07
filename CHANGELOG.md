@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added an expand and collapse animation for the accent color picker.
 - Fixed packaged macOS builds loading a blank window by using relative renderer asset paths.
 
 ## [0.0.3]
