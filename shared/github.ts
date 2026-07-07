@@ -177,6 +177,11 @@ export interface CheckSummary {
   status?: string | null;
   conclusion?: string | null;
   url?: string | null;
+  checkRunId?: number | null;
+  jobId?: number | null;
+  workflowRunId?: number | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
 }
 
 export interface PullRequestDetail extends PullRequestSummary {
@@ -188,6 +193,16 @@ export interface PullRequestDetail extends PullRequestSummary {
   checks: CheckSummary[];
 }
 
+export interface WorkflowJobStepSummary {
+  name: string;
+  status?: string | null;
+  conclusion?: string | null;
+  number?: number;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  log?: string | null;
+}
+
 export interface WorkflowJobSummary {
   id: number;
   name: string;
@@ -196,12 +211,7 @@ export interface WorkflowJobSummary {
   startedAt?: string | null;
   completedAt?: string | null;
   url?: string | null;
-  steps: Array<{
-    name: string;
-    status?: string | null;
-    conclusion?: string | null;
-    number?: number;
-  }>;
+  steps: WorkflowJobStepSummary[];
 }
 
 export interface ArtifactSummary {
@@ -217,6 +227,18 @@ export interface ArtifactSummary {
 export interface WorkflowRunDetail extends WorkflowRunSummary {
   jobs: WorkflowJobSummary[];
   artifacts: ArtifactSummary[];
+}
+
+export interface WorkflowJobLogDetail {
+  id: number;
+  name: string;
+  status?: string | null;
+  conclusion?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  url?: string | null;
+  steps: WorkflowJobStepSummary[];
+  rawLog?: string | null;
 }
 
 export interface DispatchWorkflowPayload {
@@ -241,6 +263,7 @@ export interface GithubFocusApi {
   getWorkflowRuns(repo: RepoRef): Promise<CacheEnvelope<WorkflowRunSummary[]>>;
   getPullRequest(repo: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>>;
   getWorkflowRun(repo: RepoRef, runId: number): Promise<CacheEnvelope<WorkflowRunDetail>>;
+  getWorkflowJob(repo: RepoRef, jobId: number): Promise<CacheEnvelope<WorkflowJobLogDetail>>;
   dispatchWorkflow(payload: DispatchWorkflowPayload): Promise<void>;
   openInGitHub(url: string): Promise<void>;
   onCacheUpdated(callback: (key: string) => void): () => void;

@@ -23,7 +23,9 @@ import type {
   RepoRef,
   RepoSummary,
   TimelineComment,
+  WorkflowJobLogDetail,
   WorkflowJobSummary,
+  WorkflowJobStepSummary,
   WorkflowRunDetail,
   WorkflowRunSummary,
   WorkflowSummary
@@ -623,7 +625,7 @@ async function getWorkflowRuns(repoRef: RepoRef): Promise<CacheEnvelope<Workflow
 
 async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>> {
   const repo = ensureRepo(repoRef);
-  return cached(`repo:${repo.owner}/${repo.name}:pull:${number}:v2`, async () => {
+  return cached(`repo:${repo.owner}/${repo.name}:pull:${number}:v5`, async () => {
     const { gql, octokit } = await getClients();
     const [result, files] = await Promise.all([
       gql(
@@ -680,10 +682,13 @@ async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEn
                           nodes {
                             __typename
                             ... on CheckRun {
+                              databaseId
                               name
                               status
                               conclusion
                               detailsUrl
+                              startedAt
+                              completedAt
                             }
                             ... on StatusContext {
                               context
@@ -713,11 +718,21 @@ async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEn
     const pr = (result as any).repository.pullRequest;
     const summary = toPullRequest(pr);
     const latestCommit = nodeList<any>(pr.commits).at(-1)?.commit;
-    const checks: CheckSummary[] = nodeList<any>(latestCommit?.statusCheckRollup?.contexts).map((check) => ({
-      name: check.name ?? check.context,
-      status: check.status ?? check.state ?? null,
-      conclusion: check.conclusion ?? null,
-      url: check.detailsUrl ?? check.targetUrl ?? null
+    const checks = await Promise.all(nodeList<any>(latestCommit?.statusCheckRollup?.contexts).map(async (check) => {
+      const url = check.detailsUrl ?? check.targetUrl ?? null;
+      const jobId = parseActionsJobId(url);
+      const workflowRunId = parseActionsRunId(url) ?? (jobId ? await getWorkflowRunIdForJob(octokit, repo, jobId) : null);
+      return {
+        name: check.name ?? check.context,
+        status: check.status ?? check.state ?? null,
+        conclusion: check.conclusion ?? null,
+        url,
+        checkRunId: check.databaseId ?? null,
+        jobId,
+        workflowRunId,
+        startedAt: check.startedAt ?? null,
+        completedAt: check.completedAt ?? null
+      };
     }));
 
     return {
@@ -759,6 +774,67 @@ async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEn
       checks
     };
   });
+}
+
+function parseActionsJobId(rawUrl?: string | null): number | null {
+  if (!rawUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(rawUrl);
+    if (url.hostname !== "github.com" && url.hostname !== "www.github.com") {
+      return null;
+    }
+
+    const match =
+      url.pathname.match(/\/actions\/runs\/\d+\/job\/(\d+)/)
+      ?? url.pathname.match(/\/runs\/(\d+)$/);
+    if (!match) {
+      return null;
+    }
+
+    const jobId = Number(match[1]);
+    return Number.isSafeInteger(jobId) ? jobId : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseActionsRunId(rawUrl?: string | null): number | null {
+  if (!rawUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(rawUrl);
+    if (url.hostname !== "github.com" && url.hostname !== "www.github.com") {
+      return null;
+    }
+
+    const match = url.pathname.match(/\/actions\/runs\/(\d+)/);
+    if (!match) {
+      return null;
+    }
+
+    const runId = Number(match[1]);
+    return Number.isSafeInteger(runId) ? runId : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getWorkflowRunIdForJob(octokit: Octokit, repo: RepoRef, jobId: number): Promise<number | null> {
+  try {
+    const job = await octokit.actions.getJobForWorkflowRun({
+      owner: repo.owner,
+      repo: repo.name,
+      job_id: jobId
+    });
+    return job.data.run_id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function buildPullRequestFilePatch(file: {
@@ -825,7 +901,9 @@ async function getWorkflowRun(repoRef: RepoRef, runId: number): Promise<CacheEnv
           name: step.name,
           status: step.status,
           conclusion: step.conclusion,
-          number: step.number
+          number: step.number,
+          startedAt: step.started_at,
+          completedAt: step.completed_at
         }))
       })),
       artifacts: artifacts.data.artifacts.map<ArtifactSummary>((artifact) => ({
@@ -839,6 +917,187 @@ async function getWorkflowRun(repoRef: RepoRef, runId: number): Promise<CacheEnv
       }))
     };
   }, 60 * 1000);
+}
+
+async function getWorkflowJob(repoRef: RepoRef, jobId: number): Promise<CacheEnvelope<WorkflowJobLogDetail>> {
+  const repo = ensureRepo(repoRef);
+  if (!Number.isSafeInteger(jobId) || jobId <= 0) {
+    throw new Error("A valid GitHub Actions job id is required.");
+  }
+
+  return cached(`repo:${repo.owner}/${repo.name}:workflow-job:${jobId}:v1`, async () => {
+    const { octokit } = await getClients();
+    const [job, rawLog] = await Promise.all([
+      octokit.actions.getJobForWorkflowRun({
+        owner: repo.owner,
+        repo: repo.name,
+        job_id: jobId
+      }),
+      downloadActionsJobLog(repo, jobId)
+    ]);
+    const stepLogs = splitActionsLogByStep(job.data.steps ?? [], rawLog);
+
+    return {
+      id: job.data.id,
+      name: job.data.name,
+      status: job.data.status,
+      conclusion: job.data.conclusion,
+      startedAt: job.data.started_at,
+      completedAt: job.data.completed_at,
+      url: job.data.html_url,
+      steps: (job.data.steps ?? []).map<WorkflowJobStepSummary>((step, index) => ({
+        name: step.name,
+        status: step.status,
+        conclusion: step.conclusion,
+        number: step.number,
+        startedAt: step.started_at,
+        completedAt: step.completed_at,
+        log: stepLogs.get(step.number ?? index) ?? null
+      })),
+      rawLog
+    };
+  }, 30 * 1000);
+}
+
+async function downloadActionsJobLog(repo: RepoRef, jobId: number): Promise<string | null> {
+  const token = await readToken();
+  if (!token) {
+    throw new Error("GitHub token is not configured.");
+  }
+
+  const response = await fetchWithTimeout(
+    `https://api.github.com/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/actions/jobs/${jobId}/logs`,
+    {
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${token}`,
+        "x-github-api-version": "2022-11-28"
+      },
+      redirect: "manual"
+    }
+  );
+
+  if (response.ok) {
+    return response.text();
+  }
+
+  const location = response.headers.get("location");
+  if (!location) {
+    throw new Error(`Unable to download job logs (${response.status}).`);
+  }
+
+  const logResponse = await fetchWithTimeout(location, {
+    headers: {}
+  });
+  if (!logResponse.ok) {
+    throw new Error(`Unable to download job logs (${logResponse.status}).`);
+  }
+
+  return logResponse.text();
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30_000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Timed out while downloading job logs.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function splitActionsLogByStep(steps: any[], rawLog: string | null): Map<number, string> {
+  const stepLogs = new Map<number, string[]>();
+  if (!rawLog) {
+    return new Map();
+  }
+
+  const windows = steps.map((step, index) => ({
+    key: step.number ?? index,
+    start: parseDateMs(step.started_at),
+    end: parseDateMs(step.completed_at)
+  }));
+
+  for (const line of rawLog.split(/\r?\n/)) {
+    const parsed = parseActionsLogLine(line);
+    const text = cleanActionsLogText(parsed.text);
+    if (!text) {
+      continue;
+    }
+
+    const window = parsed.timestampMs === null ? null : findStepWindow(windows, parsed.timestampMs);
+    if (!window) {
+      continue;
+    }
+
+    const bucket = stepLogs.get(window.key) ?? [];
+    bucket.push(text);
+    stepLogs.set(window.key, bucket);
+  }
+
+  return new Map([...stepLogs.entries()].map(([key, lines]) => [key, lines.join("\n").trim()]));
+}
+
+function parseDateMs(value?: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function parseActionsLogLine(line: string): { timestampMs: number | null; text: string } {
+  const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s?(.*)$/);
+  if (!match) {
+    return { timestampMs: null, text: line };
+  }
+
+  const timestampMs = parseDateMs(match[1]);
+  return {
+    timestampMs,
+    text: match[2] ?? ""
+  };
+}
+
+function findStepWindow<T extends { start: number | null; end: number | null }>(
+  windows: T[],
+  timestampMs: number
+): T | null {
+  const paddingMs = 1000;
+  const matches = windows.filter((window) => {
+    if (window.start === null && window.end === null) {
+      return false;
+    }
+
+    const afterStart = window.start === null || timestampMs >= window.start - paddingMs;
+    const beforeEnd = window.end === null || timestampMs <= window.end + paddingMs;
+    return afterStart && beforeEnd;
+  });
+  if (!matches.length) {
+    return null;
+  }
+
+  return matches[matches.length - 1];
+}
+
+function cleanActionsLogText(text: string): string {
+  const withoutAnsi = text.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "");
+  const withoutGroups = withoutAnsi
+    .replace(/^##\[group\](.*)$/u, "$1")
+    .replace(/^##\[command\](.*)$/u, "$ $1")
+    .replace(/^##\[(error|warning|notice)\](.*)$/u, "$1: $2")
+    .replace(/^##\[endgroup\]$/u, "");
+
+  return withoutGroups.trimEnd();
 }
 
 async function dispatchWorkflow(payload: DispatchWorkflowPayload): Promise<void> {
@@ -938,6 +1197,9 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:get-workflow-run", (_event, repo: RepoRef, runId: number) =>
     getWorkflowRun(repo, runId)
+  );
+  ipcMain.handle("github:get-workflow-job", (_event, repo: RepoRef, jobId: number) =>
+    getWorkflowJob(repo, jobId)
   );
   ipcMain.handle("github:dispatch-workflow", (_event, payload: DispatchWorkflowPayload) =>
     dispatchWorkflow(payload)

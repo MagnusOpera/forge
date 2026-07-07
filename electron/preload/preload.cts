@@ -19,6 +19,8 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:get-pull-request", repo, number),
   getWorkflowRun: (repo: RepoRef, runId: number) =>
     ipcRenderer.invoke("github:get-workflow-run", repo, runId),
+  getWorkflowJob: (repo: RepoRef, jobId: number) =>
+    ipcRenderer.invoke("github:get-workflow-job", repo, jobId),
   dispatchWorkflow: (payload: DispatchWorkflowPayload) =>
     ipcRenderer.invoke("github:dispatch-workflow", payload),
   openInGitHub: (url: string) => ipcRenderer.invoke("github:open-in-github", url),

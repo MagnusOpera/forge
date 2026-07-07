@@ -15,7 +15,6 @@ import {
   GitPullRequest,
   Inbox,
   KeyRound,
-  ListChecks,
   Loader2,
   Moon,
   Menu,
@@ -38,13 +37,16 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import type {
   AuthStatus,
+  CheckSummary,
   ChangedFileSummary,
   GithubFocusApi,
   IssueSummary,
   OrganizationSummary,
   PullRequestDetail,
   PullRequestSummary,
+  RepoRef,
   RepoSummary,
+  WorkflowJobLogDetail,
   WorkflowRunDetail,
   WorkflowRunSummary,
   WorkflowSummary
@@ -59,7 +61,7 @@ type ContentSelection =
   | { kind: "repo" }
   | { kind: "pr"; pr: PullRequestSummary }
   | { kind: "issue"; issue: IssueSummary }
-  | { kind: "run"; run: WorkflowRunSummary }
+  | { kind: "run"; run: WorkflowRunSummary; focusedJobId?: number | null }
   | { kind: "workflow"; workflow: WorkflowSummary };
 
 type MiddleItem =
@@ -87,6 +89,24 @@ interface PaletteItem {
 type ThemeMode = "dark" | "light";
 type SidebarRepoTab = "favorites" | "all";
 type PatchDiffOptions = NonNullable<PatchDiffProps<unknown>["options"]>;
+type WorkflowJobLogLoadState = {
+  loading: boolean;
+  error?: string | null;
+  detail?: WorkflowJobLogDetail | null;
+};
+
+interface WorkflowCheckGroup {
+  check: CheckSummary;
+  checks: CheckSummary[];
+  conclusion?: string | null;
+  key: string;
+  name: string;
+  recency: number;
+  run?: WorkflowRunSummary | null;
+  status?: string | null;
+  url?: string | null;
+  workflowRunId?: number | null;
+}
 
 const accentColors = [
   "#7ee787",
@@ -122,6 +142,7 @@ const browserApi: GithubFocusApi = {
   getWorkflowRuns: () => ipcUnavailable(),
   getPullRequest: () => ipcUnavailable(),
   getWorkflowRun: () => ipcUnavailable(),
+  getWorkflowJob: () => ipcUnavailable(),
   dispatchWorkflow: () => ipcUnavailable(),
   openInGitHub: () => ipcUnavailable(),
   onCacheUpdated: () => () => undefined
@@ -160,6 +181,32 @@ function useStoredState<T>(key: string, initialValue: T): [T, (next: T | ((value
 
 function repoKey(repo: { owner: string; name: string }): string {
   return `${repo.owner}/${repo.name}`;
+}
+
+function isGithubUrl(rawUrl?: string | null): boolean {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "https:" && (url.hostname === "github.com" || url.hostname === "www.github.com");
+  } catch {
+    return false;
+  }
+}
+
+function workflowRunFallbackFromCheck(repo: RepoRef, check: CheckSummary): WorkflowRunSummary {
+  const runId = check.workflowRunId ?? 0;
+  return {
+    id: runId,
+    workflowId: 0,
+    name: check.name,
+    displayTitle: check.name,
+    status: check.status,
+    conclusion: check.conclusion,
+    url: `https://github.com/${repo.owner}/${repo.name}/actions/runs/${runId}`
+  };
 }
 
 function uniqueRepos(repos: RepoSummary[]): RepoSummary[] {
@@ -595,6 +642,28 @@ export function App() {
     }
   }, [currentGithubUrl]);
 
+  const openGithubUrl = useCallback((url: string) => {
+    void api.openInGitHub(url);
+  }, []);
+
+  const openWorkflowRunFromCheck = useCallback(
+    (check: CheckSummary) => {
+      if (!selectedRepo || !check.workflowRunId) {
+        if (isGithubUrl(check.url)) {
+          void api.openInGitHub(check.url ?? "");
+        }
+        return;
+      }
+
+      const run =
+        workflowRuns.find((item) => item.id === check.workflowRunId)
+        ?? workflowRunFallbackFromCheck(selectedRepo, check);
+      setSelection({ kind: "run", run, focusedJobId: null });
+      setRunTab("Summary");
+    },
+    [selectedRepo, workflowRuns]
+  );
+
   const moveMiddleSelection = useCallback(
     (delta: number) => {
       if (!middleItems.length) {
@@ -998,7 +1067,10 @@ export function App() {
         onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
         onAccentChange={setAccentColor}
         onOpenGithub={openGithub}
+        onOpenGithubUrl={openGithubUrl}
+        onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
         onRunWorkflow={runWorkflow}
+        workflowRuns={workflowRuns}
       />
       {paletteOpen && (
         <CommandPalette
@@ -1450,6 +1522,7 @@ function ContentPane(props: {
   loading: boolean;
   error: string | null;
   theme: ThemeMode;
+  workflowRuns: WorkflowRunSummary[];
   accentColor: string;
   onTokenChange(value: string): void;
   onSaveToken(event: React.FormEvent): void;
@@ -1459,6 +1532,8 @@ function ContentPane(props: {
   onToggleTheme(): void;
   onAccentChange(color: string): void;
   onOpenGithub(): void;
+  onOpenGithubUrl(url: string): void;
+  onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
   return (
@@ -1529,14 +1604,25 @@ function ContentPane(props: {
         <PullRequestContent
           detail={props.prDetail}
           fallback={props.selection.pr}
+          repo={props.repo}
           tab={props.prTab}
           theme={props.theme}
+          workflowRuns={props.workflowRuns}
+          onOpenGithubUrl={props.onOpenGithubUrl}
+          onOpenWorkflowRunFromCheck={props.onOpenWorkflowRunFromCheck}
           onTab={props.onPrTabChange}
         />
       ) : props.selection.kind === "issue" ? (
         <IssueContent issue={props.selection.issue} />
       ) : props.selection.kind === "run" ? (
-        <WorkflowRunContent detail={props.runDetail} fallback={props.selection.run} tab={props.runTab} onTab={props.onRunTabChange} />
+        <WorkflowRunContent
+          detail={props.runDetail}
+          fallback={props.selection.run}
+          focusedJobId={props.selection.focusedJobId ?? null}
+          repo={props.repo}
+          tab={props.runTab}
+          onTab={props.onRunTabChange}
+        />
       ) : (
         <WorkflowContent workflow={props.selection.workflow} repo={props.repo} onRun={props.onRunWorkflow} />
       )}
@@ -1640,8 +1726,12 @@ function RepoOverview({ repo }: { repo: RepoSummary }) {
 function PullRequestContent(props: {
   detail: PullRequestDetail | null;
   fallback: PullRequestSummary;
+  repo: RepoSummary;
   tab: string;
   theme: ThemeMode;
+  workflowRuns: WorkflowRunSummary[];
+  onOpenGithubUrl(url: string): void;
+  onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onTab(tab: string): void;
 }) {
   const detail = props.detail;
@@ -1697,27 +1787,175 @@ function PullRequestContent(props: {
             <div className="commit-row" key={commit.oid}>
               <GitBranch size={15} />
               <span>{commit.messageHeadline}</span>
-              <code>{shortSha(commit.oid)}</code>
+              <button
+                type="button"
+                className="commit-link"
+                title="Open commit in GitHub"
+                onClick={() => props.onOpenGithubUrl(commit.url)}
+              >
+                {shortSha(commit.oid)}
+              </button>
             </div>
           )}
         />
       ) : (
-        <StackedList
-          empty="No checks"
-          items={detail.checks}
-          render={(check) => (
-            <div className="check-row" key={`${check.name}-${check.url ?? ""}`}>
-              <StatusIcon status={check.status} conclusion={check.conclusion} />
-              <span>{check.name}</span>
-              <span className={cx("state-chip", statusTone(check.status, check.conclusion))}>
-                {check.conclusion ?? check.status ?? "check"}
-              </span>
-            </div>
-          )}
+        <ChecksList
+          checks={detail.checks}
+          workflowRuns={props.workflowRuns}
+          onOpenWorkflowRun={props.onOpenWorkflowRunFromCheck}
         />
       )}
     </div>
   );
+}
+
+function ChecksList({
+  checks,
+  workflowRuns,
+  onOpenWorkflowRun
+}: {
+  checks: CheckSummary[];
+  workflowRuns: WorkflowRunSummary[];
+  onOpenWorkflowRun(check: CheckSummary): void;
+}) {
+  const groups = useMemo(() => groupChecksByWorkflow(checks, workflowRuns), [checks, workflowRuns]);
+
+  if (!groups.length) {
+    return <div className="empty-content">No checks</div>;
+  }
+
+  return (
+    <div className="checks-list">
+      {groups.map((group) => {
+        const hasRun = Boolean(group.workflowRunId);
+        const hasGithubTarget = isGithubUrl(group.url);
+
+        return (
+          <article className="check-card compact" key={group.key}>
+            <button
+              className="check-header"
+              disabled={!hasRun && !hasGithubTarget}
+              title={hasRun ? "Open workflow run" : hasGithubTarget ? "Open check in GitHub" : "No workflow run"}
+              onClick={() => onOpenWorkflowRun(group.check)}
+            >
+              {hasRun ? <Workflow size={15} /> : <ExternalLink size={15} />}
+              <StatusIcon status={group.status} conclusion={group.conclusion} />
+              <span className="check-title">{group.name}</span>
+              <span className={cx("state-chip", statusTone(group.status, group.conclusion))}>
+                {group.conclusion ?? group.status ?? "check"}
+              </span>
+            </button>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function groupChecksByWorkflow(checks: CheckSummary[], workflowRuns: WorkflowRunSummary[]): WorkflowCheckGroup[] {
+  const runById = new Map(workflowRuns.map((run) => [run.id, run]));
+  const perRun = new Map<string, WorkflowCheckGroup>();
+
+  for (const check of checks) {
+    const run = check.workflowRunId ? runById.get(check.workflowRunId) : null;
+    const name = run?.name || workflowNameFromCheck(check);
+    const runKey = check.workflowRunId ? String(check.workflowRunId) : checkKey(check);
+    const key = `${name}:${runKey}`;
+    const current = perRun.get(key);
+    const checksForGroup = [...(current?.checks ?? []), check];
+    perRun.set(key, {
+      check: newestCheck([current?.check, check].filter(Boolean) as CheckSummary[]),
+      checks: checksForGroup,
+      conclusion: run?.conclusion ?? aggregateCheckConclusion(checksForGroup),
+      key,
+      name,
+      recency: Math.max(current?.recency ?? 0, checkRecency(check), runRecency(run)),
+      run,
+      status: run?.status ?? aggregateCheckStatus(checksForGroup),
+      url: run?.url ?? check.url ?? current?.url ?? null,
+      workflowRunId: check.workflowRunId ?? current?.workflowRunId ?? null
+    });
+  }
+
+  const latestByWorkflow = new Map<string, WorkflowCheckGroup>();
+  for (const group of perRun.values()) {
+    const current = latestByWorkflow.get(group.name);
+    if (!current || group.recency >= current.recency) {
+      latestByWorkflow.set(group.name, group);
+    }
+  }
+
+  return [...latestByWorkflow.values()].sort((left, right) => right.recency - left.recency);
+}
+
+function workflowNameFromCheck(check: CheckSummary): string {
+  const [workflowName] = check.name.split(" / ");
+  if (workflowName && workflowName !== check.name) {
+    return workflowName.trim();
+  }
+  if (check.workflowRunId) {
+    return `Workflow run ${check.workflowRunId}`;
+  }
+  return check.name;
+}
+
+function newestCheck(checks: CheckSummary[]): CheckSummary {
+  return checks.reduce((latest, check) => (checkRecency(check) >= checkRecency(latest) ? check : latest));
+}
+
+function checkKey(check: CheckSummary): string {
+  return `${check.jobId ?? check.workflowRunId ?? check.checkRunId ?? check.name}:${check.url ?? ""}`;
+}
+
+function checkRecency(check: CheckSummary): number {
+  return (
+    dateValue(check.completedAt)
+    || dateValue(check.startedAt)
+    || check.jobId
+    || check.workflowRunId
+    || check.checkRunId
+    || 0
+  );
+}
+
+function runRecency(run?: WorkflowRunSummary | null): number {
+  return dateValue(run?.runStartedAt) || dateValue(run?.createdAt) || dateValue(run?.updatedAt) || run?.id || 0;
+}
+
+function dateValue(value?: string | null): number {
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function aggregateCheckConclusion(checks: CheckSummary[]): string | null {
+  const conclusions = checks.map((check) => check.conclusion).filter(Boolean);
+  if (conclusions.some((conclusion) => ["FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED"].includes(String(conclusion)))) {
+    return "failure";
+  }
+  if (conclusions.some((conclusion) => String(conclusion) === "CANCELLED")) {
+    return "cancelled";
+  }
+  if (conclusions.length && conclusions.every((conclusion) => String(conclusion) === "SKIPPED")) {
+    return "skipped";
+  }
+  if (checks.every((check) => check.status === "SUCCESS" || check.conclusion === "SUCCESS")) {
+    return "success";
+  }
+  return conclusions[0] ?? null;
+}
+
+function aggregateCheckStatus(checks: CheckSummary[]): string | null {
+  if (checks.some((check) => ["PENDING", "EXPECTED", "IN_PROGRESS", "QUEUED"].includes(String(check.status)))) {
+    return "pending";
+  }
+  if (checks.every((check) => check.status === "SUCCESS" || check.conclusion === "SUCCESS")) {
+    return "success";
+  }
+  return checks[0]?.status ?? null;
 }
 
 function ChangedFilesDiffList({ files, theme }: { files: ChangedFileSummary[]; theme: ThemeMode }) {
@@ -1852,7 +2090,9 @@ function WorkflowContent(props: { workflow: WorkflowSummary; repo: RepoSummary; 
 
 function WorkflowRunContent(props: {
   detail: WorkflowRunDetail | null;
+  focusedJobId?: number | null;
   fallback: WorkflowRunSummary;
+  repo: RepoRef;
   tab: string;
   onTab(tab: string): void;
 }) {
@@ -1931,17 +2171,199 @@ function WorkflowRunContent(props: {
           )}
         />
       ) : (
-        <StackedList
-          empty="No jobs"
-          items={props.detail.jobs}
-          render={(job) => (
-            <div className="file-row" key={job.id}>
-              <ListChecks size={15} />
-              <span>{job.name}</span>
-              <span className="muted-line">{job.conclusion ?? job.status ?? "job"}</span>
-            </div>
-          )}
-        />
+        <WorkflowLogsList focusedJobId={props.focusedJobId ?? null} jobs={props.detail.jobs} repo={props.repo} />
+      )}
+    </div>
+  );
+}
+
+function WorkflowLogsList({
+  focusedJobId,
+  jobs,
+  repo
+}: {
+  focusedJobId?: number | null;
+  jobs: WorkflowRunDetail["jobs"];
+  repo: RepoRef;
+}) {
+  const [collapsedJobs, setCollapsedJobs] = useState<Record<string, boolean>>({});
+  const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({});
+  const [details, setDetails] = useState<Record<string, WorkflowJobLogLoadState>>({});
+  const detailsRef = useRef(details);
+  const loadingJobKeys = useRef<Set<string>>(new Set());
+  const jobsKey = jobs.map((job) => job.id).join(",");
+
+  useEffect(() => {
+    detailsRef.current = details;
+  }, [details]);
+
+  const loadJob = useCallback(
+    (job: WorkflowRunDetail["jobs"][number]) => {
+      const key = String(job.id);
+      const current = detailsRef.current[key];
+      if (loadingJobKeys.current.has(key) || current?.loading || current?.detail) {
+        return;
+      }
+
+      loadingJobKeys.current.add(key);
+      setDetails((current) => ({
+        ...current,
+        [key]: { loading: true, error: null, detail: current[key]?.detail ?? null }
+      }));
+      void api
+        .getWorkflowJob(repo, job.id)
+        .then((response) => {
+          setDetails((current) => ({
+            ...current,
+            [key]: { loading: false, detail: response.data, error: null }
+          }));
+        })
+        .catch((error) => {
+          setDetails((current) => ({
+            ...current,
+            [key]: {
+              loading: false,
+              detail: current[key]?.detail ?? null,
+              error: error instanceof Error ? error.message : "Unable to load workflow job logs."
+            }
+          }));
+        })
+        .finally(() => {
+          loadingJobKeys.current.delete(key);
+        });
+    },
+    [repo]
+  );
+
+  useEffect(() => {
+    loadingJobKeys.current.clear();
+    detailsRef.current = {};
+    setCollapsedJobs(focusedJobId ? { [String(focusedJobId)]: false } : {});
+    setCollapsedSteps({});
+    setDetails({});
+  }, [focusedJobId, jobsKey]);
+
+  useEffect(() => {
+    const focusedJob = focusedJobId ? jobs.find((job) => job.id === focusedJobId) : null;
+    if (focusedJob) {
+      loadJob(focusedJob);
+    }
+  }, [focusedJobId, jobs, jobsKey, loadJob]);
+
+  if (!jobs.length) {
+    return <div className="empty-content">No jobs</div>;
+  }
+
+  return (
+    <div className="checks-list">
+      {jobs.map((job) => {
+        const key = String(job.id);
+        const collapsed = collapsedJobs[key] ?? true;
+        const state = details[key];
+
+        return (
+          <article className="check-card" key={job.id}>
+            <button
+              className="check-header"
+              aria-expanded={!collapsed}
+              onClick={() => {
+                const nextCollapsed = !(collapsedJobs[key] ?? true);
+                setCollapsedJobs((current) => ({
+                  ...current,
+                  [key]: nextCollapsed
+                }));
+                if (!nextCollapsed) {
+                  loadJob(job);
+                }
+              }}
+            >
+              {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+              <StatusIcon status={job.status} conclusion={job.conclusion} />
+              <span className="check-title">{job.name}</span>
+              <span className={cx("state-chip", statusTone(job.status, job.conclusion))}>
+                {job.conclusion ?? job.status ?? "job"}
+              </span>
+            </button>
+            {!collapsed && (
+              <div className="check-body">
+                {state?.loading ? (
+                  <div className="diff-loading">Loading job logs...</div>
+                ) : state?.error ? (
+                  <div className="inline-error">
+                    <AlertCircle size={15} />
+                    <span>{state.error}</span>
+                  </div>
+                ) : state?.detail ? (
+                  <WorkflowJobSteps
+                    collapsedSteps={collapsedSteps}
+                    detail={state.detail}
+                    jobKey={key}
+                    onToggleStep={(stepKey) =>
+                      setCollapsedSteps((current) => ({
+                        ...current,
+                        [stepKey]: !(current[stepKey] ?? true)
+                      }))
+                    }
+                  />
+                ) : (
+                  <div className="empty-row">No logs loaded.</div>
+                )}
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function WorkflowJobSteps(props: {
+  collapsedSteps: Record<string, boolean>;
+  detail: WorkflowJobLogDetail;
+  jobKey: string;
+  onToggleStep(stepKey: string): void;
+}) {
+  if (!props.detail.steps.length && props.detail.rawLog?.trim()) {
+    return (
+      <pre className="terminal-output standalone" aria-label="Raw job output">
+        {props.detail.rawLog.trim()}
+      </pre>
+    );
+  }
+
+  if (!props.detail.steps.length) {
+    return <div className="empty-row">No steps found for this job.</div>;
+  }
+
+  return (
+    <div className="check-steps">
+      {props.detail.steps.map((step, index) => {
+        const stepKey = `${props.jobKey}:${step.number ?? index}:${step.name}`;
+        const collapsed = props.collapsedSteps[stepKey] ?? true;
+        return (
+          <article className="check-step-card" key={stepKey}>
+            <button className="check-step-header" aria-expanded={!collapsed} onClick={() => props.onToggleStep(stepKey)}>
+              {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+              <StatusIcon status={step.status} conclusion={step.conclusion} />
+              <span className="check-title">{step.name}</span>
+              <span className={cx("state-chip", statusTone(step.status, step.conclusion))}>
+                {step.conclusion ?? step.status ?? "step"}
+              </span>
+            </button>
+            {!collapsed && (
+              <pre className="terminal-output" aria-label={`${step.name} output`}>
+                {step.log?.trim() || "No output captured for this step."}
+              </pre>
+            )}
+          </article>
+        );
+      })}
+      {!props.detail.steps.some((step) => step.log?.trim()) && props.detail.rawLog?.trim() && (
+        <article className="check-step-card">
+          <pre className="terminal-output standalone" aria-label="Raw job output">
+            {props.detail.rawLog.trim()}
+          </pre>
+        </article>
       )}
     </div>
   );
