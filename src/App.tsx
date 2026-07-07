@@ -2228,6 +2228,10 @@ function ContentPane(props: {
   onSelectRun(run: WorkflowRunSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
+  const reviewPr = props.selection.kind === "pr" ? props.prDetail ?? props.selection.pr : null;
+  const showReviewActions =
+    props.repo && reviewPr && canSubmitPullRequestReview(props.repo) && reviewPr.state === "OPEN";
+
   return (
     <main className="content-pane" tabIndex={0}>
       <div className="content-header app-drag">
@@ -2252,6 +2256,13 @@ function ContentPane(props: {
           </div>
           <div className="content-title">
             <ContentTitle selection={props.selection} repo={props.repo} />
+            {showReviewActions && (
+              <PullRequestReviewActions
+                disabled={props.reviewSubmitting}
+                pr={reviewPr}
+                onSubmitReview={props.onSubmitPullRequestReview}
+              />
+            )}
             {props.loading && <Loader2 className="spin" size={15} />}
           </div>
         </div>
@@ -2316,14 +2327,11 @@ function ContentPane(props: {
         <PullRequestContent
           detail={props.prDetail}
           fallback={props.selection.pr}
-          repo={props.repo}
           tab={props.prTab}
           theme={props.theme}
           workflowRuns={props.workflowRuns}
           onOpenGithubUrl={props.onOpenGithubUrl}
           onOpenWorkflowRunFromCheck={props.onOpenWorkflowRunFromCheck}
-          onSubmitReview={props.onSubmitPullRequestReview}
-          reviewSubmitting={props.reviewSubmitting}
           onTab={props.onPrTabChange}
         />
       ) : props.selection.kind === "issue" ? (
@@ -2368,6 +2376,37 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
     return <span>Run {props.selection.run.id}</span>;
   }
   return <span>{props.selection.workflow.name}</span>;
+}
+
+function PullRequestReviewActions(props: {
+  disabled: boolean;
+  pr: PullRequestSummary;
+  onSubmitReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
+}) {
+  return (
+    <div className="pr-review-actions" aria-label="Pull request review actions">
+      <button
+        type="button"
+        className="review-action-button approve"
+        title="Approve"
+        aria-label="Approve pull request"
+        disabled={props.disabled}
+        onClick={() => props.onSubmitReview(props.pr, "APPROVE")}
+      >
+        <ThumbsUp size={15} />
+      </button>
+      <button
+        type="button"
+        className="review-action-button request"
+        title="Request changes"
+        aria-label="Request changes"
+        disabled={props.disabled}
+        onClick={() => props.onSubmitReview(props.pr, "REQUEST_CHANGES")}
+      >
+        <ThumbsDown size={15} />
+      </button>
+    </div>
+  );
 }
 
 function TokenGate(props: {
@@ -2446,19 +2485,15 @@ function RepoOverview({ repo }: { repo: RepoSummary }) {
 function PullRequestContent(props: {
   detail: PullRequestDetail | null;
   fallback: PullRequestSummary;
-  repo: RepoSummary;
   tab: string;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
-  onSubmitReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
-  reviewSubmitting: boolean;
   onTab(tab: string): void;
 }) {
   const detail = props.detail;
   const tabs = ["Description", "Comments", "Reviews", "Files", "Commits", "Checks"];
-  const canReview = canSubmitPullRequestReview(props.repo) && (detail?.state ?? props.fallback.state) === "OPEN";
 
   return (
     <div className="content-detail-shell">
@@ -2469,30 +2504,6 @@ function PullRequestContent(props: {
             <h1>{detail?.title ?? props.fallback.title}</h1>
           </div>
           <div className="pr-heading-meta">
-            {canReview && (
-              <div className="pr-review-actions" aria-label="Pull request review actions">
-                <button
-                  type="button"
-                  className="review-action-button approve"
-                  title="Approve"
-                  aria-label="Approve pull request"
-                  disabled={props.reviewSubmitting}
-                  onClick={() => props.onSubmitReview(detail ?? props.fallback, "APPROVE")}
-                >
-                  <ThumbsUp size={15} />
-                </button>
-                <button
-                  type="button"
-                  className="review-action-button request"
-                  title="Request changes"
-                  aria-label="Request changes"
-                  disabled={props.reviewSubmitting}
-                  onClick={() => props.onSubmitReview(detail ?? props.fallback, "REQUEST_CHANGES")}
-                >
-                  <ThumbsDown size={15} />
-                </button>
-              </div>
-            )}
             <div className="label-row">
               {(detail?.labels ?? props.fallback.labels).map((label) => (
                 <span className="label" style={{ borderColor: `#${label.color}` }} key={label.id}>
