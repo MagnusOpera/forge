@@ -1,10 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  AddPullRequestCommentPayload,
   CacheRequestOptions,
   DispatchWorkflowPayload,
   GithubFocusApi,
   RepoRef,
-  SubmitPullRequestReviewPayload
+  SubmitPullRequestReviewPayload,
+  UpdatePullRequestTitlePayload
 } from "../../shared/github.js";
 
 const api: GithubFocusApi = {
@@ -25,16 +27,20 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:get-workflows", repo, options),
   getWorkflowRuns: (repo: RepoRef, options?: CacheRequestOptions) =>
     ipcRenderer.invoke("github:get-workflow-runs", repo, options),
-  getPullRequest: (repo: RepoRef, number: number) =>
-    ipcRenderer.invoke("github:get-pull-request", repo, number),
-  getWorkflowRun: (repo: RepoRef, runId: number) =>
-    ipcRenderer.invoke("github:get-workflow-run", repo, runId),
+  getPullRequest: (repo: RepoRef, number: number, options?: CacheRequestOptions) =>
+    ipcRenderer.invoke("github:get-pull-request", repo, number, options),
+  getWorkflowRun: (repo: RepoRef, runId: number, options?: CacheRequestOptions) =>
+    ipcRenderer.invoke("github:get-workflow-run", repo, runId, options),
   getWorkflowJob: (repo: RepoRef, jobId: number) =>
     ipcRenderer.invoke("github:get-workflow-job", repo, jobId),
   dispatchWorkflow: (payload: DispatchWorkflowPayload) =>
     ipcRenderer.invoke("github:dispatch-workflow", payload),
   submitPullRequestReview: (payload: SubmitPullRequestReviewPayload) =>
     ipcRenderer.invoke("github:submit-pull-request-review", payload),
+  addPullRequestComment: (payload: AddPullRequestCommentPayload) =>
+    ipcRenderer.invoke("github:add-pull-request-comment", payload),
+  updatePullRequestTitle: (payload: UpdatePullRequestTitlePayload) =>
+    ipcRenderer.invoke("github:update-pull-request-title", payload),
   openInGitHub: (url: string) => ipcRenderer.invoke("github:open-in-github", url),
   onCacheUpdated: (callback: (key: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, key: string) => callback(key);

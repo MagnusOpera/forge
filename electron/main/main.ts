@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   ActorSummary,
+  AddPullRequestCommentPayload,
   ArtifactSummary,
   AuthStatus,
   CacheEnvelope,
@@ -26,6 +27,7 @@ import type {
   RepoSummary,
   SubmitPullRequestReviewPayload,
   TimelineComment,
+  UpdatePullRequestTitlePayload,
   WorkflowJobLogDetail,
   WorkflowJobSummary,
   WorkflowJobStepSummary,
@@ -995,7 +997,11 @@ async function getWorkflowRuns(
   }, 60 * 1000, options);
 }
 
-async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>> {
+async function getPullRequest(
+  repoRef: RepoRef,
+  number: number,
+  options?: CacheRequestOptions
+): Promise<CacheEnvelope<PullRequestDetail>> {
   const repo = ensureRepo(repoRef);
   return cached(pullRequestCacheKey(repo, number), async () => {
     const { gql, octokit } = await getClients();
@@ -1145,7 +1151,7 @@ async function getPullRequest(repoRef: RepoRef, number: number): Promise<CacheEn
       })),
       checks
     };
-  });
+  }, defaultTtlMs, options);
 }
 
 function parseActionsJobId(rawUrl?: string | null): number | null {
@@ -1235,7 +1241,11 @@ function buildPullRequestFilePatch(file: {
   return [...header, `--- ${oldTarget}`, `+++ ${newTarget}`, file.patch].join("\n");
 }
 
-async function getWorkflowRun(repoRef: RepoRef, runId: number): Promise<CacheEnvelope<WorkflowRunDetail>> {
+async function getWorkflowRun(
+  repoRef: RepoRef,
+  runId: number,
+  options?: CacheRequestOptions
+): Promise<CacheEnvelope<WorkflowRunDetail>> {
   const repo = ensureRepo(repoRef);
   return cached(`repo:${repo.owner}/${repo.name}:workflow-run:${runId}`, async () => {
     const { octokit } = await getClients();
@@ -1288,7 +1298,7 @@ async function getWorkflowRun(repoRef: RepoRef, runId: number): Promise<CacheEnv
         url: artifact.archive_download_url
       }))
     };
-  }, 60 * 1000);
+  }, 60 * 1000, options);
 }
 
 async function getWorkflowJob(repoRef: RepoRef, jobId: number): Promise<CacheEnvelope<WorkflowJobLogDetail>> {
@@ -1539,6 +1549,48 @@ async function submitPullRequestReview(payload: SubmitPullRequestReviewPayload):
   ]);
 }
 
+async function addPullRequestComment(payload: AddPullRequestCommentPayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const body = payload.body?.trim();
+  if (!body) {
+    throw new Error("Pull request comment cannot be empty.");
+  }
+
+  const { octokit } = await getClients();
+  await octokit.issues.createComment({
+    owner: repo.owner,
+    repo: repo.name,
+    issue_number: payload.pullNumber,
+    body
+  });
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, payload.pullNumber))
+  ]);
+}
+
+async function updatePullRequestTitle(payload: UpdatePullRequestTitlePayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const title = payload.title?.trim();
+  if (!title) {
+    throw new Error("Pull request title cannot be empty.");
+  }
+
+  const { octokit } = await getClients();
+  await octokit.pulls.update({
+    owner: repo.owner,
+    repo: repo.name,
+    pull_number: payload.pullNumber,
+    title
+  });
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, payload.pullNumber))
+  ]);
+}
+
 async function openInGitHub(rawUrl: string): Promise<void> {
   const url = new URL(rawUrl);
   const host = url.hostname.toLowerCase();
@@ -1625,11 +1677,11 @@ function registerIpc(): void {
   ipcMain.handle("github:get-workflow-runs", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
     getWorkflowRuns(repo, options)
   );
-  ipcMain.handle("github:get-pull-request", (_event, repo: RepoRef, number: number) =>
-    getPullRequest(repo, number)
+  ipcMain.handle("github:get-pull-request", (_event, repo: RepoRef, number: number, options?: CacheRequestOptions) =>
+    getPullRequest(repo, number, options)
   );
-  ipcMain.handle("github:get-workflow-run", (_event, repo: RepoRef, runId: number) =>
-    getWorkflowRun(repo, runId)
+  ipcMain.handle("github:get-workflow-run", (_event, repo: RepoRef, runId: number, options?: CacheRequestOptions) =>
+    getWorkflowRun(repo, runId, options)
   );
   ipcMain.handle("github:get-workflow-job", (_event, repo: RepoRef, jobId: number) =>
     getWorkflowJob(repo, jobId)
@@ -1639,6 +1691,12 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:submit-pull-request-review", (_event, payload: SubmitPullRequestReviewPayload) =>
     submitPullRequestReview(payload)
+  );
+  ipcMain.handle("github:add-pull-request-comment", (_event, payload: AddPullRequestCommentPayload) =>
+    addPullRequestComment(payload)
+  );
+  ipcMain.handle("github:update-pull-request-title", (_event, payload: UpdatePullRequestTitlePayload) =>
+    updatePullRequestTitle(payload)
   );
   ipcMain.handle("github:open-in-github", (_event, url: string) => openInGitHub(url));
 }

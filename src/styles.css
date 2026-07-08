@@ -1305,6 +1305,46 @@ p {
   display: flex;
   align-items: center;
   gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.pr-title-row {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 8px;
+}
+
+.pr-title-row h1 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pr-title-action {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.pr-title-edit {
+  display: flex;
+  align-items: flex-start;
+  width: min(760px, 100%);
+  min-width: 0;
+  gap: 8px;
+}
+
+.pr-title-input {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--input-bg);
+  color: var(--title);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .review-action-button {
@@ -1334,6 +1374,91 @@ p {
 }
 
 .review-action-button:disabled {
+  opacity: 0.45;
+}
+
+.comments-action-row {
+  display: flex;
+  justify-content: flex-end;
+  max-height: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition:
+    max-height 150ms ease,
+    margin-bottom 150ms ease,
+    opacity 130ms ease,
+    transform 150ms ease;
+}
+
+.comment-composer {
+  display: grid;
+  gap: 0;
+  margin-bottom: 12px;
+  transition: gap 150ms ease;
+}
+
+.comment-composer.expanded {
+  gap: 8px;
+}
+
+.comment-composer textarea {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  resize: none;
+  padding: 10px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-base);
+  font: inherit;
+  line-height: 1.45;
+  overflow: hidden;
+  transition:
+    height 160ms ease,
+    min-height 160ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.comment-composer.expanded textarea {
+  height: 128px;
+  min-height: 128px;
+  resize: vertical;
+  overflow: auto;
+}
+
+.comment-composer.expanded .comments-action-row {
+  max-height: 40px;
+  margin-bottom: 10px;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.comment-action-button {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.comment-action-button:hover:not(:disabled) {
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+.comment-action-button:disabled {
   opacity: 0.45;
 }
 

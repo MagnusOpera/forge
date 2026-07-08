@@ -50,6 +50,10 @@ export function canSubmitPullRequestReview(repo: RepoSummary): boolean {
   return ["ADMIN", "MAINTAIN", "WRITE"].includes(repo.viewerPermission ?? "");
 }
 
+export function isPullRequestAuthor(pr: PullRequestSummary, viewerLogin?: string | null): boolean {
+  return Boolean(viewerLogin && pr.author?.login && pr.author.login.toLowerCase() === viewerLogin.toLowerCase());
+}
+
 export function canSubmitPullRequestReviewForPullRequest(
   repo: RepoSummary,
   pr: PullRequestSummary,
@@ -58,11 +62,15 @@ export function canSubmitPullRequestReviewForPullRequest(
   if (!canSubmitPullRequestReview(repo) || !viewerLogin) {
     return false;
   }
-  if (!pr.author?.login) {
-    return true;
-  }
+  return !isPullRequestAuthor(pr, viewerLogin);
+}
 
-  return pr.author.login.toLowerCase() !== viewerLogin.toLowerCase();
+export function canUpdatePullRequestTitle(
+  repo: RepoSummary,
+  pr: PullRequestSummary,
+  viewerLogin?: string | null
+): boolean {
+  return canSubmitPullRequestReview(repo) || isPullRequestAuthor(pr, viewerLogin);
 }
 
 export function isLiveStatus(status?: string | null): boolean {

@@ -3,7 +3,9 @@ import type { PullRequestSummary, RepoSummary } from "../shared/github";
 import {
   canSubmitPullRequestReview,
   canSubmitPullRequestReviewForPullRequest,
+  canUpdatePullRequestTitle,
   formatDuration,
+  isPullRequestAuthor,
   isLiveStatus,
   pullRequestTabForState,
   shortSha,
@@ -41,11 +43,22 @@ describe("appLogic", () => {
     const repo = { viewerPermission: "WRITE" } as RepoSummary;
     const pr = { author: { login: "octocat" } } as PullRequestSummary;
 
+    expect(isPullRequestAuthor(pr, "Octocat")).toBe(true);
+    expect(isPullRequestAuthor(pr, "hubot")).toBe(false);
     expect(canSubmitPullRequestReviewForPullRequest(repo, pr, "hubot")).toBe(true);
     expect(canSubmitPullRequestReviewForPullRequest(repo, pr, "Octocat")).toBe(false);
     expect(canSubmitPullRequestReviewForPullRequest(repo, pr, null)).toBe(false);
     expect(canSubmitPullRequestReviewForPullRequest(repo, { author: null } as PullRequestSummary, "hubot")).toBe(true);
     expect(canSubmitPullRequestReviewForPullRequest({ viewerPermission: "READ" } as RepoSummary, pr, "hubot")).toBe(false);
+  });
+
+  it("allows pull request title edits for write users or the author", () => {
+    const pr = { author: { login: "octocat" } } as PullRequestSummary;
+
+    expect(canUpdatePullRequestTitle({ viewerPermission: "WRITE" } as RepoSummary, pr, "hubot")).toBe(true);
+    expect(canUpdatePullRequestTitle({ viewerPermission: "READ" } as RepoSummary, pr, "Octocat")).toBe(true);
+    expect(canUpdatePullRequestTitle({ viewerPermission: "READ" } as RepoSummary, pr, "hubot")).toBe(false);
+    expect(canUpdatePullRequestTitle({ viewerPermission: null } as RepoSummary, pr, null)).toBe(false);
   });
 
   it("maps status and conclusion values to UI tones", () => {

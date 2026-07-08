@@ -23,6 +23,7 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Play,
   RefreshCw,
   Search,
@@ -42,6 +43,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import {
   canSubmitPullRequestReviewForPullRequest,
+  canUpdatePullRequestTitle,
   formatDuration,
   isLiveStatus,
   pullRequestTabForState,
@@ -179,6 +181,8 @@ const browserApi: GithubFocusApi = {
   getWorkflowJob: () => ipcUnavailable(),
   dispatchWorkflow: () => ipcUnavailable(),
   submitPullRequestReview: () => ipcUnavailable(),
+  addPullRequestComment: () => ipcUnavailable(),
+  updatePullRequestTitle: () => ipcUnavailable(),
   openInGitHub: () => ipcUnavailable(),
   onCacheUpdated: () => () => undefined
 };
@@ -525,6 +529,7 @@ export function App() {
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [prActionSubmitting, setPrActionSubmitting] = useState(false);
   const [prTab, setPrTab] = useState("Description");
   const [runTab, setRunTab] = useState("Summary");
 
@@ -862,6 +867,80 @@ export function App() {
     [flash, loadProject, selectedRepo]
   );
 
+  const refreshPullRequest = useCallback(
+    async (
+      repo: RepoSummary,
+      pullNumber: number,
+      options: { force?: boolean; showProjectSpinner?: boolean } = {}
+    ): Promise<PullRequestDetail> => {
+      const cacheOptions = options.force ? { force: true } : undefined;
+      const [detailResponse] = await Promise.all([
+        api.getPullRequest(repo, pullNumber, cacheOptions),
+        loadProject(repo, options.showProjectSpinner ?? false, true)
+      ]);
+      setPrDetail(detailResponse.data);
+      setSelection((current) =>
+        current.kind === "pr" && current.pr.number === pullNumber ? { kind: "pr", pr: detailResponse.data } : current
+      );
+      return detailResponse.data;
+    },
+    [loadProject]
+  );
+
+  const refreshWorkflowRun = useCallback(
+    async (
+      repo: RepoSummary,
+      runId: number,
+      options: { force?: boolean; showProjectSpinner?: boolean } = {}
+    ): Promise<WorkflowRunDetail> => {
+      const cacheOptions = options.force ? { force: true } : undefined;
+      const [detailResponse] = await Promise.all([
+        api.getWorkflowRun(repo, runId, cacheOptions),
+        loadProject(repo, options.showProjectSpinner ?? false, true)
+      ]);
+      setRunDetail(detailResponse.data);
+      setSelection((current) =>
+        current.kind === "run" && current.run.id === runId ? { ...current, run: detailResponse.data } : current
+      );
+      return detailResponse.data;
+    },
+    [loadProject]
+  );
+
+  const refreshActivePane = useCallback(async () => {
+    if (!selectedRepo) {
+      return;
+    }
+
+    if (selection.kind === "pr") {
+      setContentLoading(true);
+      setContentError(null);
+      try {
+        await refreshPullRequest(selectedRepo, selection.pr.number, { force: true, showProjectSpinner: true });
+      } catch (error) {
+        setContentError(error instanceof Error ? error.message : "Unable to refresh pull request.");
+      } finally {
+        setContentLoading(false);
+      }
+      return;
+    }
+
+    if (selection.kind === "run") {
+      setContentLoading(true);
+      setContentError(null);
+      try {
+        await refreshWorkflowRun(selectedRepo, selection.run.id, { force: true, showProjectSpinner: true });
+      } catch (error) {
+        setContentError(error instanceof Error ? error.message : "Unable to refresh workflow run.");
+      } finally {
+        setContentLoading(false);
+      }
+      return;
+    }
+
+    await loadProject(selectedRepo, true, true);
+  }, [loadProject, refreshPullRequest, refreshWorkflowRun, selectedRepo, selection]);
+
   const submitPullRequestReview = useCallback(
     async (pr: PullRequestSummary, event: PullRequestReviewEvent) => {
       if (!selectedRepo) {
@@ -898,22 +977,80 @@ export function App() {
           event,
           body
         });
-        const [detailResponse] = await Promise.all([
-          api.getPullRequest(selectedRepo, pr.number),
-          loadProject(selectedRepo, false, true)
-        ]);
-        setPrDetail(detailResponse.data);
-        setSelection((current) =>
-          current.kind === "pr" && current.pr.number === pr.number ? { kind: "pr", pr: detailResponse.data } : current
-        );
-        flash(event === "APPROVE" ? "Approved pull request." : "Requested changes.");
+        await refreshPullRequest(selectedRepo, pr.number);
       } catch (error) {
         flash(error instanceof Error ? error.message : "Unable to submit review.");
       } finally {
         setReviewSubmitting(false);
       }
     },
-    [auth?.viewerLogin, flash, loadProject, selectedRepo]
+    [auth?.viewerLogin, flash, refreshPullRequest, selectedRepo]
+  );
+
+  const addPullRequestComment = useCallback(
+    async (pr: PullRequestSummary, bodyValue: string): Promise<boolean> => {
+      if (!selectedRepo) {
+        return false;
+      }
+
+      const body = bodyValue.trim();
+      if (!body) {
+        flash("Comment cannot be empty.");
+        return false;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.addPullRequestComment({
+          repo: selectedRepo,
+          pullNumber: pr.number,
+          body
+        });
+        await refreshPullRequest(selectedRepo, pr.number);
+        setPrTab("Comments");
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to add comment.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [flash, refreshPullRequest, selectedRepo]
+  );
+
+  const updatePullRequestTitle = useCallback(
+    async (pr: PullRequestSummary, titleValue: string): Promise<boolean> => {
+      if (!selectedRepo || !canUpdatePullRequestTitle(selectedRepo, pr, auth?.viewerLogin)) {
+        return false;
+      }
+
+      const title = titleValue.trim();
+      if (!title) {
+        flash("Pull request title cannot be empty.");
+        return false;
+      }
+      if (title === pr.title) {
+        return true;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.updatePullRequestTitle({
+          repo: selectedRepo,
+          pullNumber: pr.number,
+          title
+        });
+        await refreshPullRequest(selectedRepo, pr.number);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to update title.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [auth?.viewerLogin, flash, refreshPullRequest, selectedRepo]
   );
 
   const selectRun = useCallback(
@@ -1479,7 +1616,7 @@ export function App() {
         onFocusView={setStoredProjectFocusView}
         onPullRequestTab={setProjectPullRequestTab}
         onWorkflowTab={setProjectWorkflowTab}
-        onRefresh={() => selectedRepo && loadProject(selectedRepo, true, true)}
+        onRefresh={() => void refreshActivePane()}
         onToggleSidebar={() => setSidebarCollapsedWithAnimation(false)}
         onOpenGithub={openGithub}
         onSelectPr={(pr) => {
@@ -1512,6 +1649,7 @@ export function App() {
         loading={contentLoading}
         error={contentError}
         reviewSubmitting={reviewSubmitting}
+        prActionSubmitting={prActionSubmitting}
         theme={activeTheme}
         canNavigateBack={canNavigateBack}
         canNavigateForward={canNavigateForward}
@@ -1525,6 +1663,8 @@ export function App() {
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
         onCopyText={copyToClipboard}
         onSubmitPullRequestReview={submitPullRequestReview}
+        onAddPullRequestComment={addPullRequestComment}
+        onUpdatePullRequestTitle={updatePullRequestTitle}
         onSelectRun={selectRun}
         onRunWorkflow={runWorkflow}
         workflowRuns={workflowRuns}
@@ -2349,6 +2489,7 @@ function ContentPane(props: {
   loading: boolean;
   error: string | null;
   reviewSubmitting: boolean;
+  prActionSubmitting: boolean;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
   canNavigateBack: boolean;
@@ -2368,10 +2509,14 @@ function ContentPane(props: {
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onCopyText(value: string): Promise<boolean>;
   onSubmitPullRequestReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
+  onAddPullRequestComment(pr: PullRequestSummary, body: string): Promise<boolean>;
+  onUpdatePullRequestTitle(pr: PullRequestSummary, title: string): Promise<boolean>;
   onSelectRun(run: WorkflowRunSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
   const reviewPr = props.selection.kind === "pr" ? props.prDetail ?? props.selection.pr : null;
+  const showTitleAction =
+    props.repo && reviewPr && canUpdatePullRequestTitle(props.repo, reviewPr, props.auth?.viewerLogin);
   const showReviewActions =
     props.repo &&
     reviewPr &&
@@ -2474,8 +2619,12 @@ function ContentPane(props: {
           detail={props.prDetail}
           fallback={props.selection.pr}
           tab={props.prTab}
+          prActionSubmitting={props.prActionSubmitting}
+          canUpdateTitle={Boolean(showTitleAction)}
           theme={props.theme}
           workflowRuns={props.workflowRuns}
+          onAddComment={props.onAddPullRequestComment}
+          onUpdateTitle={props.onUpdatePullRequestTitle}
           onOpenGithubUrl={props.onOpenGithubUrl}
           onOpenWorkflowRunFromCheck={props.onOpenWorkflowRunFromCheck}
           onCopyText={props.onCopyText}
@@ -2633,19 +2782,36 @@ function PullRequestContent(props: {
   detail: PullRequestDetail | null;
   fallback: PullRequestSummary;
   tab: string;
+  prActionSubmitting: boolean;
+  canUpdateTitle: boolean;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
+  onAddComment(pr: PullRequestSummary, body: string): Promise<boolean>;
+  onUpdateTitle(pr: PullRequestSummary, title: string): Promise<boolean>;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onCopyText(value: string): Promise<boolean>;
   onTab(tab: string): void;
 }) {
   const detail = props.detail;
+  const pr = detail ?? props.fallback;
+  const title = detail?.title ?? props.fallback.title;
   const tabs = ["Description", "Comments", "Reviews", "Files", "Commits", "Checks"];
   const branchName = detail?.headRefName ?? props.fallback.headRefName;
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(title);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [commentComposerExpanded, setCommentComposerExpanded] = useState(false);
   const [copiedMeta, setCopiedMeta] = useState<"number" | "branch" | null>(null);
   const copyFeedbackTimer = useRef<number | null>(null);
   const copyFeedbackFrame = useRef<number | null>(null);
+  const titleSaveInFlight = useRef(false);
+
+  useEffect(() => {
+    if (!titleEditing) {
+      setTitleDraft(title);
+    }
+  }, [title, titleEditing]);
 
   useEffect(
     () => () => {
@@ -2686,6 +2852,84 @@ function PullRequestContent(props: {
     [props.onCopyText]
   );
 
+  const startTitleEdit = useCallback(() => {
+    setTitleDraft(title);
+    setTitleEditing(true);
+  }, [title]);
+
+  const cancelTitleEdit = useCallback(() => {
+    setTitleDraft(title);
+    setTitleEditing(false);
+  }, [title]);
+
+  const finishTitleEdit = useCallback(async () => {
+    if (props.prActionSubmitting || titleSaveInFlight.current) {
+      return;
+    }
+
+    const nextTitle = titleDraft.trim();
+    if (nextTitle === title) {
+      cancelTitleEdit();
+      return;
+    }
+
+    titleSaveInFlight.current = true;
+    try {
+      const saved = await props.onUpdateTitle(pr, nextTitle);
+      if (saved) {
+        setTitleEditing(false);
+      }
+    } finally {
+      titleSaveInFlight.current = false;
+    }
+  }, [cancelTitleEdit, pr, props.onUpdateTitle, props.prActionSubmitting, title, titleDraft]);
+
+  const submitTitleEdit = useCallback(
+    async (event?: React.FormEvent) => {
+      event?.preventDefault();
+      await finishTitleEdit();
+    },
+    [finishTitleEdit]
+  );
+
+  const handleTitleEditBlur = useCallback(
+    (event: React.FocusEvent<HTMLFormElement>) => {
+      const nextFocused = event.relatedTarget;
+      if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+        return;
+      }
+
+      void finishTitleEdit();
+    },
+    [finishTitleEdit]
+  );
+
+  const submitComment = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      const body = commentDraft.trim();
+      if (!body || props.prActionSubmitting) {
+        return;
+      }
+
+      const saved = await props.onAddComment(pr, body);
+      if (saved) {
+        setCommentDraft("");
+        setCommentComposerExpanded(false);
+      }
+    },
+    [commentDraft, pr, props]
+  );
+
+  const handleCommentComposerBlur = useCallback((event: React.FocusEvent<HTMLFormElement>) => {
+    const nextFocused = event.relatedTarget;
+    if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+      return;
+    }
+
+    setCommentComposerExpanded(false);
+  }, []);
+
   return (
     <div className="content-detail-shell">
       <div className="detail-fixed">
@@ -2715,7 +2959,59 @@ function PullRequestContent(props: {
                 </>
               ) : null}
             </div>
-            <h1>{detail?.title ?? props.fallback.title}</h1>
+            <div className="pr-title-row">
+              {titleEditing ? (
+                <form className="pr-title-edit" onSubmit={submitTitleEdit} onBlur={handleTitleEditBlur}>
+                  <input
+                    className="pr-title-input"
+                    value={titleDraft}
+                    autoFocus
+                    disabled={props.prActionSubmitting}
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        cancelTitleEdit();
+                      }
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    className="review-action-button pr-title-action"
+                    title="Save title"
+                    aria-label="Save pull request title"
+                    disabled={props.prActionSubmitting || !titleDraft.trim() || titleDraft.trim() === title}
+                  >
+                    <CheckCircle2 size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="review-action-button pr-title-action"
+                    title="Cancel"
+                    aria-label="Cancel title edit"
+                    disabled={props.prActionSubmitting}
+                    onClick={cancelTitleEdit}
+                  >
+                    <X size={15} />
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <h1>{title}</h1>
+                  {props.canUpdateTitle && (
+                    <button
+                      type="button"
+                      className="review-action-button pr-title-action"
+                      title="Edit title"
+                      aria-label="Edit pull request title"
+                      disabled={props.prActionSubmitting}
+                      onClick={startTitleEdit}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
           <div className="pr-heading-meta">
             <div className="label-row">
@@ -2735,15 +3031,44 @@ function PullRequestContent(props: {
         ) : props.tab === "Description" ? (
           <MarkdownBlock value={detail.body || "No description."} />
         ) : props.tab === "Comments" ? (
-          <StackedList
-            empty="No comments"
-            items={detail.comments}
-            render={(comment) => (
-              <ArticleCard key={comment.id} title={comment.author?.login ?? "unknown"} meta={formatRelative(comment.updatedAt ?? comment.createdAt)}>
-                <MarkdownBlock value={comment.body} compact />
-              </ArticleCard>
-            )}
-          />
+          <>
+            <form
+              className={cx("comment-composer", commentComposerExpanded && "expanded")}
+              onSubmit={submitComment}
+              onFocus={() => setCommentComposerExpanded(true)}
+              onBlur={handleCommentComposerBlur}
+            >
+              <textarea
+                value={commentDraft}
+                rows={commentComposerExpanded ? 4 : 1}
+                placeholder="Write a comment"
+                disabled={props.prActionSubmitting}
+                onChange={(event) => setCommentDraft(event.target.value)}
+              />
+              <div className="comments-action-row" aria-hidden={!commentComposerExpanded}>
+                <button
+                  type="submit"
+                  className="comment-action-button"
+                  title="Add comment"
+                  aria-label="Add pull request comment"
+                  tabIndex={commentComposerExpanded ? 0 : -1}
+                  disabled={props.prActionSubmitting || !commentDraft.trim()}
+                >
+                  <MessageSquare size={14} />
+                  <span>Add comment</span>
+                </button>
+              </div>
+            </form>
+            <StackedList
+              empty="No comments"
+              items={detail.comments}
+              render={(comment) => (
+                <ArticleCard key={comment.id} title={comment.author?.login ?? "unknown"} meta={formatRelative(comment.updatedAt ?? comment.createdAt)}>
+                  <MarkdownBlock value={comment.body} compact />
+                </ArticleCard>
+              )}
+            />
+          </>
         ) : props.tab === "Reviews" ? (
           <StackedList
             empty="No reviews"

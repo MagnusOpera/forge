@@ -266,6 +266,18 @@ export interface SubmitPullRequestReviewPayload {
   body?: string;
 }
 
+export interface AddPullRequestCommentPayload {
+  repo: RepoRef;
+  pullNumber: number;
+  body: string;
+}
+
+export interface UpdatePullRequestTitlePayload {
+  repo: RepoRef;
+  pullNumber: number;
+  title: string;
+}
+
 export interface GithubFocusApi {
   getAuthStatus(): Promise<AuthStatus>;
   saveToken(token: string): Promise<AuthStatus>;
@@ -279,11 +291,13 @@ export interface GithubFocusApi {
   getIssues(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<IssueSummary[]>>;
   getWorkflows(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowSummary[]>>;
   getWorkflowRuns(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowRunSummary[]>>;
-  getPullRequest(repo: RepoRef, number: number): Promise<CacheEnvelope<PullRequestDetail>>;
-  getWorkflowRun(repo: RepoRef, runId: number): Promise<CacheEnvelope<WorkflowRunDetail>>;
+  getPullRequest(repo: RepoRef, number: number, options?: CacheRequestOptions): Promise<CacheEnvelope<PullRequestDetail>>;
+  getWorkflowRun(repo: RepoRef, runId: number, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowRunDetail>>;
   getWorkflowJob(repo: RepoRef, jobId: number): Promise<CacheEnvelope<WorkflowJobLogDetail>>;
   dispatchWorkflow(payload: DispatchWorkflowPayload): Promise<void>;
   submitPullRequestReview(payload: SubmitPullRequestReviewPayload): Promise<void>;
+  addPullRequestComment(payload: AddPullRequestCommentPayload): Promise<void>;
+  updatePullRequestTitle(payload: UpdatePullRequestTitlePayload): Promise<void>;
   openInGitHub(url: string): Promise<void>;
   onCacheUpdated(callback: (key: string) => void): () => void;
   platform: string;
