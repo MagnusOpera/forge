@@ -53,6 +53,7 @@ import {
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
+  reviewDecisionForReviewEvent,
   shortSha,
   statusTone,
   type FavoriteRepoSnapshots,
@@ -68,6 +69,7 @@ import type {
   LabelSummary,
   OrganizationSummary,
   PullRequestDetail,
+  PullRequestReview,
   PullRequestReviewEvent,
   PullRequestSummary,
   RepoRef,
@@ -980,6 +982,21 @@ export function App() {
     [loadProject]
   );
 
+  const patchPullRequestOptimistically = useCallback(
+    (pullNumber: number, patch: Partial<PullRequestSummary>): void => {
+      setPullRequests((current) =>
+        current.map((item) => (item.number === pullNumber ? { ...item, ...patch } : item))
+      );
+      setPrDetail((current) => (current?.number === pullNumber ? { ...current, ...patch } : current));
+      setSelection((current) =>
+        current.kind === "pr" && current.pr.number === pullNumber
+          ? { kind: "pr", pr: { ...current.pr, ...patch } }
+          : current
+      );
+    },
+    []
+  );
+
   const refreshActivePane = useCallback(async () => {
     if (!selectedRepo) {
       return;
@@ -1037,7 +1054,8 @@ export function App() {
       if (!selectedRepo) {
         return;
       }
-      if (!canSubmitPullRequestReviewForPullRequest(selectedRepo, pr, auth?.viewerLogin)) {
+      const viewerLogin = auth?.viewerLogin;
+      if (!canSubmitPullRequestReviewForPullRequest(selectedRepo, pr, viewerLogin)) {
         flash("Cannot review this pull request with the current account.");
         return;
       }
@@ -1060,6 +1078,28 @@ export function App() {
         }
       }
 
+      const previousReviewDecision = pr.reviewDecision;
+      const previousReviews = prDetail?.number === pr.number ? prDetail.reviews : null;
+      const reviewDecision = reviewDecisionForReviewEvent(event);
+      const optimisticReview: PullRequestReview | null = viewerLogin
+        ? {
+            id: `optimistic-review:${pr.id}:${event}:${Date.now()}`,
+            state: reviewDecision,
+            author: { login: viewerLogin },
+            body: body ?? null,
+            submittedAt: new Date().toISOString()
+          }
+        : null;
+
+      patchPullRequestOptimistically(pr.number, { reviewDecision });
+      if (optimisticReview) {
+        setPrDetail((current) =>
+          current?.number === pr.number
+            ? { ...current, reviews: [...current.reviews, optimisticReview] }
+            : current
+        );
+      }
+
       setReviewSubmitting(true);
       try {
         await api.submitPullRequestReview({
@@ -1068,14 +1108,22 @@ export function App() {
           event,
           body
         });
-        await refreshPullRequest(selectedRepo, pr.number);
+        void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
+          flash(error instanceof Error ? error.message : "Review submitted, but refresh failed.");
+        });
       } catch (error) {
+        patchPullRequestOptimistically(pr.number, { reviewDecision: previousReviewDecision });
+        if (previousReviews) {
+          setPrDetail((current) =>
+            current?.number === pr.number ? { ...current, reviews: previousReviews } : current
+          );
+        }
         flash(error instanceof Error ? error.message : "Unable to submit review.");
       } finally {
         setReviewSubmitting(false);
       }
     },
-    [auth?.viewerLogin, flash, refreshPullRequest, selectedRepo]
+    [auth?.viewerLogin, flash, patchPullRequestOptimistically, prDetail?.number, prDetail?.reviews, refreshPullRequest, selectedRepo]
   );
 
   const addPullRequestComment = useCallback(
@@ -1153,6 +1201,8 @@ export function App() {
         return true;
       }
 
+      const previousIsDraft = pr.isDraft;
+      patchPullRequestOptimistically(pr.number, { isDraft: draft });
       setPrActionSubmitting(true);
       try {
         await api.updatePullRequestDraftState({
@@ -1161,16 +1211,19 @@ export function App() {
           pullRequestId: pr.id,
           draft
         });
-        await refreshPullRequest(selectedRepo, pr.number);
+        void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
+          flash(error instanceof Error ? error.message : "Pull request state updated, but refresh failed.");
+        });
         return true;
       } catch (error) {
+        patchPullRequestOptimistically(pr.number, { isDraft: previousIsDraft });
         flash(error instanceof Error ? error.message : "Unable to update pull request state.");
         return false;
       } finally {
         setPrActionSubmitting(false);
       }
     },
-    [auth?.viewerLogin, flash, refreshPullRequest, selectedRepo]
+    [auth?.viewerLogin, flash, patchPullRequestOptimistically, refreshPullRequest, selectedRepo]
   );
 
   const addPullRequestLabel = useCallback(

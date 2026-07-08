@@ -1,4 +1,9 @@
-import type { PullRequestReview, PullRequestReviewEvent, PullRequestSummary, RepoSummary } from "../shared/github";
+import type {
+  PullRequestReview,
+  PullRequestReviewEvent,
+  PullRequestSummary,
+  RepoSummary
+} from "../shared/github";
 
 export type ProjectPullRequestTab = "open" | "closed";
 export type FavoriteRepoSnapshots = Record<string, RepoSummary>;
@@ -132,6 +137,13 @@ export function canUpdatePullRequestDraftState(
     return false;
   }
   return canUpdatePullRequestTitle(repo, pr, viewerLogin);
+}
+
+export function reviewDecisionForReviewEvent(event: PullRequestReviewEvent): "APPROVED" | "CHANGES_REQUESTED" {
+  if (event === "APPROVE") {
+    return "APPROVED";
+  }
+  return "CHANGES_REQUESTED";
 }
 
 function reviewEventForState(state?: string | null): PullRequestReviewEvent | null {

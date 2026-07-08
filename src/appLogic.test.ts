@@ -12,6 +12,7 @@ import {
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
+  reviewDecisionForReviewEvent,
   shortSha,
   statusTone
 } from "./appLogic";
@@ -72,6 +73,11 @@ describe("appLogic", () => {
     expect(canUpdatePullRequestDraftState({ viewerPermission: "READ" } as RepoSummary, pr, "Octocat")).toBe(true);
     expect(canUpdatePullRequestDraftState({ viewerPermission: "READ" } as RepoSummary, pr, "hubot")).toBe(false);
     expect(canUpdatePullRequestDraftState({ viewerPermission: "WRITE" } as RepoSummary, { ...pr, state: "CLOSED" }, "hubot")).toBe(false);
+  });
+
+  it("maps review events to pull request review decisions", () => {
+    expect(reviewDecisionForReviewEvent("APPROVE")).toBe("APPROVED");
+    expect(reviewDecisionForReviewEvent("REQUEST_CHANGES")).toBe("CHANGES_REQUESTED");
   });
 
   it("allows pull request label edits for triage and write users", () => {
