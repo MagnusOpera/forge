@@ -45,13 +45,16 @@ import {
   canSubmitPullRequestReviewForPullRequest,
   canUpdatePullRequestLabels,
   canUpdatePullRequestTitle,
+  mergeFavoriteRepoSnapshots,
   formatDuration,
   isLiveStatus,
   pullRequestTabForState,
   shortSha,
   statusTone,
+  type FavoriteRepoSnapshots,
   type ProjectPullRequestTab
 } from "./appLogic";
+import { CLASSIC_TOKEN_SETTINGS_URL } from "../shared/auth";
 import type {
   AuthStatus,
   CheckSummary,
@@ -202,6 +205,16 @@ const browserApi: GithubFocusApi = {
 
 const api: GithubFocusApi =
   window.githubFocus && typeof window.githubFocus.getAuthStatus === "function" ? window.githubFocus : browserApi;
+
+function userFacingError(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) {
+    return fallback;
+  }
+
+  return error.message
+    .replace(/^Error invoking remote method '[^']+':\s*/u, "")
+    .replace(/^Error:\s*/u, "");
+}
 
 function useStoredState<T>(key: string, initialValue: T): [T, (next: T | ((value: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => {
@@ -577,6 +590,10 @@ export function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("github-focus:sidebar-collapsed", false);
   const [favoriteKeys, setFavoriteKeys] = useStoredState<string[]>("github-focus:favorites", []);
+  const [favoriteRepoSnapshots, setFavoriteRepoSnapshots] = useStoredState<FavoriteRepoSnapshots>(
+    "github-focus:favorite-repos",
+    {}
+  );
   const [localRecentKeys, setLocalRecentKeys] = useStoredState<string[]>("github-focus:local-recents", []);
   const [starredWorkflowKeys, setStarredWorkflowKeys] = useStoredState<Record<string, number[]>>(
     "github-focus:starred-workflows",
@@ -616,11 +633,23 @@ export function App() {
   const layoutAnimationTimer = useRef<number | null>(null);
   const restoringNavigation = useRef(false);
 
-  const allRepos = useMemo(() => uniqueRepos([...(selectedRepo ? [selectedRepo] : []), ...starredRepos, ...recentRepos, ...repositories]), [
-    selectedRepo,
-    starredRepos,
-    recentRepos,
-    repositories
+  const loadedRepos = useMemo(
+    () => uniqueRepos([...(selectedRepo ? [selectedRepo] : []), ...starredRepos, ...recentRepos, ...repositories]),
+    [selectedRepo, starredRepos, recentRepos, repositories]
+  );
+
+  useEffect(() => {
+    setFavoriteRepoSnapshots((current) => mergeFavoriteRepoSnapshots(current, favoriteKeys, loadedRepos));
+  }, [favoriteKeys, loadedRepos, setFavoriteRepoSnapshots]);
+
+  const favoriteRepoFallbacks = useMemo(
+    () => favoriteKeys.map((key) => favoriteRepoSnapshots[key]).filter(Boolean) as RepoSummary[],
+    [favoriteKeys, favoriteRepoSnapshots]
+  );
+
+  const allRepos = useMemo(() => uniqueRepos([...loadedRepos, ...favoriteRepoFallbacks]), [
+    favoriteRepoFallbacks,
+    loadedRepos
   ]);
 
   const reposByKey = useMemo(() => new Map(allRepos.map((repo) => [repoKey(repo), repo])), [allRepos]);
@@ -1632,7 +1661,7 @@ export function App() {
       setTokenDraft("");
       setAuth(nextAuth);
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Unable to store token.");
+      setAuthError(userFacingError(error, "Unable to store token."));
     }
   };
 
@@ -1756,6 +1785,7 @@ export function App() {
         tokenDraft={tokenDraft}
         onTokenChange={setTokenDraft}
         onSaveToken={saveToken}
+        onOpenTokenSettings={() => void api.openInGitHub(CLASSIC_TOKEN_SETTINGS_URL)}
         onClearToken={clearStoredToken}
         repo={selectedRepo}
         selection={selection}
@@ -2620,6 +2650,7 @@ function ContentPane(props: {
   accentColor: string;
   onTokenChange(value: string): void;
   onSaveToken(event: React.FormEvent): void;
+  onOpenTokenSettings(): void;
   onClearToken(): void;
   onPrTabChange(tab: string): void;
   onRunTabChange(tab: string): void;
@@ -2728,6 +2759,7 @@ function ContentPane(props: {
           token={props.tokenDraft}
           onTokenChange={props.onTokenChange}
           onSave={props.onSaveToken}
+          onOpenTokenSettings={props.onOpenTokenSettings}
         />
       ) : props.error ? (
         <div className="content-scroll">
@@ -2841,6 +2873,7 @@ function TokenGate(props: {
   token: string;
   onTokenChange(value: string): void;
   onSave(event: React.FormEvent): void;
+  onOpenTokenSettings(): void;
 }) {
   return (
     <div className="token-gate">
@@ -2849,6 +2882,13 @@ function TokenGate(props: {
           <KeyRound size={24} />
         </div>
         <h1>GitHub token</h1>
+        <p className="token-help">
+          Use a classic PAT with <strong>repo</strong> and <strong>read:project</strong> permissions.
+        </p>
+        <button className="token-settings-link" type="button" onClick={props.onOpenTokenSettings}>
+          <ExternalLink size={14} />
+          <span>Open classic token settings</span>
+        </button>
         <input
           type="password"
           value={props.token}

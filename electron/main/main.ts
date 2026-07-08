@@ -36,6 +36,11 @@ import type {
   WorkflowRunSummary,
   WorkflowSummary
 } from "../../shared/github.js";
+import {
+  isClassicPersonalAccessToken,
+  missingRequiredClassicTokenScopes,
+  REQUIRED_CLASSIC_TOKEN_SCOPES
+} from "../../shared/auth.js";
 
 type GraphqlClient = typeof graphql;
 
@@ -359,6 +364,36 @@ async function writeToken(token: string): Promise<void> {
   graphqlClient = null;
   activeTokenHash = null;
   await clearCache();
+}
+
+async function validateTokenBeforeSave(token: string): Promise<void> {
+  if (!isClassicPersonalAccessToken(token)) {
+    throw new Error("This is not a classic GitHub personal access token. Create a classic token and paste the value that starts with ghp_.");
+  }
+
+  const response = await fetchWithTimeout("https://api.github.com/user", {
+    headers: {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${token}`,
+      "x-github-api-version": "2022-11-28"
+    }
+  });
+
+  if (response.status === 401) {
+    throw new Error("GitHub rejected this token. Check that it is active and copied correctly.");
+  }
+  if (!response.ok) {
+    throw new GitHubHttpStatusError(`GitHub could not check this token right now (${response.status}). Try again.`, response.status);
+  }
+
+  const scopesHeader = response.headers.get("x-oauth-scopes");
+  const missingScopes = missingRequiredClassicTokenScopes(scopesHeader);
+  if (missingScopes.length) {
+    throw new Error(
+      `This classic token is missing the required ${missingScopes.join(" and ")} permission${missingScopes.length > 1 ? "s" : ""}. ` +
+        `Open classic token settings and enable ${REQUIRED_CLASSIC_TOKEN_SCOPES.join(" and ")}.`
+    );
+  }
 }
 
 async function clearToken(): Promise<void> {
@@ -1715,6 +1750,7 @@ function registerIpc(): void {
     if (!trimmedToken) {
       throw new Error("Token cannot be empty.");
     }
+    await validateTokenBeforeSave(trimmedToken);
     await writeToken(trimmedToken);
     return getAuthStatus();
   });

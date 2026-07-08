@@ -8,6 +8,7 @@ import {
   formatDuration,
   isPullRequestAuthor,
   isLiveStatus,
+  mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
   shortSha,
   statusTone
@@ -69,6 +70,50 @@ describe("appLogic", () => {
     expect(canUpdatePullRequestLabels({ viewerPermission: "TRIAGE" } as RepoSummary)).toBe(true);
     expect(canUpdatePullRequestLabels({ viewerPermission: "READ" } as RepoSummary)).toBe(false);
     expect(canUpdatePullRequestLabels({ viewerPermission: null } as RepoSummary)).toBe(false);
+  });
+
+  it("keeps repository snapshots for current favorites only", () => {
+    const favorite = {
+      owner: "octo",
+      name: "repo",
+      fullName: "octo/repo",
+      updatedAt: "2026-01-01T00:00:00Z"
+    } as RepoSummary;
+    const staleFavorite = {
+      owner: "octo",
+      name: "repo",
+      fullName: "octo/repo",
+      updatedAt: "2025-01-01T00:00:00Z"
+    } as RepoSummary;
+    const removedFavorite = {
+      owner: "octo",
+      name: "old",
+      fullName: "octo/old"
+    } as RepoSummary;
+
+    expect(
+      mergeFavoriteRepoSnapshots(
+        {
+          "octo/old": removedFavorite,
+          "octo/repo": staleFavorite
+        },
+        ["octo/repo"],
+        [favorite]
+      )
+    ).toEqual({
+      "octo/repo": favorite
+    });
+  });
+
+  it("preserves favorite snapshots when loaded repositories are cleared", () => {
+    const favorite = {
+      owner: "octo",
+      name: "repo",
+      fullName: "octo/repo"
+    } as RepoSummary;
+    const current = { "octo/repo": favorite };
+
+    expect(mergeFavoriteRepoSnapshots(current, ["octo/repo"], [])).toBe(current);
   });
 
   it("maps status and conclusion values to UI tones", () => {

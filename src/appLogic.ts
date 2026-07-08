@@ -1,6 +1,52 @@
 import type { PullRequestSummary, RepoSummary } from "../shared/github";
 
 export type ProjectPullRequestTab = "open" | "closed";
+export type FavoriteRepoSnapshots = Record<string, RepoSummary>;
+
+function repoSnapshotKey(repo: Pick<RepoSummary, "owner" | "name">): string {
+  return `${repo.owner}/${repo.name}`;
+}
+
+export function mergeFavoriteRepoSnapshots(
+  current: FavoriteRepoSnapshots,
+  favoriteKeys: string[],
+  repos: RepoSummary[]
+): FavoriteRepoSnapshots {
+  const favoriteKeySet = new Set(favoriteKeys);
+  const next: FavoriteRepoSnapshots = {};
+  let changed = false;
+
+  for (const key of favoriteKeys) {
+    if (current[key]) {
+      next[key] = current[key];
+    }
+  }
+
+  for (const key of Object.keys(current)) {
+    if (!favoriteKeySet.has(key)) {
+      changed = true;
+    }
+  }
+
+  for (const repo of repos) {
+    const key = repoSnapshotKey(repo);
+    if (!favoriteKeySet.has(key)) {
+      continue;
+    }
+    if (next[key] !== repo) {
+      next[key] = repo;
+      changed = true;
+    }
+  }
+
+  for (const key of favoriteKeys) {
+    if (next[key] !== current[key]) {
+      changed = true;
+    }
+  }
+
+  return changed ? next : current;
+}
 
 export function formatDuration(value?: number | null): string {
   if (!value) {
