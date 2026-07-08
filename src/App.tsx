@@ -19,12 +19,12 @@ import {
   KeyRound,
   Loader2,
   Moon,
-  Menu,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
   Play,
+  Plus,
   RefreshCw,
   Search,
   Star,
@@ -43,6 +43,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import {
   canSubmitPullRequestReviewForPullRequest,
+  canUpdatePullRequestLabels,
   canUpdatePullRequestTitle,
   formatDuration,
   isLiveStatus,
@@ -57,6 +58,7 @@ import type {
   ChangedFileSummary,
   GithubFocusApi,
   IssueSummary,
+  LabelSummary,
   OrganizationSummary,
   PullRequestDetail,
   PullRequestReviewEvent,
@@ -122,6 +124,7 @@ type NavigationState = {
 };
 type ProjectSnapshot = {
   repo: RepoSummary;
+  labels: LabelSummary[];
   pullRequests: PullRequestSummary[];
   issues: IssueSummary[];
   workflows: WorkflowSummary[];
@@ -179,6 +182,7 @@ const browserApi: GithubFocusApi = {
   getRecentRepos: () => ipcUnavailable(),
   getOrganizations: () => ipcUnavailable(),
   getRepo: () => ipcUnavailable(),
+  getRepoLabels: () => ipcUnavailable(),
   getPullRequests: () => ipcUnavailable(),
   getIssues: () => ipcUnavailable(),
   getWorkflows: () => ipcUnavailable(),
@@ -190,6 +194,8 @@ const browserApi: GithubFocusApi = {
   submitPullRequestReview: () => ipcUnavailable(),
   addPullRequestComment: () => ipcUnavailable(),
   updatePullRequestTitle: () => ipcUnavailable(),
+  addPullRequestLabel: () => ipcUnavailable(),
+  removePullRequestLabel: () => ipcUnavailable(),
   openInGitHub: () => ipcUnavailable(),
   onCacheUpdated: () => () => undefined
 };
@@ -553,6 +559,7 @@ export function App() {
   const [recentRepos, setRecentRepos] = useState<RepoSummary[]>([]);
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<RepoSummary | null>(null);
+  const [repoLabels, setRepoLabels] = useState<LabelSummary[]>([]);
   const [pullRequests, setPullRequests] = useState<PullRequestSummary[]>([]);
   const [issues, setIssues] = useState<IssueSummary[]>([]);
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunSummary[]>([]);
@@ -789,8 +796,9 @@ export function App() {
       const options = force ? { force: true } : undefined;
 
       try {
-        const [repoDetail, prs, repoIssues, repoWorkflows, runs] = await Promise.all([
+        const [repoDetail, labels, prs, repoIssues, repoWorkflows, runs] = await Promise.all([
           api.getRepo(repo, options),
+          api.getRepoLabels(repo, options),
           api.getPullRequests(repo, options),
           api.getIssues(repo, options),
           api.getWorkflows(repo, options),
@@ -799,6 +807,7 @@ export function App() {
 
         const project = {
           repo: repoDetail.data,
+          labels: labels.data,
           pullRequests: prs.data,
           issues: repoIssues.data,
           workflows: repoWorkflows.data,
@@ -806,6 +815,7 @@ export function App() {
         };
 
         setSelectedRepo(project.repo);
+        setRepoLabels(project.labels);
         setPullRequests(project.pullRequests);
         setIssues(project.issues);
         setWorkflows(project.workflows);
@@ -827,6 +837,7 @@ export function App() {
     (repo: RepoSummary) => {
       setSelectedRepo(repo);
       setSelection({ kind: "repo" });
+      setRepoLabels([]);
       setPrDetail(null);
       setRunDetail(null);
       setLocalRecentKeys((current) => [repoKey(repo), ...current.filter((key) => key !== repoKey(repo))].slice(0, 20));
@@ -1096,6 +1107,68 @@ export function App() {
       }
     },
     [auth?.viewerLogin, flash, refreshPullRequest, selectedRepo]
+  );
+
+  const addPullRequestLabel = useCallback(
+    async (pr: PullRequestSummary, labelNameValue: string): Promise<boolean> => {
+      if (!selectedRepo || !canUpdatePullRequestLabels(selectedRepo)) {
+        return false;
+      }
+
+      const labelName = labelNameValue.trim();
+      if (!labelName) {
+        flash("Pull request label cannot be empty.");
+        return false;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.addPullRequestLabel({
+          repo: selectedRepo,
+          pullNumber: pr.number,
+          labelName
+        });
+        await refreshPullRequest(selectedRepo, pr.number);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to add label.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [flash, refreshPullRequest, selectedRepo]
+  );
+
+  const removePullRequestLabel = useCallback(
+    async (pr: PullRequestSummary, labelNameValue: string): Promise<boolean> => {
+      if (!selectedRepo || !canUpdatePullRequestLabels(selectedRepo)) {
+        return false;
+      }
+
+      const labelName = labelNameValue.trim();
+      if (!labelName) {
+        flash("Pull request label cannot be empty.");
+        return false;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.removePullRequestLabel({
+          repo: selectedRepo,
+          pullNumber: pr.number,
+          labelName
+        });
+        await refreshPullRequest(selectedRepo, pr.number);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to remove label.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [flash, refreshPullRequest, selectedRepo]
   );
 
   const selectRun = useCallback(
@@ -1576,6 +1649,7 @@ export function App() {
     setRecentRepos([]);
     setOrganizations([]);
     setSelectedRepo(null);
+    setRepoLabels([]);
     setPullRequests([]);
     setIssues([]);
     setWorkflows([]);
@@ -1689,6 +1763,7 @@ export function App() {
         runDetail={runDetail}
         prTab={prTab}
         runTab={runTab}
+        repoLabels={repoLabels}
         onPrTabChange={setPrTab}
         onRunTabChange={setRunTab}
         loading={contentLoading}
@@ -1710,6 +1785,8 @@ export function App() {
         onSubmitPullRequestReview={submitPullRequestReview}
         onAddPullRequestComment={addPullRequestComment}
         onUpdatePullRequestTitle={updatePullRequestTitle}
+        onAddPullRequestLabel={addPullRequestLabel}
+        onRemovePullRequestLabel={removePullRequestLabel}
         onSelectRun={selectRun}
         onRunWorkflow={runWorkflow}
         workflowRuns={workflowRuns}
@@ -2531,6 +2608,7 @@ function ContentPane(props: {
   runDetail: WorkflowRunDetail | null;
   prTab: string;
   runTab: string;
+  repoLabels: LabelSummary[];
   loading: boolean;
   error: string | null;
   reviewSubmitting: boolean;
@@ -2556,12 +2634,15 @@ function ContentPane(props: {
   onSubmitPullRequestReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
   onAddPullRequestComment(pr: PullRequestSummary, body: string): Promise<boolean>;
   onUpdatePullRequestTitle(pr: PullRequestSummary, title: string): Promise<boolean>;
+  onAddPullRequestLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
+  onRemovePullRequestLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
   onSelectRun(run: WorkflowRunSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
   const reviewPr = props.selection.kind === "pr" ? props.prDetail ?? props.selection.pr : null;
   const showTitleAction =
     props.repo && reviewPr && canUpdatePullRequestTitle(props.repo, reviewPr, props.auth?.viewerLogin);
+  const showLabelActions = props.repo && canUpdatePullRequestLabels(props.repo);
   const showReviewActions =
     props.repo &&
     reviewPr &&
@@ -2664,12 +2745,16 @@ function ContentPane(props: {
           detail={props.prDetail}
           fallback={props.selection.pr}
           tab={props.prTab}
+          repoLabels={props.repoLabels}
           prActionSubmitting={props.prActionSubmitting}
           canUpdateTitle={Boolean(showTitleAction)}
+          canUpdateLabels={Boolean(showLabelActions)}
           theme={props.theme}
           workflowRuns={props.workflowRuns}
           onAddComment={props.onAddPullRequestComment}
           onUpdateTitle={props.onUpdatePullRequestTitle}
+          onAddLabel={props.onAddPullRequestLabel}
+          onRemoveLabel={props.onRemovePullRequestLabel}
           onOpenGithubUrl={props.onOpenGithubUrl}
           onOpenWorkflowRunFromCheck={props.onOpenWorkflowRunFromCheck}
           onCopyText={props.onCopyText}
@@ -2827,12 +2912,16 @@ function PullRequestContent(props: {
   detail: PullRequestDetail | null;
   fallback: PullRequestSummary;
   tab: string;
+  repoLabels: LabelSummary[];
   prActionSubmitting: boolean;
   canUpdateTitle: boolean;
+  canUpdateLabels: boolean;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
   onAddComment(pr: PullRequestSummary, body: string): Promise<boolean>;
   onUpdateTitle(pr: PullRequestSummary, title: string): Promise<boolean>;
+  onAddLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
+  onRemoveLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onCopyText(value: string): Promise<boolean>;
@@ -2844,6 +2933,15 @@ function PullRequestContent(props: {
   const tabs = ["Description", "Comments", "Reviews", "Files", "Commits", "Checks"];
   const branchName = detail?.headRefName ?? props.fallback.headRefName;
   const authorLogin = (detail?.author ?? props.fallback.author)?.login;
+  const labels = detail?.labels ?? props.fallback.labels;
+  const selectedLabelNames = useMemo(
+    () => new Set(labels.map((label) => label.name.toLowerCase())),
+    [labels]
+  );
+  const availableLabels = useMemo(
+    () => props.repoLabels.filter((label) => !selectedLabelNames.has(label.name.toLowerCase())),
+    [props.repoLabels, selectedLabelNames]
+  );
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(title);
   const [commentDraft, setCommentDraft] = useState("");
@@ -2976,11 +3074,33 @@ function PullRequestContent(props: {
     setCommentComposerExpanded(false);
   }, []);
 
+  const addLabel = useCallback(
+    (labelName: string) => {
+      if (!labelName || props.prActionSubmitting) {
+        return;
+      }
+
+      void props.onAddLabel(pr, labelName);
+    },
+    [pr, props.onAddLabel, props.prActionSubmitting]
+  );
+
+  const removeLabel = useCallback(
+    (labelName: string) => {
+      if (props.prActionSubmitting) {
+        return;
+      }
+
+      void props.onRemoveLabel(pr, labelName);
+    },
+    [pr, props.onRemoveLabel, props.prActionSubmitting]
+  );
+
   return (
     <div className="content-detail-shell">
       <div className="detail-fixed">
         <div className="detail-heading pr-detail-heading">
-          <div>
+          <div className="pr-title-stack">
             <div className="pr-eyebrow-row">
               <span>Pull request</span>
               <button
@@ -3072,15 +3192,38 @@ function PullRequestContent(props: {
                 </>
               )}
             </div>
-          </div>
-          <div className="pr-heading-meta">
-            <div className="label-row">
-              {(detail?.labels ?? props.fallback.labels).map((label) => (
-                <span className="label" style={{ borderColor: `#${label.color}` }} key={label.id}>
-                  {label.name}
-                </span>
-              ))}
-            </div>
+            {(labels.length > 0 || props.canUpdateLabels) && (
+              <div className="pr-label-row" aria-label="Pull request labels">
+                {labels.map((label) =>
+                  props.canUpdateLabels ? (
+                    <button
+                      type="button"
+                      className="label pr-label-chip removable"
+                      style={{ borderColor: `#${label.color}` }}
+                      key={label.id}
+                      title={`Remove ${label.name}`}
+                      aria-label={`Remove ${label.name} label`}
+                      disabled={props.prActionSubmitting}
+                      onClick={() => removeLabel(label.name)}
+                    >
+                      <span>{label.name}</span>
+                      <X size={12} />
+                    </button>
+                  ) : (
+                    <span className="label pr-label-chip" style={{ borderColor: `#${label.color}` }} key={label.id}>
+                      {label.name}
+                    </span>
+                  )
+                )}
+                {props.canUpdateLabels && (
+                  <PullRequestLabelPicker
+                    disabled={props.prActionSubmitting || availableLabels.length === 0}
+                    labels={availableLabels}
+                    onSelect={addLabel}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
         <TabBar tabs={tabs} selected={props.tab} onSelect={props.onTab} />
@@ -3167,6 +3310,121 @@ function PullRequestContent(props: {
             onOpenWorkflowRun={props.onOpenWorkflowRunFromCheck}
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+function PullRequestLabelPicker(props: {
+  disabled: boolean;
+  labels: LabelSummary[];
+  onSelect(labelName: string): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const filteredLabels = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) {
+      return props.labels;
+    }
+
+    return props.labels.filter((label) => label.name.toLowerCase().includes(needle));
+  }, [props.labels, query]);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
+    if (props.disabled) {
+      setOpen(false);
+    }
+  }, [props.disabled]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+  }, []);
+
+  const selectLabel = useCallback(
+    (labelName: string) => {
+      props.onSelect(labelName);
+      close();
+    },
+    [close, props]
+  );
+
+  const handleBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const nextFocused = event.relatedTarget;
+    if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+      return;
+    }
+
+    setOpen(false);
+  }, []);
+
+  return (
+    <div className={cx("label-picker", open && "open")} onBlur={handleBlur}>
+      <button
+        type="button"
+        className="label-picker-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={props.labels.length ? "Add label" : "No labels available"}
+        disabled={props.disabled}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Plus size={13} />
+        <span>{props.labels.length ? "Add label" : "No labels"}</span>
+        <ChevronDown size={13} />
+      </button>
+      <div className="label-picker-popover" aria-hidden={!open}>
+        <label className="label-picker-search">
+          <Search size={13} />
+          <input
+            ref={inputRef}
+            value={query}
+            placeholder="Filter labels"
+            tabIndex={open ? 0 : -1}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                close();
+              }
+              if (event.key === "Enter" && filteredLabels.length === 1) {
+                event.preventDefault();
+                selectLabel(filteredLabels[0].name);
+              }
+            }}
+          />
+        </label>
+        <div className="label-picker-options" role="listbox" aria-label="Available labels">
+          {filteredLabels.length ? (
+            filteredLabels.map((label) => (
+              <button
+                type="button"
+                className="label-picker-option"
+                role="option"
+                aria-selected="false"
+                tabIndex={open ? 0 : -1}
+                key={label.id}
+                onClick={() => selectLabel(label.name)}
+              >
+                <span className="label-color-dot" style={{ backgroundColor: `#${label.color}` }} />
+                <span>{label.name}</span>
+              </button>
+            ))
+          ) : (
+            <div className="label-picker-empty">No matching labels</div>
+          )}
+        </div>
       </div>
     </div>
   );

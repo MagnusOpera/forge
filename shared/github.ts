@@ -278,6 +278,12 @@ export interface UpdatePullRequestTitlePayload {
   title: string;
 }
 
+export interface PullRequestLabelPayload {
+  repo: RepoRef;
+  pullNumber: number;
+  labelName: string;
+}
+
 export interface GithubFocusApi {
   getAuthStatus(): Promise<AuthStatus>;
   saveToken(token: string): Promise<AuthStatus>;
@@ -287,6 +293,7 @@ export interface GithubFocusApi {
   getRecentRepos(): Promise<CacheEnvelope<RepoSummary[]>>;
   getOrganizations(): Promise<CacheEnvelope<OrganizationSummary[]>>;
   getRepo(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<RepoSummary>>;
+  getRepoLabels(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<LabelSummary[]>>;
   getPullRequests(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<PullRequestSummary[]>>;
   getIssues(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<IssueSummary[]>>;
   getWorkflows(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowSummary[]>>;
@@ -298,6 +305,8 @@ export interface GithubFocusApi {
   submitPullRequestReview(payload: SubmitPullRequestReviewPayload): Promise<void>;
   addPullRequestComment(payload: AddPullRequestCommentPayload): Promise<void>;
   updatePullRequestTitle(payload: UpdatePullRequestTitlePayload): Promise<void>;
+  addPullRequestLabel(payload: PullRequestLabelPayload): Promise<void>;
+  removePullRequestLabel(payload: PullRequestLabelPayload): Promise<void>;
   openInGitHub(url: string): Promise<void>;
   onCacheUpdated(callback: (key: string) => void): () => void;
   platform: string;

@@ -1291,21 +1291,207 @@ p {
 }
 
 .pr-detail-heading {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
-.pr-heading-meta {
-  display: flex;
+.pr-title-stack {
+  display: grid;
   min-width: 0;
-  flex-direction: column;
-  align-items: flex-end;
   gap: 8px;
 }
 
-.pr-heading-meta .label-row {
-  max-width: 360px;
-  justify-content: flex-end;
+.pr-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.pr-label-chip {
+  max-width: 220px;
+}
+
+button.pr-label-chip {
+  appearance: none;
+  gap: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+button.pr-label-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.pr-label-chip svg {
+  flex: 0 0 auto;
+  opacity: 0.72;
+}
+
+button.pr-label-chip:hover:not(:disabled) {
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+button.pr-label-chip:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.label-picker {
+  position: relative;
+  z-index: 4;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.label-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 999px;
+  background: var(--input-bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.label-picker-trigger svg {
+  flex: 0 0 auto;
+}
+
+.label-picker-trigger svg:last-child {
+  transition: transform 150ms ease;
+}
+
+.label-picker.open .label-picker-trigger {
+  border-color: var(--accent-border);
+  background: var(--accent-panel-bg);
+  color: var(--accent-text);
+}
+
+.label-picker.open .label-picker-trigger svg:last-child {
+  transform: rotate(180deg);
+}
+
+.label-picker-trigger:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+.label-picker-trigger:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.label-picker-popover {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  width: 260px;
+  max-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: 0 18px 48px var(--modal-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px) scale(0.98);
+  transform-origin: top left;
+  transition:
+    max-height 180ms ease,
+    opacity 130ms ease,
+    transform 170ms ease;
+}
+
+.label-picker.open .label-picker-popover {
+  max-height: 292px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.label-picker-search {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  gap: 7px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--icon);
+}
+
+.label-picker-search input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-base);
+  font: inherit;
+  font-size: 12px;
+}
+
+.label-picker-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.label-picker-options {
+  display: grid;
+  max-height: 218px;
+  overflow: auto;
+  padding: 5px;
+}
+
+.label-picker-option {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  align-items: center;
+  min-height: 30px;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-base);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.label-picker-option:hover,
+.label-picker-option:focus {
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+.label-picker-option span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgb(255 255 255 / 0.32);
+  border-radius: 999px;
+}
+
+.label-picker-empty {
+  padding: 12px 10px;
+  color: var(--empty-text);
+  font-size: 12px;
 }
 
 .pr-review-actions {

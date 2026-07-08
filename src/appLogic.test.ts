@@ -3,6 +3,7 @@ import type { PullRequestSummary, RepoSummary } from "../shared/github";
 import {
   canSubmitPullRequestReview,
   canSubmitPullRequestReviewForPullRequest,
+  canUpdatePullRequestLabels,
   canUpdatePullRequestTitle,
   formatDuration,
   isPullRequestAuthor,
@@ -59,6 +60,15 @@ describe("appLogic", () => {
     expect(canUpdatePullRequestTitle({ viewerPermission: "READ" } as RepoSummary, pr, "Octocat")).toBe(true);
     expect(canUpdatePullRequestTitle({ viewerPermission: "READ" } as RepoSummary, pr, "hubot")).toBe(false);
     expect(canUpdatePullRequestTitle({ viewerPermission: null } as RepoSummary, pr, null)).toBe(false);
+  });
+
+  it("allows pull request label edits for triage and write users", () => {
+    expect(canUpdatePullRequestLabels({ viewerPermission: "ADMIN" } as RepoSummary)).toBe(true);
+    expect(canUpdatePullRequestLabels({ viewerPermission: "MAINTAIN" } as RepoSummary)).toBe(true);
+    expect(canUpdatePullRequestLabels({ viewerPermission: "WRITE" } as RepoSummary)).toBe(true);
+    expect(canUpdatePullRequestLabels({ viewerPermission: "TRIAGE" } as RepoSummary)).toBe(true);
+    expect(canUpdatePullRequestLabels({ viewerPermission: "READ" } as RepoSummary)).toBe(false);
+    expect(canUpdatePullRequestLabels({ viewerPermission: null } as RepoSummary)).toBe(false);
   });
 
   it("maps status and conclusion values to UI tones", () => {

@@ -4,6 +4,7 @@ import type {
   CacheRequestOptions,
   DispatchWorkflowPayload,
   GithubFocusApi,
+  PullRequestLabelPayload,
   RepoRef,
   SubmitPullRequestReviewPayload,
   UpdatePullRequestTitlePayload
@@ -19,6 +20,8 @@ const api: GithubFocusApi = {
   getRecentRepos: () => ipcRenderer.invoke("github:get-recent-repos"),
   getOrganizations: () => ipcRenderer.invoke("github:get-organizations"),
   getRepo: (repo: RepoRef, options?: CacheRequestOptions) => ipcRenderer.invoke("github:get-repo", repo, options),
+  getRepoLabels: (repo: RepoRef, options?: CacheRequestOptions) =>
+    ipcRenderer.invoke("github:get-repo-labels", repo, options),
   getPullRequests: (repo: RepoRef, options?: CacheRequestOptions) =>
     ipcRenderer.invoke("github:get-pull-requests", repo, options),
   getIssues: (repo: RepoRef, options?: CacheRequestOptions) =>
@@ -41,6 +44,10 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:add-pull-request-comment", payload),
   updatePullRequestTitle: (payload: UpdatePullRequestTitlePayload) =>
     ipcRenderer.invoke("github:update-pull-request-title", payload),
+  addPullRequestLabel: (payload: PullRequestLabelPayload) =>
+    ipcRenderer.invoke("github:add-pull-request-label", payload),
+  removePullRequestLabel: (payload: PullRequestLabelPayload) =>
+    ipcRenderer.invoke("github:remove-pull-request-label", payload),
   openInGitHub: (url: string) => ipcRenderer.invoke("github:open-in-github", url),
   onCacheUpdated: (callback: (key: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, key: string) => callback(key);

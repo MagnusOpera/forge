@@ -50,6 +50,10 @@ export function canSubmitPullRequestReview(repo: RepoSummary): boolean {
   return ["ADMIN", "MAINTAIN", "WRITE"].includes(repo.viewerPermission ?? "");
 }
 
+export function canUpdatePullRequestLabels(repo: RepoSummary): boolean {
+  return ["ADMIN", "MAINTAIN", "WRITE", "TRIAGE"].includes(repo.viewerPermission ?? "");
+}
+
 export function isPullRequestAuthor(pr: PullRequestSummary, viewerLogin?: string | null): boolean {
   return Boolean(viewerLogin && pr.author?.login && pr.author.login.toLowerCase() === viewerLogin.toLowerCase());
 }

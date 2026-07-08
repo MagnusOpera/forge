@@ -20,6 +20,7 @@ import type {
   IssueSummary,
   LabelSummary,
   OrganizationSummary,
+  PullRequestLabelPayload,
   PullRequestDetail,
   PullRequestReview,
   PullRequestSummary,
@@ -518,6 +519,10 @@ function repoCacheKey(repo: RepoRef): string {
   return `repo:${repo.owner}/${repo.name}:v2`;
 }
 
+function repoLabelsCacheKey(repo: RepoRef): string {
+  return `repo:${repo.owner}/${repo.name}:labels:v1`;
+}
+
 function pullRequestsCacheKey(repo: RepoRef): string {
   return `repo:${repo.owner}/${repo.name}:pulls:v2`;
 }
@@ -542,12 +547,17 @@ function toActor(actor: any): ActorSummary | null {
   };
 }
 
-function toLabels(labels: any): LabelSummary[] {
-  return nodeList<any>(labels).map((label) => ({
-    id: label.id,
+function toLabel(label: any): LabelSummary {
+  return {
+    id: String(label.id ?? label.node_id ?? label.name),
     name: label.name,
-    color: label.color
-  }));
+    color: label.color ?? "d0d7de"
+  };
+}
+
+function toLabels(labels: any): LabelSummary[] {
+  const values = Array.isArray(labels) ? labels : nodeList<any>(labels);
+  return values.filter((label) => label?.name).map(toLabel);
 }
 
 function toRepositoryPermission(repo: any): RepoSummary["viewerPermission"] {
@@ -849,6 +859,19 @@ async function getRepo(repoRef: RepoRef, options?: CacheRequestOptions): Promise
       { owner: repo.owner, name: repo.name }
     );
     return toRepo(result.repository);
+  }, defaultTtlMs, options);
+}
+
+async function getRepoLabels(repoRef: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<LabelSummary[]>> {
+  const repo = ensureRepo(repoRef);
+  return cached(repoLabelsCacheKey(repo), async () => {
+    const { octokit } = await getClients();
+    const labels = await octokit.paginate(octokit.issues.listLabelsForRepo, {
+      owner: repo.owner,
+      repo: repo.name,
+      per_page: 100
+    });
+    return labels.map(toLabel).sort((left, right) => left.name.localeCompare(right.name));
   }, defaultTtlMs, options);
 }
 
@@ -1591,6 +1614,48 @@ async function updatePullRequestTitle(payload: UpdatePullRequestTitlePayload): P
   ]);
 }
 
+function ensureLabelName(payload: PullRequestLabelPayload): string {
+  const labelName = payload.labelName?.trim();
+  if (!labelName) {
+    throw new Error("Pull request label cannot be empty.");
+  }
+  return labelName;
+}
+
+async function addPullRequestLabel(payload: PullRequestLabelPayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const labelName = ensureLabelName(payload);
+  const { octokit } = await getClients();
+  await octokit.issues.addLabels({
+    owner: repo.owner,
+    repo: repo.name,
+    issue_number: payload.pullNumber,
+    labels: [labelName]
+  });
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, payload.pullNumber))
+  ]);
+}
+
+async function removePullRequestLabel(payload: PullRequestLabelPayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const labelName = ensureLabelName(payload);
+  const { octokit } = await getClients();
+  await octokit.issues.removeLabel({
+    owner: repo.owner,
+    repo: repo.name,
+    issue_number: payload.pullNumber,
+    name: labelName
+  });
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, payload.pullNumber))
+  ]);
+}
+
 async function openInGitHub(rawUrl: string): Promise<void> {
   const url = new URL(rawUrl);
   const host = url.hostname.toLowerCase();
@@ -1665,6 +1730,9 @@ function registerIpc(): void {
   ipcMain.handle("github:get-repo", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
     getRepo(repo, options)
   );
+  ipcMain.handle("github:get-repo-labels", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
+    getRepoLabels(repo, options)
+  );
   ipcMain.handle("github:get-pull-requests", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
     getPullRequests(repo, options)
   );
@@ -1697,6 +1765,12 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:update-pull-request-title", (_event, payload: UpdatePullRequestTitlePayload) =>
     updatePullRequestTitle(payload)
+  );
+  ipcMain.handle("github:add-pull-request-label", (_event, payload: PullRequestLabelPayload) =>
+    addPullRequestLabel(payload)
+  );
+  ipcMain.handle("github:remove-pull-request-label", (_event, payload: PullRequestLabelPayload) =>
+    removePullRequestLabel(payload)
   );
   ipcMain.handle("github:open-in-github", (_event, url: string) => openInGitHub(url));
 }
