@@ -198,6 +198,7 @@ const browserApi: GithubFocusApi = {
   getWorkflowRun: () => ipcUnavailable(),
   getWorkflowJob: () => ipcUnavailable(),
   dispatchWorkflow: () => ipcUnavailable(),
+  confirmPullRequestApproval: async (pullNumber: number) => window.confirm(`Approve PR #${pullNumber}?`),
   submitPullRequestReview: () => ipcUnavailable(),
   addPullRequestComment: () => ipcUnavailable(),
   updatePullRequestTitle: () => ipcUnavailable(),
@@ -1053,7 +1054,7 @@ export function App() {
           return;
         }
       } else {
-        const confirmed = window.confirm(`Approve PR #${pr.number}?`);
+        const confirmed = await api.confirmPullRequestApproval(pr.number);
         if (!confirmed) {
           return;
         }

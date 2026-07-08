@@ -39,6 +39,8 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:get-workflow-job", repo, jobId),
   dispatchWorkflow: (payload: DispatchWorkflowPayload) =>
     ipcRenderer.invoke("github:dispatch-workflow", payload),
+  confirmPullRequestApproval: (pullNumber: number) =>
+    ipcRenderer.invoke("dialog:confirm-pull-request-approval", pullNumber),
   submitPullRequestReview: (payload: SubmitPullRequestReviewPayload) =>
     ipcRenderer.invoke("github:submit-pull-request-review", payload),
   addPullRequestComment: (payload: AddPullRequestCommentPayload) =>

@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Used the Forge app icon in pull request approval confirmation dialogs.
 - Changed pull request draft and ready actions to use the titlebar hover selector.
 - Collapsed pull request review actions into a vertical hover selector with a single current-state icon.
 - Matched selected pull request review actions to the titlebar underline style.

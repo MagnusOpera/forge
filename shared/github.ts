@@ -309,6 +309,7 @@ export interface GithubFocusApi {
   getWorkflowRun(repo: RepoRef, runId: number, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowRunDetail>>;
   getWorkflowJob(repo: RepoRef, jobId: number): Promise<CacheEnvelope<WorkflowJobLogDetail>>;
   dispatchWorkflow(payload: DispatchWorkflowPayload): Promise<void>;
+  confirmPullRequestApproval(pullNumber: number): Promise<boolean>;
   submitPullRequestReview(payload: SubmitPullRequestReviewPayload): Promise<void>;
   addPullRequestComment(payload: AddPullRequestCommentPayload): Promise<void>;
   updatePullRequestTitle(payload: UpdatePullRequestTitlePayload): Promise<void>;

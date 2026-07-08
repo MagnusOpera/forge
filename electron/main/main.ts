@@ -1,4 +1,15 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, shell, type MenuItemConstructorOptions } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeImage,
+  safeStorage,
+  shell,
+  type IpcMainInvokeEvent,
+  type MenuItemConstructorOptions
+} from "electron";
 import { Octokit } from "@octokit/rest";
 import { graphql } from "@octokit/graphql";
 import crypto from "node:crypto";
@@ -137,6 +148,26 @@ function loadAppIconDataUrl(): string {
   } catch {
     return "";
   }
+}
+
+async function confirmPullRequestApproval(event: IpcMainInvokeEvent, rawPullNumber: number): Promise<boolean> {
+  if (!Number.isSafeInteger(rawPullNumber) || rawPullNumber <= 0) {
+    throw new Error("Pull request number is required.");
+  }
+
+  const icon = nativeImage.createFromPath(appIconPath("png"));
+  const parent = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+  const options = {
+    type: "question" as const,
+    buttons: ["Cancel", "OK"],
+    defaultId: 1,
+    cancelId: 0,
+    noLink: true,
+    message: `Approve PR #${rawPullNumber}?`,
+    icon: icon.isEmpty() ? undefined : icon
+  };
+  const result = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+  return result.response === 1;
 }
 
 function showAboutWindow(): void {
@@ -1825,6 +1856,9 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:dispatch-workflow", (_event, payload: DispatchWorkflowPayload) =>
     dispatchWorkflow(payload)
+  );
+  ipcMain.handle("dialog:confirm-pull-request-approval", (event, pullNumber: number) =>
+    confirmPullRequestApproval(event, pullNumber)
   );
   ipcMain.handle("github:submit-pull-request-review", (_event, payload: SubmitPullRequestReviewPayload) =>
     submitPullRequestReview(payload)
