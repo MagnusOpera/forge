@@ -326,6 +326,10 @@ function repoKey(repo: { owner: string; name: string }): string {
   return `${repo.owner}/${repo.name}`;
 }
 
+function isPullRequestCacheUpdate(key: string): boolean {
+  return key.includes(":pull-request");
+}
+
 function isGithubUrl(rawUrl?: string | null): boolean {
   if (!rawUrl) {
     return false;
@@ -1025,6 +1029,25 @@ export function App() {
     []
   );
 
+  const updatePullRequestLabelsOptimistically = useCallback(
+    (pullNumber: number, updateLabels: (labels: LabelSummary[]) => LabelSummary[]): void => {
+      setPullRequests((current) =>
+        current.map((item) =>
+          item.number === pullNumber ? { ...item, labels: updateLabels(item.labels) } : item
+        )
+      );
+      setPrDetail((current) =>
+        current?.number === pullNumber ? { ...current, labels: updateLabels(current.labels) } : current
+      );
+      setSelection((current) =>
+        current.kind === "pr" && current.pr.number === pullNumber
+          ? { kind: "pr", pr: { ...current.pr, labels: updateLabels(current.pr.labels) } }
+          : current
+      );
+    },
+    []
+  );
+
   const refreshActivePane = useCallback(async () => {
     if (!selectedRepo) {
       return;
@@ -1298,32 +1321,26 @@ export function App() {
         return false;
       }
 
-      const previousLabels = pr.labels;
-      const nextLabels = addPullRequestLabelOptimistically(previousLabels, repoLabels, labelName);
-      if (nextLabels === previousLabels) {
+      if (pr.labels.some((label) => label.name.toLowerCase() === labelName.toLowerCase())) {
         return true;
       }
 
       const mutationKey = `pr:${pr.number}:label:${labelName.toLowerCase()}`;
       const mutationId = beginOptimisticMutation(mutationKey);
-      patchPullRequestOptimistically(pr.number, { labels: nextLabels });
+      updatePullRequestLabelsOptimistically(pr.number, (labels) =>
+        addPullRequestLabelOptimistically(labels, repoLabels, labelName)
+      );
       void api
         .addPullRequestLabel({
           repo: selectedRepo,
           pullNumber: pr.number,
           labelName
         })
-        .then(() => {
-          if (!isCurrentOptimisticMutation(mutationKey, mutationId)) {
-            return;
-          }
-          void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
-            flash(error instanceof Error ? error.message : "Label added, but refresh failed.");
-          });
-        })
         .catch((error) => {
           if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
-            patchPullRequestOptimistically(pr.number, { labels: previousLabels });
+            updatePullRequestLabelsOptimistically(pr.number, (labels) =>
+              removePullRequestLabelOptimistically(labels, labelName)
+            );
           }
           flash(error instanceof Error ? error.message : "Unable to add label.");
         })
@@ -1337,10 +1354,9 @@ export function App() {
       finishOptimisticMutation,
       flash,
       isCurrentOptimisticMutation,
-      patchPullRequestOptimistically,
-      refreshPullRequest,
       repoLabels,
-      selectedRepo
+      selectedRepo,
+      updatePullRequestLabelsOptimistically
     ]
   );
 
@@ -1356,32 +1372,27 @@ export function App() {
         return false;
       }
 
-      const previousLabels = pr.labels;
-      const nextLabels = removePullRequestLabelOptimistically(previousLabels, labelName);
-      if (nextLabels === previousLabels) {
+      if (!pr.labels.some((label) => label.name.toLowerCase() === labelName.toLowerCase())) {
         return true;
       }
 
+      const removedLabel = pr.labels.find((label) => label.name.toLowerCase() === labelName.toLowerCase());
       const mutationKey = `pr:${pr.number}:label:${labelName.toLowerCase()}`;
       const mutationId = beginOptimisticMutation(mutationKey);
-      patchPullRequestOptimistically(pr.number, { labels: nextLabels });
+      updatePullRequestLabelsOptimistically(pr.number, (labels) =>
+        removePullRequestLabelOptimistically(labels, labelName)
+      );
       void api
         .removePullRequestLabel({
           repo: selectedRepo,
           pullNumber: pr.number,
           labelName
         })
-        .then(() => {
-          if (!isCurrentOptimisticMutation(mutationKey, mutationId)) {
-            return;
-          }
-          void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
-            flash(error instanceof Error ? error.message : "Label removed, but refresh failed.");
-          });
-        })
         .catch((error) => {
           if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
-            patchPullRequestOptimistically(pr.number, { labels: previousLabels });
+            updatePullRequestLabelsOptimistically(pr.number, (labels) =>
+              addPullRequestLabelOptimistically(labels, removedLabel ? [removedLabel] : pr.labels, labelName)
+            );
           }
           flash(error instanceof Error ? error.message : "Unable to remove label.");
         })
@@ -1395,9 +1406,8 @@ export function App() {
       finishOptimisticMutation,
       flash,
       isCurrentOptimisticMutation,
-      patchPullRequestOptimistically,
-      refreshPullRequest,
-      selectedRepo
+      selectedRepo,
+      updatePullRequestLabelsOptimistically
     ]
   );
 
@@ -1757,7 +1767,7 @@ export function App() {
       if (key.startsWith("viewer:")) {
         void loadInitial(false);
       }
-      if (selectedRepo && key.startsWith(`repo:${repoKey(selectedRepo)}`)) {
+      if (selectedRepo && key.startsWith(`repo:${repoKey(selectedRepo)}`) && !isPullRequestCacheUpdate(key)) {
         void loadProject(selectedRepo, false);
       }
     });

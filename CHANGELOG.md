@@ -5,6 +5,7 @@ All notable changes to Forge are documented in this file.
 ## [Unreleased]
 
 - Removed hover tooltips from Forge controls to reduce interface clutter.
+- Kept rapid pull request label removals from reappearing during background sync.
 - Closed pull request state and review pickers after leaving them with the pointer.
 - Made pull request draft, review, and label actions update immediately with toast rollbacks on failure.
 - Changed pull request draft and ready actions to use the titlebar hover selector.
