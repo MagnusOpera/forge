@@ -102,6 +102,10 @@ export function canSubmitPullRequestReview(repo: RepoSummary): boolean {
   return ["ADMIN", "MAINTAIN", "WRITE"].includes(repo.viewerPermission ?? "");
 }
 
+export function canManagePullRequest(repo: RepoSummary): boolean {
+  return canSubmitPullRequestReview(repo);
+}
+
 export function canUpdatePullRequestLabels(repo: RepoSummary): boolean {
   return ["ADMIN", "MAINTAIN", "WRITE", "TRIAGE"].includes(repo.viewerPermission ?? "");
 }

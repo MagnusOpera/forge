@@ -1320,7 +1320,7 @@ p {
 }
 
 .pr-detail-heading {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
 }
 
@@ -1328,6 +1328,104 @@ p {
   display: grid;
   min-width: 0;
   gap: 8px;
+}
+
+.pr-management-actions {
+  position: relative;
+  justify-self: end;
+  -webkit-app-region: no-drag;
+}
+
+.pr-management-actions::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 34;
+  width: max(100%, 178px);
+  height: 8px;
+  content: "";
+  -webkit-app-region: no-drag;
+}
+
+.pr-management-trigger {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.pr-management-trigger:hover:not(:disabled),
+.pr-management-actions:focus-within .pr-management-trigger {
+  border-color: var(--control-border-strong);
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+.pr-management-trigger:disabled {
+  opacity: 0.55;
+}
+
+.pr-management-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 35;
+  display: grid;
+  min-width: 178px;
+  padding: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: 0 12px 40px var(--toast-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 120ms ease,
+    transform 140ms ease;
+}
+
+.pr-management-actions:hover .pr-management-menu,
+.pr-management-actions:focus-within .pr-management-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.pr-management-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 31px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.pr-management-option:hover:not(:disabled),
+.pr-management-option:focus {
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+.pr-management-option.destructive:hover:not(:disabled),
+.pr-management-option.destructive:focus {
+  color: var(--danger-text);
+}
+
+.pr-management-option:disabled {
+  opacity: 0.45;
 }
 
 .pr-label-row {
@@ -1542,6 +1640,14 @@ button.pr-label-chip:disabled {
   -webkit-app-region: no-drag;
 }
 
+.pr-state-actions::after {
+  width: calc((30px * 3) + (7px * 2) + 14px);
+}
+
+.pr-review-actions::after {
+  width: calc((30px * 2) + 7px + 14px);
+}
+
 .titlebar-picker .review-action-button {
   width: 34px;
   height: 34px;
@@ -1588,6 +1694,16 @@ button.pr-label-chip:disabled {
 .titlebar-picker-menu .review-action-button {
   width: 30px;
   height: 30px;
+}
+
+.pr-state-picker {
+  grid-auto-flow: column;
+  grid-auto-columns: 30px;
+}
+
+.review-action-picker {
+  grid-auto-flow: column;
+  grid-auto-columns: 30px;
 }
 
 .pr-title-row {

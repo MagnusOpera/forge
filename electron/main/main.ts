@@ -31,6 +31,8 @@ import type {
   IssueSummary,
   LabelSummary,
   OrganizationSummary,
+  PullRequestActionPayload,
+  PullRequestAutoMergePayload,
   PullRequestLabelPayload,
   PullRequestDetail,
   PullRequestReview,
@@ -707,6 +709,7 @@ function toPullRequest(pr: any): PullRequestSummary {
     labels: toLabels(pr.labels),
     state: pr.state,
     isDraft: Boolean(pr.isDraft),
+    autoMergeEnabled: Boolean(pr.autoMergeRequest),
     reviewDecision: pr.reviewDecision ?? null,
     mergeable: pr.mergeable ?? null,
     ciState: latestCommit?.commit?.statusCheckRollup?.state ?? null,
@@ -960,6 +963,7 @@ async function getPullRequests(
                 title
                 state
                 isDraft
+                autoMergeRequest { enabledAt }
                 reviewDecision
                 mergeable
                 headRefName
@@ -985,6 +989,7 @@ async function getPullRequests(
                 title
                 state
                 isDraft
+                autoMergeRequest { enabledAt }
                 reviewDecision
                 mergeable
                 headRefName
@@ -1107,6 +1112,7 @@ async function getPullRequest(
                 body
                 state
                 isDraft
+                autoMergeRequest { enabledAt }
                 reviewDecision
                 mergeable
                 headRefName
@@ -1721,6 +1727,21 @@ function ensureLabelName(payload: PullRequestLabelPayload): string {
   return labelName;
 }
 
+function ensurePullNumber(value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error("Pull request number is required.");
+  }
+  return value;
+}
+
+function ensurePullRequestId(value: string): string {
+  const pullRequestId = value?.trim();
+  if (!pullRequestId) {
+    throw new Error("Pull request id is required.");
+  }
+  return pullRequestId;
+}
+
 async function addPullRequestLabel(payload: PullRequestLabelPayload): Promise<void> {
   const repo = ensureRepo(payload.repo);
   const labelName = ensureLabelName(payload);
@@ -1752,6 +1773,89 @@ async function removePullRequestLabel(payload: PullRequestLabelPayload): Promise
   await Promise.all([
     invalidateCacheKey(pullRequestsCacheKey(repo)),
     invalidateCacheKey(pullRequestCacheKey(repo, payload.pullNumber))
+  ]);
+}
+
+async function enablePullRequestAutoMerge(payload: PullRequestAutoMergePayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const pullNumber = ensurePullNumber(payload.pullNumber);
+  const pullRequestId = ensurePullRequestId(payload.pullRequestId);
+  const { gql } = await getClients();
+  await gql(
+    `
+      mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
+        enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId }) {
+          pullRequest {
+            id
+            autoMergeRequest { enabledAt }
+          }
+        }
+      }
+    `,
+    { pullRequestId }
+  );
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, pullNumber))
+  ]);
+}
+
+async function disablePullRequestAutoMerge(payload: PullRequestAutoMergePayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const pullNumber = ensurePullNumber(payload.pullNumber);
+  const pullRequestId = ensurePullRequestId(payload.pullRequestId);
+  const { gql } = await getClients();
+  await gql(
+    `
+      mutation DisablePullRequestAutoMerge($pullRequestId: ID!) {
+        disablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId }) {
+          pullRequest {
+            id
+            autoMergeRequest { enabledAt }
+          }
+        }
+      }
+    `,
+    { pullRequestId }
+  );
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, pullNumber))
+  ]);
+}
+
+async function mergePullRequest(payload: PullRequestActionPayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const pullNumber = ensurePullNumber(payload.pullNumber);
+  const { octokit } = await getClients();
+  await octokit.pulls.merge({
+    owner: repo.owner,
+    repo: repo.name,
+    pull_number: pullNumber
+  });
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, pullNumber))
+  ]);
+}
+
+async function closePullRequest(payload: PullRequestActionPayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const pullNumber = ensurePullNumber(payload.pullNumber);
+  const { octokit } = await getClients();
+  await octokit.pulls.update({
+    owner: repo.owner,
+    repo: repo.name,
+    pull_number: pullNumber,
+    state: "closed"
+  });
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, pullNumber))
   ]);
 }
 
@@ -1877,6 +1981,18 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:remove-pull-request-label", (_event, payload: PullRequestLabelPayload) =>
     removePullRequestLabel(payload)
+  );
+  ipcMain.handle("github:enable-pull-request-auto-merge", (_event, payload: PullRequestAutoMergePayload) =>
+    enablePullRequestAutoMerge(payload)
+  );
+  ipcMain.handle("github:disable-pull-request-auto-merge", (_event, payload: PullRequestAutoMergePayload) =>
+    disablePullRequestAutoMerge(payload)
+  );
+  ipcMain.handle("github:merge-pull-request", (_event, payload: PullRequestActionPayload) =>
+    mergePullRequest(payload)
+  );
+  ipcMain.handle("github:close-pull-request", (_event, payload: PullRequestActionPayload) =>
+    closePullRequest(payload)
   );
   ipcMain.handle("github:open-in-github", (_event, url: string) => openInGitHub(url));
 }

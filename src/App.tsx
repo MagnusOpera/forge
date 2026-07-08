@@ -11,7 +11,6 @@ import {
   Code2,
   Command,
   Construction,
-  Crown,
   ExternalLink,
   FileCode2,
   FileText,
@@ -35,6 +34,7 @@ import {
   Sun,
   ThumbsDown,
   ThumbsUp,
+  Trophy,
   Workflow,
   X,
   XCircle
@@ -46,6 +46,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import {
   addPullRequestLabelOptimistically,
+  canManagePullRequest,
   canSubmitPullRequestReviewForPullRequest,
   canUpdatePullRequestDraftState,
   canUpdatePullRequestLabels,
@@ -210,6 +211,10 @@ const browserApi: GithubFocusApi = {
   updatePullRequestDraftState: () => ipcUnavailable(),
   addPullRequestLabel: () => ipcUnavailable(),
   removePullRequestLabel: () => ipcUnavailable(),
+  enablePullRequestAutoMerge: () => ipcUnavailable(),
+  disablePullRequestAutoMerge: () => ipcUnavailable(),
+  mergePullRequest: () => ipcUnavailable(),
+  closePullRequest: () => ipcUnavailable(),
   openInGitHub: () => ipcUnavailable(),
   onCacheUpdated: () => () => undefined
 };
@@ -328,7 +333,7 @@ function repoKey(repo: { owner: string; name: string }): string {
 }
 
 function isPullRequestCacheUpdate(key: string): boolean {
-  return key.includes(":pull-request");
+  return key.includes(":pulls:") || key.includes(":pull:");
 }
 
 function isGithubUrl(rawUrl?: string | null): boolean {
@@ -1412,6 +1417,142 @@ export function App() {
     ]
   );
 
+  const enablePullRequestAutoMerge = useCallback(
+    async (pr: PullRequestSummary): Promise<boolean> => {
+      if (!selectedRepo || !canManagePullRequest(selectedRepo)) {
+        return false;
+      }
+      if (pr.state !== "OPEN") {
+        flash("Only open pull requests can enable auto-merge.");
+        return false;
+      }
+      if (pr.autoMergeEnabled) {
+        flash("Auto-merge is already enabled.");
+        return false;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.enablePullRequestAutoMerge({
+          repo: selectedRepo,
+          pullNumber: pr.number,
+          pullRequestId: pr.id
+        });
+        const refreshed = await refreshPullRequest(selectedRepo, pr.number);
+        setProjectPullRequestTab(pullRequestTabForState(refreshed));
+        flash(`Enabled auto-merge for PR #${pr.number}`);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to enable auto-merge.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [flash, refreshPullRequest, selectedRepo, setProjectPullRequestTab]
+  );
+
+  const disablePullRequestAutoMerge = useCallback(
+    async (pr: PullRequestSummary): Promise<boolean> => {
+      if (!selectedRepo || !canManagePullRequest(selectedRepo)) {
+        return false;
+      }
+      if (pr.state !== "OPEN") {
+        flash("Only open pull requests can disable auto-merge.");
+        return false;
+      }
+      if (!pr.autoMergeEnabled) {
+        flash("Auto-merge is already disabled.");
+        return false;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.disablePullRequestAutoMerge({
+          repo: selectedRepo,
+          pullNumber: pr.number,
+          pullRequestId: pr.id
+        });
+        const refreshed = await refreshPullRequest(selectedRepo, pr.number);
+        setProjectPullRequestTab(pullRequestTabForState(refreshed));
+        flash(`Disabled auto-merge for PR #${pr.number}`);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to disable auto-merge.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [flash, refreshPullRequest, selectedRepo, setProjectPullRequestTab]
+  );
+
+  const mergePullRequest = useCallback(
+    async (pr: PullRequestSummary): Promise<boolean> => {
+      if (!selectedRepo || !canManagePullRequest(selectedRepo)) {
+        return false;
+      }
+      if (pr.state !== "OPEN") {
+        flash("Only open pull requests can be merged.");
+        return false;
+      }
+      if (!window.confirm(`Merge PR #${pr.number}?`)) {
+        return false;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.mergePullRequest({
+          repo: selectedRepo,
+          pullNumber: pr.number
+        });
+        const refreshed = await refreshPullRequest(selectedRepo, pr.number);
+        setProjectPullRequestTab(pullRequestTabForState(refreshed));
+        flash(`Merged PR #${pr.number}`);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to merge pull request.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [flash, refreshPullRequest, selectedRepo, setProjectPullRequestTab]
+  );
+
+  const closePullRequest = useCallback(
+    async (pr: PullRequestSummary): Promise<boolean> => {
+      if (!selectedRepo || !canManagePullRequest(selectedRepo)) {
+        return false;
+      }
+      if (pr.state !== "OPEN") {
+        flash("Only open pull requests can be closed.");
+        return false;
+      }
+      if (!window.confirm(`Close PR #${pr.number}?`)) {
+        return false;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.closePullRequest({
+          repo: selectedRepo,
+          pullNumber: pr.number
+        });
+        const refreshed = await refreshPullRequest(selectedRepo, pr.number);
+        setProjectPullRequestTab(pullRequestTabForState(refreshed));
+        flash(`Closed PR #${pr.number}`);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to close pull request.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [flash, refreshPullRequest, selectedRepo, setProjectPullRequestTab]
+  );
+
   const selectRun = useCallback(
     (run: WorkflowRunSummary) => {
       setStoredProjectFocusView("workflow-runs");
@@ -2029,6 +2170,10 @@ export function App() {
         onUpdatePullRequestDraftState={updatePullRequestDraftState}
         onAddPullRequestLabel={addPullRequestLabel}
         onRemovePullRequestLabel={removePullRequestLabel}
+        onEnablePullRequestAutoMerge={enablePullRequestAutoMerge}
+        onDisablePullRequestAutoMerge={disablePullRequestAutoMerge}
+        onMergePullRequest={mergePullRequest}
+        onClosePullRequest={closePullRequest}
         onSelectRun={selectRun}
         onRunWorkflow={runWorkflow}
         workflowRuns={workflowRuns}
@@ -2880,6 +3025,10 @@ function ContentPane(props: {
   onUpdatePullRequestDraftState(pr: PullRequestSummary, draft: boolean): Promise<boolean>;
   onAddPullRequestLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
   onRemovePullRequestLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
+  onEnablePullRequestAutoMerge(pr: PullRequestSummary): Promise<boolean>;
+  onDisablePullRequestAutoMerge(pr: PullRequestSummary): Promise<boolean>;
+  onMergePullRequest(pr: PullRequestSummary): Promise<boolean>;
+  onClosePullRequest(pr: PullRequestSummary): Promise<boolean>;
   onSelectRun(run: WorkflowRunSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
@@ -2889,6 +3038,9 @@ function ContentPane(props: {
   const showDraftAction =
     props.repo && reviewPr && canUpdatePullRequestDraftState(props.repo, reviewPr, props.auth?.viewerLogin);
   const showLabelActions = props.repo && canUpdatePullRequestLabels(props.repo);
+  const showPullRequestManagementActions =
+    props.repo && reviewPr && reviewPr.state === "OPEN" && canManagePullRequest(props.repo);
+  const showPullRequestStateAction = Boolean(reviewPr && (showDraftAction || showPullRequestManagementActions));
   const showReviewActions =
     props.repo &&
     reviewPr &&
@@ -2898,16 +3050,53 @@ function ContentPane(props: {
     props.prDetail && reviewPr
       ? latestViewerPullRequestReviewEvent(props.prDetail.reviews, props.auth?.viewerLogin)
       : null;
-  const setDraftState = useCallback((draft: boolean) => {
+  const setPullRequestState = useCallback((state: PullRequestToolbarState) => {
     if (!reviewPr) {
       return;
     }
-    if (draft === reviewPr.isDraft) {
+    const currentState = pullRequestToolbarState(reviewPr);
+    if (state === currentState) {
       return;
     }
 
-    void props.onUpdatePullRequestDraftState(reviewPr, draft);
-  }, [props.onUpdatePullRequestDraftState, reviewPr]);
+    void (async () => {
+      if (state === "draft") {
+        if (reviewPr.autoMergeEnabled) {
+          const disabled = await props.onDisablePullRequestAutoMerge(reviewPr);
+          if (!disabled) {
+            return;
+          }
+        }
+        if (!reviewPr.isDraft) {
+          await props.onUpdatePullRequestDraftState(reviewPr, true);
+        }
+        return;
+      }
+
+      if (reviewPr.isDraft) {
+        const markedReady = await props.onUpdatePullRequestDraftState(reviewPr, false);
+        if (!markedReady) {
+          return;
+        }
+      }
+
+      if (state === "autoMerge") {
+        if (!reviewPr.autoMergeEnabled) {
+          await props.onEnablePullRequestAutoMerge(reviewPr);
+        }
+        return;
+      }
+
+      if (reviewPr.autoMergeEnabled) {
+        await props.onDisablePullRequestAutoMerge(reviewPr);
+      }
+    })();
+  }, [
+    props.onDisablePullRequestAutoMerge,
+    props.onEnablePullRequestAutoMerge,
+    props.onUpdatePullRequestDraftState,
+    reviewPr
+  ]);
 
   return (
     <main className="content-pane" tabIndex={0}>
@@ -2941,11 +3130,13 @@ function ContentPane(props: {
             >
               <ExternalLink size={16} />
             </button>
-            {showDraftAction && reviewPr && (
-              <PullRequestDraftToggle
-                disabled={false}
-                isDraft={reviewPr.isDraft}
-                onChange={setDraftState}
+            {showPullRequestStateAction && reviewPr && (
+              <PullRequestStateToggle
+                disabled={props.prActionSubmitting}
+                state={pullRequestToolbarState(reviewPr)}
+                canSetReadyDraft={Boolean(showDraftAction)}
+                canSetAutoMerge={Boolean(showPullRequestManagementActions)}
+                onChange={setPullRequestState}
               />
             )}
             {showReviewActions && (
@@ -3021,12 +3212,15 @@ function ContentPane(props: {
           prActionSubmitting={props.prActionSubmitting}
           canUpdateTitle={Boolean(showTitleAction)}
           canUpdateLabels={Boolean(showLabelActions)}
+          canManagePullRequest={Boolean(showPullRequestManagementActions)}
           theme={props.theme}
           workflowRuns={props.workflowRuns}
           onAddComment={props.onAddPullRequestComment}
           onUpdateTitle={props.onUpdatePullRequestTitle}
           onAddLabel={props.onAddPullRequestLabel}
           onRemoveLabel={props.onRemovePullRequestLabel}
+          onMergePullRequest={props.onMergePullRequest}
+          onClosePullRequest={props.onClosePullRequest}
           onOpenGithubUrl={props.onOpenGithubUrl}
           onOpenWorkflowRunFromCheck={props.onOpenWorkflowRunFromCheck}
           onCopyText={props.onCopyText}
@@ -3076,17 +3270,43 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
   return <span>{props.selection.workflow.name}</span>;
 }
 
-function PullRequestDraftToggle(props: {
+type PullRequestToolbarState = "ready" | "autoMerge" | "draft";
+
+function pullRequestToolbarState(pr: PullRequestSummary): PullRequestToolbarState {
+  if (pr.isDraft) {
+    return "draft";
+  }
+  return pr.autoMergeEnabled ? "autoMerge" : "ready";
+}
+
+function PullRequestToolbarStateIcon(props: { state: PullRequestToolbarState; size: number }) {
+  if (props.state === "draft") {
+    return <Construction size={props.size} />;
+  }
+  if (props.state === "autoMerge") {
+    return <Trophy size={props.size} />;
+  }
+  return <Check size={props.size} />;
+}
+
+function PullRequestStateToggle(props: {
   disabled: boolean;
-  isDraft: boolean;
-  onChange(draft: boolean): void;
+  state: PullRequestToolbarState;
+  canSetReadyDraft: boolean;
+  canSetAutoMerge: boolean;
+  onChange(state: PullRequestToolbarState): void;
 }) {
-  const label = props.isDraft ? "Draft pull request. Change state" : "Ready pull request. Change state";
+  const label =
+    props.state === "draft"
+      ? "Draft pull request. Change state"
+      : props.state === "autoMerge"
+        ? "Auto-merge enabled. Change state"
+        : "Ready pull request. Change state";
 
   return (
     <div
       className="titlebar-picker pr-state-actions"
-      aria-label="Pull request draft state selector"
+      aria-label="Pull request state selector"
       onPointerLeave={(event) => blurFocusedElementIn(event.currentTarget)}
     >
       <button
@@ -3097,29 +3317,45 @@ function PullRequestDraftToggle(props: {
         aria-pressed={true}
         disabled={props.disabled}
       >
-        {props.isDraft ? <Construction size={17} /> : <Crown size={17} />}
+        <PullRequestToolbarStateIcon state={props.state} size={17} />
       </button>
-      <div className="titlebar-picker-menu pr-state-picker" role="group" aria-label="Change pull request draft state">
-        <button
-          type="button"
-          className={cx("review-action-button", !props.isDraft && "active")}
-          aria-label="Mark pull request ready for review"
-          aria-pressed={!props.isDraft}
-          disabled={props.disabled}
-          onClick={() => props.onChange(false)}
-        >
-          <Crown size={15} />
-        </button>
-        <button
-          type="button"
-          className={cx("review-action-button", props.isDraft && "active")}
-          aria-label="Convert pull request to draft"
-          aria-pressed={props.isDraft}
-          disabled={props.disabled}
-          onClick={() => props.onChange(true)}
-        >
-          <Construction size={15} />
-        </button>
+      <div className="titlebar-picker-menu pr-state-picker" role="group" aria-label="Change pull request state">
+        {props.canSetReadyDraft && (
+          <button
+            type="button"
+            className={cx("review-action-button", props.state === "ready" && "active")}
+            aria-label="Mark pull request ready for review"
+            aria-pressed={props.state === "ready"}
+            disabled={props.disabled}
+            onClick={() => props.onChange("ready")}
+          >
+            <Check size={15} />
+          </button>
+        )}
+        {props.canSetAutoMerge && (
+          <button
+            type="button"
+            className={cx("review-action-button", props.state === "autoMerge" && "active")}
+            aria-label="Enable auto-merge when pull request requirements are met"
+            aria-pressed={props.state === "autoMerge"}
+            disabled={props.disabled}
+            onClick={() => props.onChange("autoMerge")}
+          >
+            <Trophy size={15} />
+          </button>
+        )}
+        {props.canSetReadyDraft && (
+          <button
+            type="button"
+            className={cx("review-action-button", props.state === "draft" && "active")}
+            aria-label="Convert pull request to draft"
+            aria-pressed={props.state === "draft"}
+            disabled={props.disabled}
+            onClick={() => props.onChange("draft")}
+          >
+            <Construction size={15} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -3185,6 +3421,55 @@ function PullRequestReviewActions(props: {
           onClick={() => submitReview("REQUEST_CHANGES")}
         >
           <ThumbsDown size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PullRequestManagementActions(props: {
+  disabled: boolean;
+  pr: PullRequestSummary;
+  onMerge(pr: PullRequestSummary): Promise<boolean>;
+  onClose(pr: PullRequestSummary): Promise<boolean>;
+}) {
+  return (
+    <div
+      className="pr-management-actions"
+      aria-label="Pull request management actions"
+      onPointerLeave={(event) => blurFocusedElementIn(event.currentTarget)}
+    >
+      <button
+        type="button"
+        className="pr-management-trigger"
+        aria-label="Pull request actions"
+        aria-haspopup="true"
+        disabled={props.disabled}
+      >
+        <GitPullRequest size={15} />
+        <span>PR action</span>
+        <ChevronDown size={14} />
+      </button>
+      <div className="pr-management-menu" role="group" aria-label="Pull request actions">
+        <button
+          type="button"
+          className="pr-management-option"
+          aria-label="Merge pull request"
+          disabled={props.disabled}
+          onClick={() => void props.onMerge(props.pr)}
+        >
+          <GitPullRequest size={15} />
+          <span>Merge</span>
+        </button>
+        <button
+          type="button"
+          className="pr-management-option destructive"
+          aria-label="Close pull request"
+          disabled={props.disabled}
+          onClick={() => void props.onClose(props.pr)}
+        >
+          <XCircle size={15} />
+          <span>Close PR</span>
         </button>
       </div>
     </div>
@@ -3280,12 +3565,15 @@ function PullRequestContent(props: {
   prActionSubmitting: boolean;
   canUpdateTitle: boolean;
   canUpdateLabels: boolean;
+  canManagePullRequest: boolean;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
   onAddComment(pr: PullRequestSummary, body: string): Promise<boolean>;
   onUpdateTitle(pr: PullRequestSummary, title: string): Promise<boolean>;
   onAddLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
   onRemoveLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
+  onMergePullRequest(pr: PullRequestSummary): Promise<boolean>;
+  onClosePullRequest(pr: PullRequestSummary): Promise<boolean>;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onCopyText(value: string): Promise<boolean>;
@@ -3580,6 +3868,14 @@ function PullRequestContent(props: {
               </div>
             )}
           </div>
+          {props.canManagePullRequest && pr.state === "OPEN" && (
+            <PullRequestManagementActions
+              disabled={props.prActionSubmitting}
+              pr={pr}
+              onMerge={props.onMergePullRequest}
+              onClose={props.onClosePullRequest}
+            />
+          )}
         </div>
         <TabBar tabs={tabs} selected={props.tab} onSelect={props.onTab} />
       </div>

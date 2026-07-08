@@ -89,6 +89,7 @@ export interface PullRequestSummary {
   labels: LabelSummary[];
   state: string;
   isDraft: boolean;
+  autoMergeEnabled: boolean;
   reviewDecision: PullRequestReviewDecision;
   mergeable: PullRequestMergeable;
   ciState: CheckState;
@@ -291,6 +292,15 @@ export interface PullRequestLabelPayload {
   labelName: string;
 }
 
+export interface PullRequestActionPayload {
+  repo: RepoRef;
+  pullNumber: number;
+}
+
+export interface PullRequestAutoMergePayload extends PullRequestActionPayload {
+  pullRequestId: string;
+}
+
 export interface GithubFocusApi {
   getAuthStatus(): Promise<AuthStatus>;
   saveToken(token: string): Promise<AuthStatus>;
@@ -316,6 +326,10 @@ export interface GithubFocusApi {
   updatePullRequestDraftState(payload: UpdatePullRequestDraftStatePayload): Promise<void>;
   addPullRequestLabel(payload: PullRequestLabelPayload): Promise<void>;
   removePullRequestLabel(payload: PullRequestLabelPayload): Promise<void>;
+  enablePullRequestAutoMerge(payload: PullRequestAutoMergePayload): Promise<void>;
+  disablePullRequestAutoMerge(payload: PullRequestAutoMergePayload): Promise<void>;
+  mergePullRequest(payload: PullRequestActionPayload): Promise<void>;
+  closePullRequest(payload: PullRequestActionPayload): Promise<void>;
   openInGitHub(url: string): Promise<void>;
   onCacheUpdated(callback: (key: string) => void): () => void;
   platform: string;

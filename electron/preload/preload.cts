@@ -4,6 +4,8 @@ import type {
   CacheRequestOptions,
   DispatchWorkflowPayload,
   GithubFocusApi,
+  PullRequestActionPayload,
+  PullRequestAutoMergePayload,
   PullRequestLabelPayload,
   RepoRef,
   SubmitPullRequestReviewPayload,
@@ -53,6 +55,14 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:add-pull-request-label", payload),
   removePullRequestLabel: (payload: PullRequestLabelPayload) =>
     ipcRenderer.invoke("github:remove-pull-request-label", payload),
+  enablePullRequestAutoMerge: (payload: PullRequestAutoMergePayload) =>
+    ipcRenderer.invoke("github:enable-pull-request-auto-merge", payload),
+  disablePullRequestAutoMerge: (payload: PullRequestAutoMergePayload) =>
+    ipcRenderer.invoke("github:disable-pull-request-auto-merge", payload),
+  mergePullRequest: (payload: PullRequestActionPayload) =>
+    ipcRenderer.invoke("github:merge-pull-request", payload),
+  closePullRequest: (payload: PullRequestActionPayload) =>
+    ipcRenderer.invoke("github:close-pull-request", payload),
   openInGitHub: (url: string) => ipcRenderer.invoke("github:open-in-github", url),
   onCacheUpdated: (callback: (key: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, key: string) => callback(key);

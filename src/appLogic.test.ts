@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LabelSummary, PullRequestReview, PullRequestSummary, RepoSummary } from "../shared/github";
 import {
   addPullRequestLabelOptimistically,
+  canManagePullRequest,
   canSubmitPullRequestReview,
   canSubmitPullRequestReviewForPullRequest,
   canUpdatePullRequestLabels,
@@ -44,6 +45,15 @@ describe("appLogic", () => {
     expect(canSubmitPullRequestReview({ viewerPermission: "WRITE" } as RepoSummary)).toBe(true);
     expect(canSubmitPullRequestReview({ viewerPermission: "READ" } as RepoSummary)).toBe(false);
     expect(canSubmitPullRequestReview({ viewerPermission: null } as RepoSummary)).toBe(false);
+  });
+
+  it("enables pull request management for write-level repository permissions", () => {
+    expect(canManagePullRequest({ viewerPermission: "ADMIN" } as RepoSummary)).toBe(true);
+    expect(canManagePullRequest({ viewerPermission: "MAINTAIN" } as RepoSummary)).toBe(true);
+    expect(canManagePullRequest({ viewerPermission: "WRITE" } as RepoSummary)).toBe(true);
+    expect(canManagePullRequest({ viewerPermission: "TRIAGE" } as RepoSummary)).toBe(false);
+    expect(canManagePullRequest({ viewerPermission: "READ" } as RepoSummary)).toBe(false);
+    expect(canManagePullRequest({ viewerPermission: null } as RepoSummary)).toBe(false);
   });
 
   it("prevents review actions on pull requests authored by the viewer", () => {
