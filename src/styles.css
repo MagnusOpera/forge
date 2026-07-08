@@ -1523,14 +1523,14 @@ button.pr-label-chip:disabled {
   font-size: 12px;
 }
 
-.pr-review-actions {
+.titlebar-picker {
   position: relative;
   display: grid;
   place-items: center;
   -webkit-app-region: no-drag;
 }
 
-.pr-review-actions::after {
+.titlebar-picker::after {
   position: absolute;
   top: 28px;
   left: 50%;
@@ -1542,13 +1542,13 @@ button.pr-label-chip:disabled {
   -webkit-app-region: no-drag;
 }
 
-.pr-review-actions .review-action-button {
+.titlebar-picker .review-action-button {
   width: 34px;
   height: 34px;
   border-radius: 0;
 }
 
-.review-action-picker {
+.titlebar-picker-menu {
   position: absolute;
   top: 30px;
   left: 50%;
@@ -1571,21 +1571,21 @@ button.pr-label-chip:disabled {
   -webkit-app-region: no-drag;
 }
 
-.pr-review-actions:hover .review-action-picker,
-.pr-review-actions:focus-within .review-action-picker {
+.titlebar-picker:hover .titlebar-picker-menu,
+.titlebar-picker:focus-within .titlebar-picker-menu {
   opacity: 1;
   pointer-events: auto;
   transform: translate3d(-50%, 0, 0) scale(1);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .review-action-picker {
+  .titlebar-picker-menu {
     transform: translate3d(-50%, 0, 0) scale(1);
     transition: none;
   }
 }
 
-.review-action-picker .review-action-button {
+.titlebar-picker-menu .review-action-button {
   width: 30px;
   height: 30px;
 }
@@ -1702,8 +1702,8 @@ button.pr-label-chip:disabled {
   color: var(--text-hover);
 }
 
-.pr-review-actions .review-action-button:hover:not(:disabled),
-.pr-review-actions .review-action-button.active:hover:not(:disabled) {
+.titlebar-picker .review-action-button:hover:not(:disabled),
+.titlebar-picker .review-action-button.active:hover:not(:disabled) {
   border-color: transparent;
   background: transparent;
   color: var(--text-hover);

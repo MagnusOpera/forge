@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  Ban,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -2720,12 +2721,15 @@ function ContentPane(props: {
     props.prDetail && reviewPr
       ? latestViewerPullRequestReviewEvent(props.prDetail.reviews, props.auth?.viewerLogin)
       : null;
-  const toggleDraftState = useCallback(() => {
+  const setDraftState = useCallback((draft: boolean) => {
     if (!reviewPr || props.prActionSubmitting) {
       return;
     }
+    if (draft === reviewPr.isDraft) {
+      return;
+    }
 
-    void props.onUpdatePullRequestDraftState(reviewPr, !reviewPr.isDraft);
+    void props.onUpdatePullRequestDraftState(reviewPr, draft);
   }, [props.onUpdatePullRequestDraftState, props.prActionSubmitting, reviewPr]);
 
   return (
@@ -2764,7 +2768,7 @@ function ContentPane(props: {
               <PullRequestDraftToggle
                 disabled={props.prActionSubmitting}
                 isDraft={reviewPr.isDraft}
-                onToggle={toggleDraftState}
+                onChange={setDraftState}
               />
             )}
             {showReviewActions && (
@@ -2900,23 +2904,48 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
 function PullRequestDraftToggle(props: {
   disabled: boolean;
   isDraft: boolean;
-  onToggle(): void;
+  onChange(draft: boolean): void;
 }) {
-  const label = props.isDraft
-    ? "Draft pull request. Mark ready for review"
-    : "Ready pull request. Convert to draft";
+  const label = props.isDraft ? "Draft pull request. Change state" : "Ready pull request. Change state";
 
   return (
-    <button
-      type="button"
-      className={cx("review-action-button", "titlebar-state-action", !props.isDraft && "active")}
-      title={label}
-      aria-label={label}
-      disabled={props.disabled}
-      onClick={props.onToggle}
-    >
-      <Check size={18} />
-    </button>
+    <div className="titlebar-picker pr-state-actions" aria-label="Pull request draft state selector">
+      <button
+        type="button"
+        className="review-action-button titlebar-state-action active"
+        title={label}
+        aria-label={label}
+        aria-haspopup="true"
+        aria-pressed={true}
+        disabled={props.disabled}
+      >
+        {props.isDraft ? <Ban size={17} /> : <Check size={18} />}
+      </button>
+      <div className="titlebar-picker-menu pr-state-picker" role="group" aria-label="Change pull request draft state">
+        <button
+          type="button"
+          className={cx("review-action-button", !props.isDraft && "active")}
+          title="Mark ready for review"
+          aria-label="Mark pull request ready for review"
+          aria-pressed={!props.isDraft}
+          disabled={props.disabled}
+          onClick={() => props.onChange(false)}
+        >
+          <Check size={15} />
+        </button>
+        <button
+          type="button"
+          className={cx("review-action-button", props.isDraft && "active")}
+          title="Convert to draft"
+          aria-label="Convert pull request to draft"
+          aria-pressed={props.isDraft}
+          disabled={props.disabled}
+          onClick={() => props.onChange(true)}
+        >
+          <Ban size={15} />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -2935,7 +2964,7 @@ function PullRequestReviewActions(props: {
         : "Choose review action";
 
   return (
-    <div className="pr-review-actions" aria-label="Pull request review action selector">
+    <div className="titlebar-picker pr-review-actions" aria-label="Pull request review action selector">
       <button
         type="button"
         className={cx("review-action-button", "review-state-button", props.activeEvent && "active")}
@@ -2948,7 +2977,7 @@ function PullRequestReviewActions(props: {
       >
         {currentEvent === "REQUEST_CHANGES" ? <ThumbsDown size={16} /> : <ThumbsUp size={16} />}
       </button>
-      <div className="review-action-picker" role="group" aria-label="Change pull request review action">
+      <div className="titlebar-picker-menu review-action-picker" role="group" aria-label="Change pull request review action">
         <button
           type="button"
           className={cx("review-action-button", "approve", props.activeEvent === "APPROVE" && "active")}
