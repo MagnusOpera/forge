@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Showed the pull request author in the pull request detail header.
 - Refreshed active pull request details when using the repository refresh action.
 - Added inline pull request commenting and title editing actions.
 - Hid pull request review actions when the current GitHub user authored the pull request.

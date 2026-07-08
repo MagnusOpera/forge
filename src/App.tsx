@@ -2798,11 +2798,12 @@ function PullRequestContent(props: {
   const title = detail?.title ?? props.fallback.title;
   const tabs = ["Description", "Comments", "Reviews", "Files", "Commits", "Checks"];
   const branchName = detail?.headRefName ?? props.fallback.headRefName;
+  const authorLogin = (detail?.author ?? props.fallback.author)?.login;
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(title);
   const [commentDraft, setCommentDraft] = useState("");
   const [commentComposerExpanded, setCommentComposerExpanded] = useState(false);
-  const [copiedMeta, setCopiedMeta] = useState<"number" | "branch" | null>(null);
+  const [copiedMeta, setCopiedMeta] = useState<"number" | "branch" | "author" | null>(null);
   const copyFeedbackTimer = useRef<number | null>(null);
   const copyFeedbackFrame = useRef<number | null>(null);
   const titleSaveInFlight = useRef(false);
@@ -2826,7 +2827,7 @@ function PullRequestContent(props: {
   );
 
   const copyMeta = useCallback(
-    async (value: string, target: "number" | "branch") => {
+    async (value: string, target: "number" | "branch" | "author") => {
       const copied = await props.onCopyText(value);
       if (!copied) {
         return;
@@ -2955,6 +2956,20 @@ function PullRequestContent(props: {
                     onClick={() => copyMeta(branchName, "branch")}
                   >
                     {branchName}
+                  </button>
+                </>
+              ) : null}
+              {authorLogin ? (
+                <>
+                  <span className="eyebrow-separator">·</span>
+                  <span>by</span>
+                  <button
+                    type="button"
+                    className={cx("copy-meta-button author", copiedMeta === "author" && "copied")}
+                    title="Copy author"
+                    onClick={() => copyMeta(authorLogin, "author")}
+                  >
+                    {authorLogin}
                   </button>
                 </>
               ) : null}
