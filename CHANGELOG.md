@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Matched selected pull request review actions to the titlebar underline style.
+- Moved the content GitHub link next to the third pane title.
 - Added a pull request titlebar action to switch open pull requests between draft and ready.
 - Highlighted the current pull request review action after approving or requesting changes.
 - Preserved favorite repositories after clearing the stored GitHub token.

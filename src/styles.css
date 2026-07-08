@@ -425,6 +425,12 @@ input {
   height: 26px;
 }
 
+.content-title-action {
+  width: 28px;
+  height: 28px;
+  -webkit-app-region: no-drag;
+}
+
 .project-view-switcher {
   position: relative;
   display: flex;
@@ -1524,6 +1530,12 @@ button.pr-label-chip:disabled {
   -webkit-app-region: no-drag;
 }
 
+.pr-review-actions .review-action-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 0;
+}
+
 .pr-title-row {
   display: flex;
   align-items: flex-start;
@@ -1601,16 +1613,16 @@ button.pr-label-chip:disabled {
 }
 
 .review-action-button.active {
-  border-color: var(--accent-border);
-  background: var(--accent-muted-bg);
-  color: var(--accent-text);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-strong);
 }
 
 .review-action-button.active::after {
   position: absolute;
-  right: 7px;
-  bottom: 4px;
-  left: 7px;
+  right: 5px;
+  bottom: 3px;
+  left: 5px;
   height: 2px;
   border-radius: 999px;
   background: var(--accent);
@@ -1623,25 +1635,28 @@ button.pr-label-chip:disabled {
 }
 
 .review-action-button.active:hover:not(:disabled) {
-  border-color: var(--accent-border);
-  background: var(--accent-muted-bg);
-  color: var(--accent-text);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-hover);
 }
 
 .review-action-button.approve:hover:not(:disabled) {
-  border-color: var(--good-border);
-  color: var(--good-text);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-hover);
 }
 
 .review-action-button.request:hover:not(:disabled) {
-  border-color: var(--bad-border);
-  color: var(--bad-text);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-hover);
 }
 
 .review-action-button.approve.active:hover:not(:disabled),
 .review-action-button.request.active:hover:not(:disabled) {
-  border-color: var(--accent-border);
-  color: var(--accent-text);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-hover);
 }
 
 .review-action-button:disabled {

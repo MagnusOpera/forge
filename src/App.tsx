@@ -2752,6 +2752,14 @@ function ContentPane(props: {
           </div>
           <div className="content-title">
             <ContentTitle selection={props.selection} repo={props.repo} />
+            <button
+              className="icon-button content-title-action"
+              title="Open in GitHub"
+              onClick={props.onOpenGithub}
+              disabled={!props.repo}
+            >
+              <ExternalLink size={16} />
+            </button>
             {showDraftAction && reviewPr && (
               <PullRequestDraftToggle
                 disabled={props.prActionSubmitting}
@@ -2776,9 +2784,6 @@ function ContentPane(props: {
               <KeyRound size={16} />
             </button>
           )}
-          <button className="icon-button" title="Open in GitHub" onClick={props.onOpenGithub} disabled={!props.repo}>
-            <ExternalLink size={16} />
-          </button>
           <div className="theme-accent-control">
             <button
               className="theme-toggle-button"
