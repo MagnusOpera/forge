@@ -4,11 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.6]
+
+
 - Added pull request label editing from the pull request detail header.
 - Showed the pull request author in the pull request detail header.
 - Refreshed the active pull request, issue, workflow, or run when using the repository refresh action.
 - Added inline pull request commenting and title editing actions.
 - Hid pull request review actions when the current GitHub user authored the pull request.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.5...0.0.6
 
 ## [0.0.5]
 
