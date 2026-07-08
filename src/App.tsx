@@ -3,7 +3,6 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  Ban,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -11,6 +10,8 @@ import {
   Circle,
   Code2,
   Command,
+  Construction,
+  Crown,
   ExternalLink,
   FileCode2,
   FileText,
@@ -3096,7 +3097,7 @@ function PullRequestDraftToggle(props: {
         aria-pressed={true}
         disabled={props.disabled}
       >
-        {props.isDraft ? <Ban size={17} /> : <Check size={18} />}
+        {props.isDraft ? <Construction size={17} /> : <Crown size={17} />}
       </button>
       <div className="titlebar-picker-menu pr-state-picker" role="group" aria-label="Change pull request draft state">
         <button
@@ -3107,7 +3108,7 @@ function PullRequestDraftToggle(props: {
           disabled={props.disabled}
           onClick={() => props.onChange(false)}
         >
-          <Check size={15} />
+          <Crown size={15} />
         </button>
         <button
           type="button"
@@ -3117,7 +3118,7 @@ function PullRequestDraftToggle(props: {
           disabled={props.disabled}
           onClick={() => props.onChange(true)}
         >
-          <Ban size={15} />
+          <Construction size={15} />
         </button>
       </div>
     </div>
