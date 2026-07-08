@@ -1976,7 +1976,7 @@ function Sidebar(props: SidebarProps) {
           <Github size={18} />
           <span>Forge</span>
         </div>
-        <button className="icon-button" title="Collapse sidebar" onClick={props.onToggle}>
+        <button className="icon-button" aria-label="Collapse sidebar" onClick={props.onToggle}>
           <PanelLeftClose size={18} />
         </button>
       </div>
@@ -1993,7 +1993,6 @@ function Sidebar(props: SidebarProps) {
           <button
             className="search-clear-button"
             type="button"
-            title="Clear search"
             aria-label="Clear search"
             onClick={() => {
               props.onSearch("");
@@ -2207,7 +2206,6 @@ function RepoButton(props: {
   onSelect(): void;
   onToggleFavorite(): void;
 }) {
-  const displayName = props.showOwner ? props.repo.fullName : props.repo.name;
   const repoLabel = props.showOwner ? (
     <>
       <span className="repo-owner">{props.repo.owner}/</span>
@@ -2233,10 +2231,14 @@ function RepoButton(props: {
       onDragEnd={props.onDragEnd}
     >
       <button className="repo-button" onClick={props.onSelect}>
-        <span className="repo-name" title={displayName}>{repoLabel}</span>
+        <span className="repo-name">{repoLabel}</span>
         <span className="repo-meta">{formatRelative(props.repo.updatedAt)}</span>
       </button>
-      <button className="star-button" title={props.favorite ? "Remove favorite" : "Add favorite"} onClick={props.onToggleFavorite}>
+      <button
+        className="star-button"
+        aria-label={props.favorite ? "Remove favorite" : "Add favorite"}
+        onClick={props.onToggleFavorite}
+      >
         {props.favorite ? <Star size={14} fill="currentColor" /> : <StarOff size={14} />}
       </button>
     </div>
@@ -2278,7 +2280,7 @@ function ProjectPane(props: {
       <div className={cx("pane-header", props.sidebarCollapsed && "collapsed-project-header")}>
         <div className="pane-title">
           {props.sidebarCollapsed && (
-            <button className="icon-button project-sidebar-toggle" title="Open sidebar" onClick={props.onToggleSidebar}>
+            <button className="icon-button project-sidebar-toggle" aria-label="Open sidebar" onClick={props.onToggleSidebar}>
               <PanelLeftOpen size={18} />
             </button>
           )}
@@ -2298,10 +2300,10 @@ function ProjectPane(props: {
             onView={props.onFocusView}
           />
           <span className="toolbar-divider" />
-          <button className="icon-button" title="Refresh" onClick={props.onRefresh} disabled={!props.repo}>
+          <button className="icon-button" aria-label="Refresh" onClick={props.onRefresh} disabled={!props.repo}>
             <RefreshCw size={16} />
           </button>
-          <button className="icon-button" title="Open in GitHub" onClick={props.onOpenGithub} disabled={!props.repo}>
+          <button className="icon-button" aria-label="Open in GitHub" onClick={props.onOpenGithub} disabled={!props.repo}>
             <ExternalLink size={16} />
           </button>
         </div>
@@ -2381,7 +2383,6 @@ function ProjectFocusToolbar(props: {
           type="button"
           className={cx("icon-button project-view-button", props.view === item.view && "active")}
           data-active-tab={props.view === item.view ? "true" : undefined}
-          title={`${item.label} (${props.counts[item.view]})`}
           aria-label={`${item.label} (${props.counts[item.view]})`}
           aria-pressed={props.view === item.view}
           disabled={props.disabled}
@@ -2702,10 +2703,10 @@ function WorkflowSection(props: {
                 <span className="focus-meta">{workflow.state}</span>
               </span>
             </button>
-            <button className="icon-button small" title="Run workflow" onClick={() => props.onRun(workflow)}>
+            <button className="icon-button small" aria-label="Run workflow" onClick={() => props.onRun(workflow)}>
               <Play size={14} />
             </button>
-            <button className="icon-button small" title="Star workflow" onClick={() => props.onToggleStar(workflow)}>
+            <button className="icon-button small" aria-label="Star workflow" onClick={() => props.onToggleStar(workflow)}>
               {props.starredIds.includes(workflow.id) ? <Star size={14} fill="currentColor" /> : <StarOff size={14} />}
             </button>
           </div>
@@ -2793,7 +2794,7 @@ function ContentPane(props: {
           <div className="navigation-controls" aria-label="Navigation">
             <button
               className="icon-button navigation-button"
-              title="Back"
+              aria-label="Back"
               onClick={props.onNavigateBack}
               disabled={!props.canNavigateBack}
             >
@@ -2801,7 +2802,7 @@ function ContentPane(props: {
             </button>
             <button
               className="icon-button navigation-button"
-              title="Forward"
+              aria-label="Forward"
               onClick={props.onNavigateForward}
               disabled={!props.canNavigateForward}
             >
@@ -2812,7 +2813,7 @@ function ContentPane(props: {
             <ContentTitle selection={props.selection} repo={props.repo} />
             <button
               className="icon-button content-title-action"
-              title="Open in GitHub"
+              aria-label="Open in GitHub"
               onClick={props.onOpenGithub}
               disabled={!props.repo}
             >
@@ -2838,7 +2839,7 @@ function ContentPane(props: {
         </div>
         <div className="header-actions">
           {props.auth?.configured && (
-            <button className="icon-button" title="Clear token" onClick={props.onClearToken}>
+            <button className="icon-button" aria-label="Clear token" onClick={props.onClearToken}>
               <KeyRound size={16} />
             </button>
           )}
@@ -2846,7 +2847,6 @@ function ContentPane(props: {
             <button
               className="theme-toggle-button"
               aria-label={props.theme === "dark" ? "Current theme: dark. Switch to light theme." : "Current theme: light. Switch to dark theme."}
-              title={props.theme === "dark" ? "Dark theme" : "Light theme"}
               onClick={props.onToggleTheme}
             >
               {props.theme === "dark" ? <Moon size={15} /> : <Sun size={15} />}
@@ -2860,7 +2860,6 @@ function ContentPane(props: {
                   role="radio"
                   aria-checked={props.accentColor === color}
                   aria-label={`Accent ${index + 1}`}
-                  title=""
                   onClick={(event) => {
                     props.onAccentChange(color);
                     event.currentTarget.blur();
@@ -2967,7 +2966,6 @@ function PullRequestDraftToggle(props: {
       <button
         type="button"
         className="review-action-button titlebar-state-action active"
-        title={label}
         aria-label={label}
         aria-haspopup="true"
         aria-pressed={true}
@@ -2979,7 +2977,6 @@ function PullRequestDraftToggle(props: {
         <button
           type="button"
           className={cx("review-action-button", !props.isDraft && "active")}
-          title="Mark ready for review"
           aria-label="Mark pull request ready for review"
           aria-pressed={!props.isDraft}
           disabled={props.disabled}
@@ -2990,7 +2987,6 @@ function PullRequestDraftToggle(props: {
         <button
           type="button"
           className={cx("review-action-button", props.isDraft && "active")}
-          title="Convert to draft"
           aria-label="Convert pull request to draft"
           aria-pressed={props.isDraft}
           disabled={props.disabled}
@@ -3022,7 +3018,6 @@ function PullRequestReviewActions(props: {
       <button
         type="button"
         className={cx("review-action-button", "review-state-button", props.activeEvent && "active")}
-        title={currentLabel}
         aria-label={currentLabel}
         aria-haspopup="true"
         aria-pressed={Boolean(props.activeEvent)}
@@ -3035,7 +3030,6 @@ function PullRequestReviewActions(props: {
         <button
           type="button"
           className={cx("review-action-button", "approve", props.activeEvent === "APPROVE" && "active")}
-          title="Approve"
           aria-label="Approve pull request"
           aria-pressed={props.activeEvent === "APPROVE"}
           disabled={props.disabled}
@@ -3046,7 +3040,6 @@ function PullRequestReviewActions(props: {
         <button
           type="button"
           className={cx("review-action-button", "request", props.activeEvent === "REQUEST_CHANGES" && "active")}
-          title="Request changes"
           aria-label="Request changes"
           aria-pressed={props.activeEvent === "REQUEST_CHANGES"}
           disabled={props.disabled}
@@ -3338,7 +3331,7 @@ function PullRequestContent(props: {
               <button
                 type="button"
                 className={cx("copy-meta-button", copiedMeta === "number" && "copied")}
-                title="Copy pull request number"
+                aria-label="Copy pull request number"
                 onClick={() => copyMeta(String(props.fallback.number), "number")}
               >
                 #{props.fallback.number}
@@ -3349,7 +3342,7 @@ function PullRequestContent(props: {
                   <button
                     type="button"
                     className={cx("copy-meta-button branch", copiedMeta === "branch" && "copied")}
-                    title="Copy branch"
+                    aria-label="Copy branch"
                     onClick={() => copyMeta(branchName, "branch")}
                   >
                     {branchName}
@@ -3363,7 +3356,7 @@ function PullRequestContent(props: {
                   <button
                     type="button"
                     className={cx("copy-meta-button author", copiedMeta === "author" && "copied")}
-                    title="Copy author"
+                    aria-label="Copy author"
                     onClick={() => copyMeta(authorLogin, "author")}
                   >
                     {authorLogin}
@@ -3389,7 +3382,6 @@ function PullRequestContent(props: {
                   <button
                     type="submit"
                     className="review-action-button pr-title-action"
-                    title="Save title"
                     aria-label="Save pull request title"
                     disabled={props.prActionSubmitting || !titleDraft.trim() || titleDraft.trim() === title}
                   >
@@ -3398,7 +3390,6 @@ function PullRequestContent(props: {
                   <button
                     type="button"
                     className="review-action-button pr-title-action"
-                    title="Cancel"
                     aria-label="Cancel title edit"
                     disabled={props.prActionSubmitting}
                     onClick={cancelTitleEdit}
@@ -3413,7 +3404,6 @@ function PullRequestContent(props: {
                     <button
                       type="button"
                       className="review-action-button pr-title-action"
-                      title="Edit title"
                       aria-label="Edit pull request title"
                       disabled={props.prActionSubmitting}
                       onClick={startTitleEdit}
@@ -3433,7 +3423,6 @@ function PullRequestContent(props: {
                       className="label pr-label-chip removable"
                       style={{ borderColor: `#${label.color}` }}
                       key={label.id}
-                      title={`Remove ${label.name}`}
                       aria-label={`Remove ${label.name} label`}
                       disabled={props.prActionSubmitting}
                       onClick={() => removeLabel(label.name)}
@@ -3484,7 +3473,6 @@ function PullRequestContent(props: {
                 <button
                   type="submit"
                   className="comment-action-button"
-                  title="Add comment"
                   aria-label="Add pull request comment"
                   tabIndex={commentComposerExpanded ? 0 : -1}
                   disabled={props.prActionSubmitting || !commentDraft.trim()}
@@ -3527,7 +3515,7 @@ function PullRequestContent(props: {
                 <button
                   type="button"
                   className="commit-link"
-                  title="Open commit in GitHub"
+                  aria-label={`Open commit ${shortSha(commit.oid)} in GitHub`}
                   onClick={() => props.onOpenGithubUrl(commit.url)}
                 >
                   {shortSha(commit.oid)}
@@ -3608,7 +3596,7 @@ function PullRequestLabelPicker(props: {
         className="label-picker-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
-        title={props.labels.length ? "Add label" : "No labels available"}
+        aria-label={props.labels.length ? "Add label" : "No labels available"}
         disabled={props.disabled}
         onClick={() => setOpen((value) => !value)}
       >
@@ -3688,7 +3676,7 @@ function ChecksList({
             <button
               className="check-header"
               disabled={!hasRun && !hasGithubTarget}
-              title={hasRun ? "Open workflow run" : hasGithubTarget ? "Open check in GitHub" : "No workflow run"}
+              aria-label={hasRun ? "Open workflow run" : hasGithubTarget ? "Open check in GitHub" : "No workflow run"}
               onClick={() => onOpenWorkflowRun(group.check)}
             >
               {hasRun ? <Workflow size={15} /> : <ExternalLink size={15} />}
