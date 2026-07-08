@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Hid pull request review actions when the current GitHub user authored the pull request.
+
 ## [0.0.5]
 
 

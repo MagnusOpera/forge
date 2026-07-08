@@ -383,8 +383,24 @@ async function getAuthStatus(): Promise<AuthStatus> {
 
   return {
     configured,
-    encryptionAvailable: safeStorage.isEncryptionAvailable()
+    encryptionAvailable: safeStorage.isEncryptionAvailable(),
+    viewerLogin: await getViewerLogin(configured)
   };
+}
+
+async function getViewerLogin(configured: boolean): Promise<string | null> {
+  if (!configured || !safeStorage.isEncryptionAvailable()) {
+    return null;
+  }
+
+  try {
+    const { octokit } = await getClients();
+    const { data } = await octokit.users.getAuthenticated();
+    return data.login ?? null;
+  } catch (error) {
+    console.warn("Unable to resolve authenticated GitHub user", error);
+    return null;
+  }
 }
 
 async function getClients(): Promise<{ octokit: Octokit; gql: GraphqlClient }> {

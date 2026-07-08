@@ -41,7 +41,7 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import {
-  canSubmitPullRequestReview,
+  canSubmitPullRequestReviewForPullRequest,
   formatDuration,
   isLiveStatus,
   pullRequestTabForState,
@@ -162,7 +162,7 @@ function ipcUnavailable<T>(): Promise<T> {
 
 const browserApi: GithubFocusApi = {
   platform: "browser",
-  getAuthStatus: async () => ({ configured: false, encryptionAvailable: false }),
+  getAuthStatus: async () => ({ configured: false, encryptionAvailable: false, viewerLogin: null }),
   saveToken: () => ipcUnavailable(),
   clearToken: () => ipcUnavailable(),
   getRepositories: () => ipcUnavailable(),
@@ -864,7 +864,11 @@ export function App() {
 
   const submitPullRequestReview = useCallback(
     async (pr: PullRequestSummary, event: PullRequestReviewEvent) => {
-      if (!selectedRepo || !canSubmitPullRequestReview(selectedRepo)) {
+      if (!selectedRepo) {
+        return;
+      }
+      if (!canSubmitPullRequestReviewForPullRequest(selectedRepo, pr, auth?.viewerLogin)) {
+        flash("Cannot review this pull request with the current account.");
         return;
       }
 
@@ -909,7 +913,7 @@ export function App() {
         setReviewSubmitting(false);
       }
     },
-    [flash, loadProject, selectedRepo]
+    [auth?.viewerLogin, flash, loadProject, selectedRepo]
   );
 
   const selectRun = useCallback(
@@ -2369,7 +2373,10 @@ function ContentPane(props: {
 }) {
   const reviewPr = props.selection.kind === "pr" ? props.prDetail ?? props.selection.pr : null;
   const showReviewActions =
-    props.repo && reviewPr && canSubmitPullRequestReview(props.repo) && reviewPr.state === "OPEN";
+    props.repo &&
+    reviewPr &&
+    reviewPr.state === "OPEN" &&
+    canSubmitPullRequestReviewForPullRequest(props.repo, reviewPr, props.auth?.viewerLogin);
 
   return (
     <main className="content-pane" tabIndex={0}>

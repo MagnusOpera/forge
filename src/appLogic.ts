@@ -50,6 +50,21 @@ export function canSubmitPullRequestReview(repo: RepoSummary): boolean {
   return ["ADMIN", "MAINTAIN", "WRITE"].includes(repo.viewerPermission ?? "");
 }
 
+export function canSubmitPullRequestReviewForPullRequest(
+  repo: RepoSummary,
+  pr: PullRequestSummary,
+  viewerLogin?: string | null
+): boolean {
+  if (!canSubmitPullRequestReview(repo) || !viewerLogin) {
+    return false;
+  }
+  if (!pr.author?.login) {
+    return true;
+  }
+
+  return pr.author.login.toLowerCase() !== viewerLogin.toLowerCase();
+}
+
 export function isLiveStatus(status?: string | null): boolean {
   return ["queued", "waiting", "pending", "requested", "in_progress"].includes((status ?? "").toLowerCase());
 }

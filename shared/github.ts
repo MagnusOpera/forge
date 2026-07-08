@@ -14,6 +14,7 @@ export interface CacheRequestOptions {
 export interface AuthStatus {
   configured: boolean;
   encryptionAvailable: boolean;
+  viewerLogin: string | null;
 }
 
 export interface RepoRef {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PullRequestSummary, RepoSummary } from "../shared/github";
 import {
   canSubmitPullRequestReview,
+  canSubmitPullRequestReviewForPullRequest,
   formatDuration,
   isLiveStatus,
   pullRequestTabForState,
@@ -34,6 +35,17 @@ describe("appLogic", () => {
     expect(canSubmitPullRequestReview({ viewerPermission: "WRITE" } as RepoSummary)).toBe(true);
     expect(canSubmitPullRequestReview({ viewerPermission: "READ" } as RepoSummary)).toBe(false);
     expect(canSubmitPullRequestReview({ viewerPermission: null } as RepoSummary)).toBe(false);
+  });
+
+  it("prevents review actions on pull requests authored by the viewer", () => {
+    const repo = { viewerPermission: "WRITE" } as RepoSummary;
+    const pr = { author: { login: "octocat" } } as PullRequestSummary;
+
+    expect(canSubmitPullRequestReviewForPullRequest(repo, pr, "hubot")).toBe(true);
+    expect(canSubmitPullRequestReviewForPullRequest(repo, pr, "Octocat")).toBe(false);
+    expect(canSubmitPullRequestReviewForPullRequest(repo, pr, null)).toBe(false);
+    expect(canSubmitPullRequestReviewForPullRequest(repo, { author: null } as PullRequestSummary, "hubot")).toBe(true);
+    expect(canSubmitPullRequestReviewForPullRequest({ viewerPermission: "READ" } as RepoSummary, pr, "hubot")).toBe(false);
   });
 
   it("maps status and conclusion values to UI tones", () => {
