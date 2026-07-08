@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -43,6 +44,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import {
   canSubmitPullRequestReviewForPullRequest,
+  canUpdatePullRequestDraftState,
   canUpdatePullRequestLabels,
   canUpdatePullRequestTitle,
   formatDuration,
@@ -198,6 +200,7 @@ const browserApi: GithubFocusApi = {
   submitPullRequestReview: () => ipcUnavailable(),
   addPullRequestComment: () => ipcUnavailable(),
   updatePullRequestTitle: () => ipcUnavailable(),
+  updatePullRequestDraftState: () => ipcUnavailable(),
   addPullRequestLabel: () => ipcUnavailable(),
   removePullRequestLabel: () => ipcUnavailable(),
   openInGitHub: () => ipcUnavailable(),
@@ -1139,6 +1142,35 @@ export function App() {
     [auth?.viewerLogin, flash, refreshPullRequest, selectedRepo]
   );
 
+  const updatePullRequestDraftState = useCallback(
+    async (pr: PullRequestSummary, draft: boolean): Promise<boolean> => {
+      if (!selectedRepo || !canUpdatePullRequestDraftState(selectedRepo, pr, auth?.viewerLogin)) {
+        return false;
+      }
+      if (draft === pr.isDraft) {
+        return true;
+      }
+
+      setPrActionSubmitting(true);
+      try {
+        await api.updatePullRequestDraftState({
+          repo: selectedRepo,
+          pullNumber: pr.number,
+          pullRequestId: pr.id,
+          draft
+        });
+        await refreshPullRequest(selectedRepo, pr.number);
+        return true;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to update pull request state.");
+        return false;
+      } finally {
+        setPrActionSubmitting(false);
+      }
+    },
+    [auth?.viewerLogin, flash, refreshPullRequest, selectedRepo]
+  );
+
   const addPullRequestLabel = useCallback(
     async (pr: PullRequestSummary, labelNameValue: string): Promise<boolean> => {
       if (!selectedRepo || !canUpdatePullRequestLabels(selectedRepo)) {
@@ -1816,6 +1848,7 @@ export function App() {
         onSubmitPullRequestReview={submitPullRequestReview}
         onAddPullRequestComment={addPullRequestComment}
         onUpdatePullRequestTitle={updatePullRequestTitle}
+        onUpdatePullRequestDraftState={updatePullRequestDraftState}
         onAddPullRequestLabel={addPullRequestLabel}
         onRemovePullRequestLabel={removePullRequestLabel}
         onSelectRun={selectRun}
@@ -2666,6 +2699,7 @@ function ContentPane(props: {
   onSubmitPullRequestReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
   onAddPullRequestComment(pr: PullRequestSummary, body: string): Promise<boolean>;
   onUpdatePullRequestTitle(pr: PullRequestSummary, title: string): Promise<boolean>;
+  onUpdatePullRequestDraftState(pr: PullRequestSummary, draft: boolean): Promise<boolean>;
   onAddPullRequestLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
   onRemovePullRequestLabel(pr: PullRequestSummary, labelName: string): Promise<boolean>;
   onSelectRun(run: WorkflowRunSummary): void;
@@ -2674,6 +2708,8 @@ function ContentPane(props: {
   const reviewPr = props.selection.kind === "pr" ? props.prDetail ?? props.selection.pr : null;
   const showTitleAction =
     props.repo && reviewPr && canUpdatePullRequestTitle(props.repo, reviewPr, props.auth?.viewerLogin);
+  const showDraftAction =
+    props.repo && reviewPr && canUpdatePullRequestDraftState(props.repo, reviewPr, props.auth?.viewerLogin);
   const showLabelActions = props.repo && canUpdatePullRequestLabels(props.repo);
   const showReviewActions =
     props.repo &&
@@ -2684,6 +2720,13 @@ function ContentPane(props: {
     props.prDetail && reviewPr
       ? latestViewerPullRequestReviewEvent(props.prDetail.reviews, props.auth?.viewerLogin)
       : null;
+  const toggleDraftState = useCallback(() => {
+    if (!reviewPr || props.prActionSubmitting) {
+      return;
+    }
+
+    void props.onUpdatePullRequestDraftState(reviewPr, !reviewPr.isDraft);
+  }, [props.onUpdatePullRequestDraftState, props.prActionSubmitting, reviewPr]);
 
   return (
     <main className="content-pane" tabIndex={0}>
@@ -2709,6 +2752,13 @@ function ContentPane(props: {
           </div>
           <div className="content-title">
             <ContentTitle selection={props.selection} repo={props.repo} />
+            {showDraftAction && reviewPr && (
+              <PullRequestDraftToggle
+                disabled={props.prActionSubmitting}
+                isDraft={reviewPr.isDraft}
+                onToggle={toggleDraftState}
+              />
+            )}
             {showReviewActions && (
               <PullRequestReviewActions
                 disabled={props.reviewSubmitting}
@@ -2840,6 +2890,29 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
     return <span>Run {props.selection.run.id}</span>;
   }
   return <span>{props.selection.workflow.name}</span>;
+}
+
+function PullRequestDraftToggle(props: {
+  disabled: boolean;
+  isDraft: boolean;
+  onToggle(): void;
+}) {
+  const label = props.isDraft
+    ? "Draft pull request. Mark ready for review"
+    : "Ready pull request. Convert to draft";
+
+  return (
+    <button
+      type="button"
+      className="review-action-button titlebar-state-action"
+      title={label}
+      aria-label={label}
+      disabled={props.disabled}
+      onClick={props.onToggle}
+    >
+      {props.isDraft ? <Pencil size={16} /> : <Check size={18} />}
+    </button>
+  );
 }
 
 function PullRequestReviewActions(props: {

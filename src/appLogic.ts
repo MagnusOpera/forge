@@ -123,6 +123,17 @@ export function canUpdatePullRequestTitle(
   return canSubmitPullRequestReview(repo) || isPullRequestAuthor(pr, viewerLogin);
 }
 
+export function canUpdatePullRequestDraftState(
+  repo: RepoSummary,
+  pr: PullRequestSummary,
+  viewerLogin?: string | null
+): boolean {
+  if (pr.state !== "OPEN") {
+    return false;
+  }
+  return canUpdatePullRequestTitle(repo, pr, viewerLogin);
+}
+
 function reviewEventForState(state?: string | null): PullRequestReviewEvent | null {
   if (state === "APPROVED") {
     return "APPROVE";

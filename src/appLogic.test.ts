@@ -4,6 +4,7 @@ import {
   canSubmitPullRequestReview,
   canSubmitPullRequestReviewForPullRequest,
   canUpdatePullRequestLabels,
+  canUpdatePullRequestDraftState,
   canUpdatePullRequestTitle,
   formatDuration,
   isPullRequestAuthor,
@@ -62,6 +63,15 @@ describe("appLogic", () => {
     expect(canUpdatePullRequestTitle({ viewerPermission: "READ" } as RepoSummary, pr, "Octocat")).toBe(true);
     expect(canUpdatePullRequestTitle({ viewerPermission: "READ" } as RepoSummary, pr, "hubot")).toBe(false);
     expect(canUpdatePullRequestTitle({ viewerPermission: null } as RepoSummary, pr, null)).toBe(false);
+  });
+
+  it("allows draft state changes on open pull requests for write users or the author", () => {
+    const pr = { author: { login: "octocat" }, state: "OPEN" } as PullRequestSummary;
+
+    expect(canUpdatePullRequestDraftState({ viewerPermission: "WRITE" } as RepoSummary, pr, "hubot")).toBe(true);
+    expect(canUpdatePullRequestDraftState({ viewerPermission: "READ" } as RepoSummary, pr, "Octocat")).toBe(true);
+    expect(canUpdatePullRequestDraftState({ viewerPermission: "READ" } as RepoSummary, pr, "hubot")).toBe(false);
+    expect(canUpdatePullRequestDraftState({ viewerPermission: "WRITE" } as RepoSummary, { ...pr, state: "CLOSED" }, "hubot")).toBe(false);
   });
 
   it("allows pull request label edits for triage and write users", () => {

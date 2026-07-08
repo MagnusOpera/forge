@@ -278,6 +278,13 @@ export interface UpdatePullRequestTitlePayload {
   title: string;
 }
 
+export interface UpdatePullRequestDraftStatePayload {
+  repo: RepoRef;
+  pullNumber: number;
+  pullRequestId: string;
+  draft: boolean;
+}
+
 export interface PullRequestLabelPayload {
   repo: RepoRef;
   pullNumber: number;
@@ -305,6 +312,7 @@ export interface GithubFocusApi {
   submitPullRequestReview(payload: SubmitPullRequestReviewPayload): Promise<void>;
   addPullRequestComment(payload: AddPullRequestCommentPayload): Promise<void>;
   updatePullRequestTitle(payload: UpdatePullRequestTitlePayload): Promise<void>;
+  updatePullRequestDraftState(payload: UpdatePullRequestDraftStatePayload): Promise<void>;
   addPullRequestLabel(payload: PullRequestLabelPayload): Promise<void>;
   removePullRequestLabel(payload: PullRequestLabelPayload): Promise<void>;
   openInGitHub(url: string): Promise<void>;

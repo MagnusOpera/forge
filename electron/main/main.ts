@@ -28,6 +28,7 @@ import type {
   RepoSummary,
   SubmitPullRequestReviewPayload,
   TimelineComment,
+  UpdatePullRequestDraftStatePayload,
   UpdatePullRequestTitlePayload,
   WorkflowJobLogDetail,
   WorkflowJobSummary,
@@ -1649,6 +1650,38 @@ async function updatePullRequestTitle(payload: UpdatePullRequestTitlePayload): P
   ]);
 }
 
+async function updatePullRequestDraftState(payload: UpdatePullRequestDraftStatePayload): Promise<void> {
+  const repo = ensureRepo(payload.repo);
+  const pullRequestId = payload.pullRequestId?.trim();
+  if (!pullRequestId) {
+    throw new Error("Pull request id is required.");
+  }
+
+  const { gql } = await getClients();
+  const mutation = payload.draft
+    ? `
+      mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
+        convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
+          pullRequest { id isDraft }
+        }
+      }
+    `
+    : `
+      mutation MarkPullRequestReadyForReview($pullRequestId: ID!) {
+        markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {
+          pullRequest { id isDraft }
+        }
+      }
+    `;
+
+  await gql(mutation, { pullRequestId });
+
+  await Promise.all([
+    invalidateCacheKey(pullRequestsCacheKey(repo)),
+    invalidateCacheKey(pullRequestCacheKey(repo, payload.pullNumber))
+  ]);
+}
+
 function ensureLabelName(payload: PullRequestLabelPayload): string {
   const labelName = payload.labelName?.trim();
   if (!labelName) {
@@ -1801,6 +1834,9 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:update-pull-request-title", (_event, payload: UpdatePullRequestTitlePayload) =>
     updatePullRequestTitle(payload)
+  );
+  ipcMain.handle("github:update-pull-request-draft-state", (_event, payload: UpdatePullRequestDraftStatePayload) =>
+    updatePullRequestDraftState(payload)
   );
   ipcMain.handle("github:add-pull-request-label", (_event, payload: PullRequestLabelPayload) =>
     addPullRequestLabel(payload)

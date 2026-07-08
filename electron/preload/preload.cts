@@ -7,6 +7,7 @@ import type {
   PullRequestLabelPayload,
   RepoRef,
   SubmitPullRequestReviewPayload,
+  UpdatePullRequestDraftStatePayload,
   UpdatePullRequestTitlePayload
 } from "../../shared/github.js";
 
@@ -44,6 +45,8 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:add-pull-request-comment", payload),
   updatePullRequestTitle: (payload: UpdatePullRequestTitlePayload) =>
     ipcRenderer.invoke("github:update-pull-request-title", payload),
+  updatePullRequestDraftState: (payload: UpdatePullRequestDraftStatePayload) =>
+    ipcRenderer.invoke("github:update-pull-request-draft-state", payload),
   addPullRequestLabel: (payload: PullRequestLabelPayload) =>
     ipcRenderer.invoke("github:add-pull-request-label", payload),
   removePullRequestLabel: (payload: PullRequestLabelPayload) =>

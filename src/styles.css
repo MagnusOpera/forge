@@ -1575,6 +1575,31 @@ button.pr-label-chip:disabled {
   color: var(--icon);
 }
 
+.titlebar-state-action {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 0;
+  color: var(--text-strong);
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-state-action::after {
+  position: absolute;
+  right: 5px;
+  bottom: 3px;
+  left: 5px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+}
+
+.review-action-button.titlebar-state-action:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-hover);
+}
+
 .review-action-button.active {
   border-color: var(--accent-border);
   background: var(--accent-muted-bg);
