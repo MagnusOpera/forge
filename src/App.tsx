@@ -44,6 +44,7 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import {
+  addPullRequestLabelOptimistically,
   canSubmitPullRequestReviewForPullRequest,
   canUpdatePullRequestDraftState,
   canUpdatePullRequestLabels,
@@ -53,6 +54,7 @@ import {
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
+  removePullRequestLabelOptimistically,
   reviewDecisionForReviewEvent,
   shortSha,
   statusTone,
@@ -500,6 +502,13 @@ function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
 }
 
+function blurFocusedElementIn(container: HTMLElement): void {
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLElement && container.contains(activeElement)) {
+    activeElement.blur();
+  }
+}
+
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false;
@@ -591,7 +600,6 @@ export function App() {
   const [runDetail, setRunDetail] = useState<WorkflowRunDetail | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [prActionSubmitting, setPrActionSubmitting] = useState(false);
   const [prTab, setPrTab] = useState("Description");
   const [runTab, setRunTab] = useState("Summary");
@@ -639,6 +647,8 @@ export function App() {
   const [layoutAnimating, setLayoutAnimating] = useState(false);
   const lastGPress = useRef(0);
   const layoutAnimationTimer = useRef<number | null>(null);
+  const optimisticMutationSequence = useRef(0);
+  const optimisticMutationIds = useRef(new Map<string, number>());
   const restoringNavigation = useRef(false);
 
   const loadedRepos = useMemo(
@@ -740,6 +750,24 @@ export function App() {
   const flash = useCallback((message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(null), 2600);
+  }, []);
+
+  const beginOptimisticMutation = useCallback((key: string): number => {
+    const id = optimisticMutationSequence.current + 1;
+    optimisticMutationSequence.current = id;
+    optimisticMutationIds.current.set(key, id);
+    return id;
+  }, []);
+
+  const isCurrentOptimisticMutation = useCallback(
+    (key: string, id: number): boolean => optimisticMutationIds.current.get(key) === id,
+    []
+  );
+
+  const finishOptimisticMutation = useCallback((key: string, id: number): void => {
+    if (optimisticMutationIds.current.get(key) === id) {
+      optimisticMutationIds.current.delete(key);
+    }
   }, []);
 
   const copyToClipboard = useCallback(
@@ -1050,7 +1078,7 @@ export function App() {
   }, [loadProject, selectedRepo, selection]);
 
   const submitPullRequestReview = useCallback(
-    async (pr: PullRequestSummary, event: PullRequestReviewEvent) => {
+    (pr: PullRequestSummary, event: PullRequestReviewEvent) => {
       if (!selectedRepo) {
         return;
       }
@@ -1071,16 +1099,13 @@ export function App() {
           flash("Request changes needs a message.");
           return;
         }
-      } else {
-        const confirmed = await api.confirmPullRequestApproval(pr.number);
-        if (!confirmed) {
-          return;
-        }
       }
 
       const previousReviewDecision = pr.reviewDecision;
       const previousReviews = prDetail?.number === pr.number ? prDetail.reviews : null;
       const reviewDecision = reviewDecisionForReviewEvent(event);
+      const mutationKey = `pr:${pr.number}:review`;
+      const mutationId = beginOptimisticMutation(mutationKey);
       const optimisticReview: PullRequestReview | null = viewerLogin
         ? {
             id: `optimistic-review:${pr.id}:${event}:${Date.now()}`,
@@ -1100,30 +1125,48 @@ export function App() {
         );
       }
 
-      setReviewSubmitting(true);
-      try {
-        await api.submitPullRequestReview({
+      void api
+        .submitPullRequestReview({
           repo: selectedRepo,
           pullNumber: pr.number,
           event,
           body
+        })
+        .then(() => {
+          if (!isCurrentOptimisticMutation(mutationKey, mutationId)) {
+            return;
+          }
+          void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
+            flash(error instanceof Error ? error.message : "Review submitted, but refresh failed.");
+          });
+        })
+        .catch((error) => {
+          if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
+            patchPullRequestOptimistically(pr.number, { reviewDecision: previousReviewDecision });
+            if (previousReviews) {
+              setPrDetail((current) =>
+                current?.number === pr.number ? { ...current, reviews: previousReviews } : current
+              );
+            }
+          }
+          flash(error instanceof Error ? error.message : "Unable to submit review.");
+        })
+        .finally(() => {
+          finishOptimisticMutation(mutationKey, mutationId);
         });
-        void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
-          flash(error instanceof Error ? error.message : "Review submitted, but refresh failed.");
-        });
-      } catch (error) {
-        patchPullRequestOptimistically(pr.number, { reviewDecision: previousReviewDecision });
-        if (previousReviews) {
-          setPrDetail((current) =>
-            current?.number === pr.number ? { ...current, reviews: previousReviews } : current
-          );
-        }
-        flash(error instanceof Error ? error.message : "Unable to submit review.");
-      } finally {
-        setReviewSubmitting(false);
-      }
     },
-    [auth?.viewerLogin, flash, patchPullRequestOptimistically, prDetail?.number, prDetail?.reviews, refreshPullRequest, selectedRepo]
+    [
+      auth?.viewerLogin,
+      beginOptimisticMutation,
+      finishOptimisticMutation,
+      flash,
+      isCurrentOptimisticMutation,
+      patchPullRequestOptimistically,
+      prDetail?.number,
+      prDetail?.reviews,
+      refreshPullRequest,
+      selectedRepo
+    ]
   );
 
   const addPullRequestComment = useCallback(
@@ -1202,28 +1245,45 @@ export function App() {
       }
 
       const previousIsDraft = pr.isDraft;
+      const mutationKey = `pr:${pr.number}:draft`;
+      const mutationId = beginOptimisticMutation(mutationKey);
       patchPullRequestOptimistically(pr.number, { isDraft: draft });
-      setPrActionSubmitting(true);
-      try {
-        await api.updatePullRequestDraftState({
+      void api
+        .updatePullRequestDraftState({
           repo: selectedRepo,
           pullNumber: pr.number,
           pullRequestId: pr.id,
           draft
+        })
+        .then(() => {
+          if (!isCurrentOptimisticMutation(mutationKey, mutationId)) {
+            return;
+          }
+          void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
+            flash(error instanceof Error ? error.message : "Pull request state updated, but refresh failed.");
+          });
+        })
+        .catch((error) => {
+          if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
+            patchPullRequestOptimistically(pr.number, { isDraft: previousIsDraft });
+          }
+          flash(error instanceof Error ? error.message : "Unable to update pull request state.");
+        })
+        .finally(() => {
+          finishOptimisticMutation(mutationKey, mutationId);
         });
-        void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
-          flash(error instanceof Error ? error.message : "Pull request state updated, but refresh failed.");
-        });
-        return true;
-      } catch (error) {
-        patchPullRequestOptimistically(pr.number, { isDraft: previousIsDraft });
-        flash(error instanceof Error ? error.message : "Unable to update pull request state.");
-        return false;
-      } finally {
-        setPrActionSubmitting(false);
-      }
+      return true;
     },
-    [auth?.viewerLogin, flash, patchPullRequestOptimistically, refreshPullRequest, selectedRepo]
+    [
+      auth?.viewerLogin,
+      beginOptimisticMutation,
+      finishOptimisticMutation,
+      flash,
+      isCurrentOptimisticMutation,
+      patchPullRequestOptimistically,
+      refreshPullRequest,
+      selectedRepo
+    ]
   );
 
   const addPullRequestLabel = useCallback(
@@ -1238,23 +1298,50 @@ export function App() {
         return false;
       }
 
-      setPrActionSubmitting(true);
-      try {
-        await api.addPullRequestLabel({
+      const previousLabels = pr.labels;
+      const nextLabels = addPullRequestLabelOptimistically(previousLabels, repoLabels, labelName);
+      if (nextLabels === previousLabels) {
+        return true;
+      }
+
+      const mutationKey = `pr:${pr.number}:label:${labelName.toLowerCase()}`;
+      const mutationId = beginOptimisticMutation(mutationKey);
+      patchPullRequestOptimistically(pr.number, { labels: nextLabels });
+      void api
+        .addPullRequestLabel({
           repo: selectedRepo,
           pullNumber: pr.number,
           labelName
+        })
+        .then(() => {
+          if (!isCurrentOptimisticMutation(mutationKey, mutationId)) {
+            return;
+          }
+          void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
+            flash(error instanceof Error ? error.message : "Label added, but refresh failed.");
+          });
+        })
+        .catch((error) => {
+          if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
+            patchPullRequestOptimistically(pr.number, { labels: previousLabels });
+          }
+          flash(error instanceof Error ? error.message : "Unable to add label.");
+        })
+        .finally(() => {
+          finishOptimisticMutation(mutationKey, mutationId);
         });
-        await refreshPullRequest(selectedRepo, pr.number);
-        return true;
-      } catch (error) {
-        flash(error instanceof Error ? error.message : "Unable to add label.");
-        return false;
-      } finally {
-        setPrActionSubmitting(false);
-      }
+      return true;
     },
-    [flash, refreshPullRequest, selectedRepo]
+    [
+      beginOptimisticMutation,
+      finishOptimisticMutation,
+      flash,
+      isCurrentOptimisticMutation,
+      patchPullRequestOptimistically,
+      refreshPullRequest,
+      repoLabels,
+      selectedRepo
+    ]
   );
 
   const removePullRequestLabel = useCallback(
@@ -1269,23 +1356,49 @@ export function App() {
         return false;
       }
 
-      setPrActionSubmitting(true);
-      try {
-        await api.removePullRequestLabel({
+      const previousLabels = pr.labels;
+      const nextLabels = removePullRequestLabelOptimistically(previousLabels, labelName);
+      if (nextLabels === previousLabels) {
+        return true;
+      }
+
+      const mutationKey = `pr:${pr.number}:label:${labelName.toLowerCase()}`;
+      const mutationId = beginOptimisticMutation(mutationKey);
+      patchPullRequestOptimistically(pr.number, { labels: nextLabels });
+      void api
+        .removePullRequestLabel({
           repo: selectedRepo,
           pullNumber: pr.number,
           labelName
+        })
+        .then(() => {
+          if (!isCurrentOptimisticMutation(mutationKey, mutationId)) {
+            return;
+          }
+          void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
+            flash(error instanceof Error ? error.message : "Label removed, but refresh failed.");
+          });
+        })
+        .catch((error) => {
+          if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
+            patchPullRequestOptimistically(pr.number, { labels: previousLabels });
+          }
+          flash(error instanceof Error ? error.message : "Unable to remove label.");
+        })
+        .finally(() => {
+          finishOptimisticMutation(mutationKey, mutationId);
         });
-        await refreshPullRequest(selectedRepo, pr.number);
-        return true;
-      } catch (error) {
-        flash(error instanceof Error ? error.message : "Unable to remove label.");
-        return false;
-      } finally {
-        setPrActionSubmitting(false);
-      }
+      return true;
     },
-    [flash, refreshPullRequest, selectedRepo]
+    [
+      beginOptimisticMutation,
+      finishOptimisticMutation,
+      flash,
+      isCurrentOptimisticMutation,
+      patchPullRequestOptimistically,
+      refreshPullRequest,
+      selectedRepo
+    ]
   );
 
   const selectRun = useCallback(
@@ -1886,7 +1999,6 @@ export function App() {
         onRunTabChange={setRunTab}
         loading={contentLoading}
         error={contentError}
-        reviewSubmitting={reviewSubmitting}
         prActionSubmitting={prActionSubmitting}
         theme={activeTheme}
         canNavigateBack={canNavigateBack}
@@ -2731,7 +2843,6 @@ function ContentPane(props: {
   repoLabels: LabelSummary[];
   loading: boolean;
   error: string | null;
-  reviewSubmitting: boolean;
   prActionSubmitting: boolean;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
@@ -2777,7 +2888,7 @@ function ContentPane(props: {
       ? latestViewerPullRequestReviewEvent(props.prDetail.reviews, props.auth?.viewerLogin)
       : null;
   const setDraftState = useCallback((draft: boolean) => {
-    if (!reviewPr || props.prActionSubmitting) {
+    if (!reviewPr) {
       return;
     }
     if (draft === reviewPr.isDraft) {
@@ -2785,7 +2896,7 @@ function ContentPane(props: {
     }
 
     void props.onUpdatePullRequestDraftState(reviewPr, draft);
-  }, [props.onUpdatePullRequestDraftState, props.prActionSubmitting, reviewPr]);
+  }, [props.onUpdatePullRequestDraftState, reviewPr]);
 
   return (
     <main className="content-pane" tabIndex={0}>
@@ -2821,14 +2932,14 @@ function ContentPane(props: {
             </button>
             {showDraftAction && reviewPr && (
               <PullRequestDraftToggle
-                disabled={props.prActionSubmitting}
+                disabled={false}
                 isDraft={reviewPr.isDraft}
                 onChange={setDraftState}
               />
             )}
             {showReviewActions && (
               <PullRequestReviewActions
-                disabled={props.reviewSubmitting}
+                disabled={false}
                 pr={reviewPr}
                 activeEvent={activeReviewEvent}
                 onSubmitReview={props.onSubmitPullRequestReview}
@@ -2962,7 +3073,11 @@ function PullRequestDraftToggle(props: {
   const label = props.isDraft ? "Draft pull request. Change state" : "Ready pull request. Change state";
 
   return (
-    <div className="titlebar-picker pr-state-actions" aria-label="Pull request draft state selector">
+    <div
+      className="titlebar-picker pr-state-actions"
+      aria-label="Pull request draft state selector"
+      onPointerLeave={(event) => blurFocusedElementIn(event.currentTarget)}
+    >
       <button
         type="button"
         className="review-action-button titlebar-state-action active"
@@ -3006,6 +3121,15 @@ function PullRequestReviewActions(props: {
   onSubmitReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
 }) {
   const currentEvent: PullRequestReviewEvent = props.activeEvent ?? "APPROVE";
+  const submitReview = useCallback(
+    (event: PullRequestReviewEvent) => {
+      if (props.activeEvent === event) {
+        return;
+      }
+      props.onSubmitReview(props.pr, event);
+    },
+    [props.activeEvent, props.onSubmitReview, props.pr]
+  );
   const currentLabel =
     props.activeEvent === "REQUEST_CHANGES"
       ? "Changes requested. Change review action"
@@ -3014,7 +3138,11 @@ function PullRequestReviewActions(props: {
         : "Choose review action";
 
   return (
-    <div className="titlebar-picker pr-review-actions" aria-label="Pull request review action selector">
+    <div
+      className="titlebar-picker pr-review-actions"
+      aria-label="Pull request review action selector"
+      onPointerLeave={(event) => blurFocusedElementIn(event.currentTarget)}
+    >
       <button
         type="button"
         className={cx("review-action-button", "review-state-button", props.activeEvent && "active")}
@@ -3022,7 +3150,7 @@ function PullRequestReviewActions(props: {
         aria-haspopup="true"
         aria-pressed={Boolean(props.activeEvent)}
         disabled={props.disabled}
-        onClick={() => props.onSubmitReview(props.pr, currentEvent)}
+        onClick={() => submitReview(currentEvent)}
       >
         {currentEvent === "REQUEST_CHANGES" ? <ThumbsDown size={16} /> : <ThumbsUp size={16} />}
       </button>
@@ -3033,7 +3161,7 @@ function PullRequestReviewActions(props: {
           aria-label="Approve pull request"
           aria-pressed={props.activeEvent === "APPROVE"}
           disabled={props.disabled}
-          onClick={() => props.onSubmitReview(props.pr, "APPROVE")}
+          onClick={() => submitReview("APPROVE")}
         >
           <ThumbsUp size={15} />
         </button>
@@ -3043,7 +3171,7 @@ function PullRequestReviewActions(props: {
           aria-label="Request changes"
           aria-pressed={props.activeEvent === "REQUEST_CHANGES"}
           disabled={props.disabled}
-          onClick={() => props.onSubmitReview(props.pr, "REQUEST_CHANGES")}
+          onClick={() => submitReview("REQUEST_CHANGES")}
         >
           <ThumbsDown size={15} />
         </button>
@@ -3301,24 +3429,20 @@ function PullRequestContent(props: {
 
   const addLabel = useCallback(
     (labelName: string) => {
-      if (!labelName || props.prActionSubmitting) {
+      if (!labelName) {
         return;
       }
 
       void props.onAddLabel(pr, labelName);
     },
-    [pr, props.onAddLabel, props.prActionSubmitting]
+    [pr, props.onAddLabel]
   );
 
   const removeLabel = useCallback(
     (labelName: string) => {
-      if (props.prActionSubmitting) {
-        return;
-      }
-
       void props.onRemoveLabel(pr, labelName);
     },
-    [pr, props.onRemoveLabel, props.prActionSubmitting]
+    [pr, props.onRemoveLabel]
   );
 
   return (
@@ -3424,7 +3548,6 @@ function PullRequestContent(props: {
                       style={{ borderColor: `#${label.color}` }}
                       key={label.id}
                       aria-label={`Remove ${label.name} label`}
-                      disabled={props.prActionSubmitting}
                       onClick={() => removeLabel(label.name)}
                     >
                       <span>{label.name}</span>
@@ -3438,7 +3561,7 @@ function PullRequestContent(props: {
                 )}
                 {props.canUpdateLabels && (
                   <PullRequestLabelPicker
-                    disabled={props.prActionSubmitting || availableLabels.length === 0}
+                    disabled={availableLabels.length === 0}
                     labels={availableLabels}
                     onSelect={addLabel}
                   />

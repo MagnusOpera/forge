@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { PullRequestReview, PullRequestSummary, RepoSummary } from "../shared/github";
+import type { LabelSummary, PullRequestReview, PullRequestSummary, RepoSummary } from "../shared/github";
 import {
+  addPullRequestLabelOptimistically,
   canSubmitPullRequestReview,
   canSubmitPullRequestReviewForPullRequest,
   canUpdatePullRequestLabels,
@@ -12,6 +13,7 @@ import {
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
+  removePullRequestLabelOptimistically,
   reviewDecisionForReviewEvent,
   shortSha,
   statusTone
@@ -87,6 +89,31 @@ describe("appLogic", () => {
     expect(canUpdatePullRequestLabels({ viewerPermission: "TRIAGE" } as RepoSummary)).toBe(true);
     expect(canUpdatePullRequestLabels({ viewerPermission: "READ" } as RepoSummary)).toBe(false);
     expect(canUpdatePullRequestLabels({ viewerPermission: null } as RepoSummary)).toBe(false);
+  });
+
+  it("adds pull request labels optimistically from repository labels", () => {
+    const bug = { id: "label-1", name: "bug", color: "d73a4a" } as LabelSummary;
+    const current = [{ id: "label-2", name: "needs review", color: "0366d6" }] as LabelSummary[];
+    const withBug = [...current, bug];
+
+    expect(addPullRequestLabelOptimistically(current, [bug], "Bug")).toEqual([...current, bug]);
+    expect(addPullRequestLabelOptimistically(withBug, [bug], "BUG")).toBe(withBug);
+  });
+
+  it("uses a stable temporary label when repository labels are missing", () => {
+    expect(addPullRequestLabelOptimistically([], [], "release")).toEqual([
+      { id: "optimistic-label:release", name: "release", color: "d0d7de" }
+    ]);
+  });
+
+  it("removes pull request labels optimistically by name", () => {
+    const current = [
+      { id: "label-1", name: "bug", color: "d73a4a" },
+      { id: "label-2", name: "needs review", color: "0366d6" }
+    ] as LabelSummary[];
+
+    expect(removePullRequestLabelOptimistically(current, "BUG")).toEqual([current[1]]);
+    expect(removePullRequestLabelOptimistically(current, "missing")).toBe(current);
   });
 
   it("returns the viewer latest submitted approval or change request", () => {

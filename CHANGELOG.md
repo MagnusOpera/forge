@@ -5,8 +5,8 @@ All notable changes to Forge are documented in this file.
 ## [Unreleased]
 
 - Removed hover tooltips from Forge controls to reduce interface clutter.
-- Made pull request review and draft state actions update optimistically while GitHub syncs.
-- Used the Forge app icon in pull request approval confirmation dialogs.
+- Closed pull request state and review pickers after leaving them with the pointer.
+- Made pull request draft, review, and label actions update immediately with toast rollbacks on failure.
 - Changed pull request draft and ready actions to use the titlebar hover selector.
 - Collapsed pull request review actions into a vertical hover selector with a single current-state icon.
 - Matched selected pull request review actions to the titlebar underline style.

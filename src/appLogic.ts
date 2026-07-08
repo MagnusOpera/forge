@@ -1,4 +1,5 @@
 import type {
+  LabelSummary,
   PullRequestReview,
   PullRequestReviewEvent,
   PullRequestSummary,
@@ -103,6 +104,49 @@ export function canSubmitPullRequestReview(repo: RepoSummary): boolean {
 
 export function canUpdatePullRequestLabels(repo: RepoSummary): boolean {
   return ["ADMIN", "MAINTAIN", "WRITE", "TRIAGE"].includes(repo.viewerPermission ?? "");
+}
+
+function normalizedLabelName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function addPullRequestLabelOptimistically(
+  currentLabels: LabelSummary[],
+  repoLabels: LabelSummary[],
+  labelNameValue: string
+): LabelSummary[] {
+  const labelName = labelNameValue.trim();
+  if (!labelName) {
+    return currentLabels;
+  }
+
+  const normalizedName = normalizedLabelName(labelName);
+  if (currentLabels.some((label) => normalizedLabelName(label.name) === normalizedName)) {
+    return currentLabels;
+  }
+
+  const repoLabel = repoLabels.find((label) => normalizedLabelName(label.name) === normalizedName);
+  return [
+    ...currentLabels,
+    repoLabel ?? {
+      id: `optimistic-label:${normalizedName}`,
+      name: labelName,
+      color: "d0d7de"
+    }
+  ];
+}
+
+export function removePullRequestLabelOptimistically(
+  currentLabels: LabelSummary[],
+  labelNameValue: string
+): LabelSummary[] {
+  const normalizedName = normalizedLabelName(labelNameValue);
+  if (!normalizedName) {
+    return currentLabels;
+  }
+
+  const nextLabels = currentLabels.filter((label) => normalizedLabelName(label.name) !== normalizedName);
+  return nextLabels.length === currentLabels.length ? currentLabels : nextLabels;
 }
 
 export function isPullRequestAuthor(pr: PullRequestSummary, viewerLogin?: string | null): boolean {
