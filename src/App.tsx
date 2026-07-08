@@ -2909,13 +2909,13 @@ function PullRequestDraftToggle(props: {
   return (
     <button
       type="button"
-      className="review-action-button titlebar-state-action"
+      className={cx("review-action-button", "titlebar-state-action", !props.isDraft && "active")}
       title={label}
       aria-label={label}
       disabled={props.disabled}
       onClick={props.onToggle}
     >
-      {props.isDraft ? <Pencil size={16} /> : <Check size={18} />}
+      <Check size={18} />
     </button>
   );
 }

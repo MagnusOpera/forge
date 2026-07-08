@@ -1650,17 +1650,6 @@ button.pr-label-chip:disabled {
   -webkit-app-region: no-drag;
 }
 
-.titlebar-state-action::after {
-  position: absolute;
-  right: 5px;
-  bottom: 3px;
-  left: 5px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--accent);
-  content: "";
-}
-
 .review-action-button.titlebar-state-action:hover:not(:disabled) {
   background: transparent;
   color: var(--text-hover);
