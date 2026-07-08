@@ -1,4 +1,4 @@
-import type { PullRequestSummary, RepoSummary } from "../shared/github";
+import type { PullRequestReview, PullRequestReviewEvent, PullRequestSummary, RepoSummary } from "../shared/github";
 
 export type ProjectPullRequestTab = "open" | "closed";
 export type FavoriteRepoSnapshots = Record<string, RepoSummary>;
@@ -121,6 +121,71 @@ export function canUpdatePullRequestTitle(
   viewerLogin?: string | null
 ): boolean {
   return canSubmitPullRequestReview(repo) || isPullRequestAuthor(pr, viewerLogin);
+}
+
+function reviewEventForState(state?: string | null): PullRequestReviewEvent | null {
+  if (state === "APPROVED") {
+    return "APPROVE";
+  }
+  if (state === "CHANGES_REQUESTED") {
+    return "REQUEST_CHANGES";
+  }
+  return null;
+}
+
+function submittedAtMs(review: PullRequestReview): number | null {
+  const value = review.submittedAt ? Date.parse(review.submittedAt) : Number.NaN;
+  return Number.isNaN(value) ? null : value;
+}
+
+function isNewerReview(
+  left: PullRequestReview,
+  leftIndex: number,
+  right: PullRequestReview,
+  rightIndex: number
+): boolean {
+  const leftSubmittedAt = submittedAtMs(left);
+  const rightSubmittedAt = submittedAtMs(right);
+
+  if (leftSubmittedAt !== null && rightSubmittedAt !== null && leftSubmittedAt !== rightSubmittedAt) {
+    return leftSubmittedAt > rightSubmittedAt;
+  }
+  if (leftSubmittedAt !== null && rightSubmittedAt === null) {
+    return true;
+  }
+  if (leftSubmittedAt === null && rightSubmittedAt !== null) {
+    return false;
+  }
+  return leftIndex > rightIndex;
+}
+
+export function latestViewerPullRequestReviewEvent(
+  reviews: PullRequestReview[],
+  viewerLogin?: string | null
+): PullRequestReviewEvent | null {
+  if (!viewerLogin) {
+    return null;
+  }
+
+  const normalizedViewerLogin = viewerLogin.toLowerCase();
+  let latest: { review: PullRequestReview; index: number; event: PullRequestReviewEvent } | null = null;
+
+  for (const [index, review] of reviews.entries()) {
+    if (review.author?.login?.toLowerCase() !== normalizedViewerLogin) {
+      continue;
+    }
+
+    const event = reviewEventForState(review.state);
+    if (!event) {
+      continue;
+    }
+
+    if (!latest || isNewerReview(review, index, latest.review, latest.index)) {
+      latest = { review, index, event };
+    }
+  }
+
+  return latest?.event ?? null;
 }
 
 export function isLiveStatus(status?: string | null): boolean {

@@ -45,9 +45,10 @@ import {
   canSubmitPullRequestReviewForPullRequest,
   canUpdatePullRequestLabels,
   canUpdatePullRequestTitle,
-  mergeFavoriteRepoSnapshots,
   formatDuration,
   isLiveStatus,
+  latestViewerPullRequestReviewEvent,
+  mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
   shortSha,
   statusTone,
@@ -2679,6 +2680,10 @@ function ContentPane(props: {
     reviewPr &&
     reviewPr.state === "OPEN" &&
     canSubmitPullRequestReviewForPullRequest(props.repo, reviewPr, props.auth?.viewerLogin);
+  const activeReviewEvent =
+    props.prDetail && reviewPr
+      ? latestViewerPullRequestReviewEvent(props.prDetail.reviews, props.auth?.viewerLogin)
+      : null;
 
   return (
     <main className="content-pane" tabIndex={0}>
@@ -2708,6 +2713,7 @@ function ContentPane(props: {
               <PullRequestReviewActions
                 disabled={props.reviewSubmitting}
                 pr={reviewPr}
+                activeEvent={activeReviewEvent}
                 onSubmitReview={props.onSubmitPullRequestReview}
               />
             )}
@@ -2839,15 +2845,17 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
 function PullRequestReviewActions(props: {
   disabled: boolean;
   pr: PullRequestSummary;
+  activeEvent: PullRequestReviewEvent | null;
   onSubmitReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
 }) {
   return (
     <div className="pr-review-actions" aria-label="Pull request review actions">
       <button
         type="button"
-        className="review-action-button approve"
+        className={cx("review-action-button", "approve", props.activeEvent === "APPROVE" && "active")}
         title="Approve"
         aria-label="Approve pull request"
+        aria-pressed={props.activeEvent === "APPROVE"}
         disabled={props.disabled}
         onClick={() => props.onSubmitReview(props.pr, "APPROVE")}
       >
@@ -2855,9 +2863,10 @@ function PullRequestReviewActions(props: {
       </button>
       <button
         type="button"
-        className="review-action-button request"
+        className={cx("review-action-button", "request", props.activeEvent === "REQUEST_CHANGES" && "active")}
         title="Request changes"
         aria-label="Request changes"
+        aria-pressed={props.activeEvent === "REQUEST_CHANGES"}
         disabled={props.disabled}
         onClick={() => props.onSubmitReview(props.pr, "REQUEST_CHANGES")}
       >

@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Highlighted the current pull request review action after approving or requesting changes.
 - Preserved favorite repositories after clearing the stored GitHub token.
 - Validated saved GitHub tokens as classic tokens with the required repo and read:project permissions.
 

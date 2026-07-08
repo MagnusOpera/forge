@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PullRequestSummary, RepoSummary } from "../shared/github";
+import type { PullRequestReview, PullRequestSummary, RepoSummary } from "../shared/github";
 import {
   canSubmitPullRequestReview,
   canSubmitPullRequestReviewForPullRequest,
@@ -8,6 +8,7 @@ import {
   formatDuration,
   isPullRequestAuthor,
   isLiveStatus,
+  latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
   shortSha,
@@ -70,6 +71,54 @@ describe("appLogic", () => {
     expect(canUpdatePullRequestLabels({ viewerPermission: "TRIAGE" } as RepoSummary)).toBe(true);
     expect(canUpdatePullRequestLabels({ viewerPermission: "READ" } as RepoSummary)).toBe(false);
     expect(canUpdatePullRequestLabels({ viewerPermission: null } as RepoSummary)).toBe(false);
+  });
+
+  it("returns the viewer latest submitted approval or change request", () => {
+    const reviews = [
+      {
+        state: "APPROVED",
+        author: { login: "octocat" },
+        submittedAt: "2026-01-01T00:00:00Z"
+      },
+      {
+        state: "CHANGES_REQUESTED",
+        author: { login: "hubot" },
+        submittedAt: "2026-01-02T00:00:00Z"
+      },
+      {
+        state: "CHANGES_REQUESTED",
+        author: { login: "Octocat" },
+        submittedAt: "2026-01-03T00:00:00Z"
+      }
+    ] as PullRequestReview[];
+
+    expect(latestViewerPullRequestReviewEvent(reviews, "octocat")).toBe("REQUEST_CHANGES");
+  });
+
+  it("ignores viewer review comments when finding the active review action", () => {
+    const reviews = [
+      {
+        state: "APPROVED",
+        author: { login: "octocat" },
+        submittedAt: "2026-01-01T00:00:00Z"
+      },
+      {
+        state: "COMMENTED",
+        author: { login: "octocat" },
+        submittedAt: "2026-01-02T00:00:00Z"
+      }
+    ] as PullRequestReview[];
+
+    expect(latestViewerPullRequestReviewEvent(reviews, "octocat")).toBe("APPROVE");
+  });
+
+  it("falls back to review order when submitted timestamps are unavailable", () => {
+    const reviews = [
+      { state: "APPROVED", author: { login: "octocat" } },
+      { state: "CHANGES_REQUESTED", author: { login: "octocat" } }
+    ] as PullRequestReview[];
+
+    expect(latestViewerPullRequestReviewEvent(reviews, "octocat")).toBe("REQUEST_CHANGES");
   });
 
   it("keeps repository snapshots for current favorites only", () => {

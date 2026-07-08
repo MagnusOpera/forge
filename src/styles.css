@@ -1564,6 +1564,7 @@ button.pr-label-chip:disabled {
 }
 
 .review-action-button {
+  position: relative;
   display: inline-grid;
   width: 30px;
   height: 30px;
@@ -1574,9 +1575,32 @@ button.pr-label-chip:disabled {
   color: var(--icon);
 }
 
+.review-action-button.active {
+  border-color: var(--accent-border);
+  background: var(--accent-muted-bg);
+  color: var(--accent-text);
+}
+
+.review-action-button.active::after {
+  position: absolute;
+  right: 7px;
+  bottom: 4px;
+  left: 7px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+}
+
 .review-action-button:hover:not(:disabled) {
   background: var(--hover-bg);
   color: var(--text-hover);
+}
+
+.review-action-button.active:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-muted-bg);
+  color: var(--accent-text);
 }
 
 .review-action-button.approve:hover:not(:disabled) {
@@ -1587,6 +1611,12 @@ button.pr-label-chip:disabled {
 .review-action-button.request:hover:not(:disabled) {
   border-color: var(--bad-border);
   color: var(--bad-text);
+}
+
+.review-action-button.approve.active:hover:not(:disabled),
+.review-action-button.request.active:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
 }
 
 .review-action-button:disabled {
