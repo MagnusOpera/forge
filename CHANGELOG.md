@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Collapsed pull request review actions into a vertical hover selector with a single current-state icon.
 - Matched selected pull request review actions to the titlebar underline style.
 - Moved the content GitHub link next to the third pane title.
 - Added a pull request titlebar action to switch open pull requests between draft and ready.

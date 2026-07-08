@@ -2926,30 +2926,52 @@ function PullRequestReviewActions(props: {
   activeEvent: PullRequestReviewEvent | null;
   onSubmitReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
 }) {
+  const currentEvent: PullRequestReviewEvent = props.activeEvent ?? "APPROVE";
+  const currentLabel =
+    props.activeEvent === "REQUEST_CHANGES"
+      ? "Changes requested. Change review action"
+      : props.activeEvent === "APPROVE"
+        ? "Approved. Change review action"
+        : "Choose review action";
+
   return (
-    <div className="pr-review-actions" aria-label="Pull request review actions">
+    <div className="pr-review-actions" aria-label="Pull request review action selector">
       <button
         type="button"
-        className={cx("review-action-button", "approve", props.activeEvent === "APPROVE" && "active")}
-        title="Approve"
-        aria-label="Approve pull request"
-        aria-pressed={props.activeEvent === "APPROVE"}
+        className={cx("review-action-button", "review-state-button", props.activeEvent && "active")}
+        title={currentLabel}
+        aria-label={currentLabel}
+        aria-haspopup="true"
+        aria-pressed={Boolean(props.activeEvent)}
         disabled={props.disabled}
-        onClick={() => props.onSubmitReview(props.pr, "APPROVE")}
+        onClick={() => props.onSubmitReview(props.pr, currentEvent)}
       >
-        <ThumbsUp size={15} />
+        {currentEvent === "REQUEST_CHANGES" ? <ThumbsDown size={16} /> : <ThumbsUp size={16} />}
       </button>
-      <button
-        type="button"
-        className={cx("review-action-button", "request", props.activeEvent === "REQUEST_CHANGES" && "active")}
-        title="Request changes"
-        aria-label="Request changes"
-        aria-pressed={props.activeEvent === "REQUEST_CHANGES"}
-        disabled={props.disabled}
-        onClick={() => props.onSubmitReview(props.pr, "REQUEST_CHANGES")}
-      >
-        <ThumbsDown size={15} />
-      </button>
+      <div className="review-action-picker" role="group" aria-label="Change pull request review action">
+        <button
+          type="button"
+          className={cx("review-action-button", "approve", props.activeEvent === "APPROVE" && "active")}
+          title="Approve"
+          aria-label="Approve pull request"
+          aria-pressed={props.activeEvent === "APPROVE"}
+          disabled={props.disabled}
+          onClick={() => props.onSubmitReview(props.pr, "APPROVE")}
+        >
+          <ThumbsUp size={15} />
+        </button>
+        <button
+          type="button"
+          className={cx("review-action-button", "request", props.activeEvent === "REQUEST_CHANGES" && "active")}
+          title="Request changes"
+          aria-label="Request changes"
+          aria-pressed={props.activeEvent === "REQUEST_CHANGES"}
+          disabled={props.disabled}
+          onClick={() => props.onSubmitReview(props.pr, "REQUEST_CHANGES")}
+        >
+          <ThumbsDown size={15} />
+        </button>
+      </div>
     </div>
   );
 }
