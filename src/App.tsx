@@ -120,6 +120,13 @@ type NavigationState = {
   entries: NavigationEntry[];
   index: number;
 };
+type ProjectSnapshot = {
+  repo: RepoSummary;
+  pullRequests: PullRequestSummary[];
+  issues: IssueSummary[];
+  workflows: WorkflowSummary[];
+  workflowRuns: WorkflowRunSummary[];
+};
 type WorkflowJobLogLoadState = {
   loading: boolean;
   refreshing?: boolean;
@@ -340,6 +347,34 @@ function navigationEntryKey(entry: NavigationEntry): string {
     entry.workflowTab,
     selectionRouteKey(entry.selection)
   ].join(":");
+}
+
+function refreshSelectionFromProject(selection: ContentSelection, project: ProjectSnapshot | null): ContentSelection {
+  if (!project) {
+    return selection;
+  }
+
+  if (selection.kind === "pr") {
+    const refreshed = project.pullRequests.find((pr) => pr.number === selection.pr.number);
+    return refreshed ? { kind: "pr", pr: refreshed } : selection;
+  }
+
+  if (selection.kind === "issue") {
+    const refreshed = project.issues.find((issue) => issue.number === selection.issue.number);
+    return refreshed ? { kind: "issue", issue: refreshed } : selection;
+  }
+
+  if (selection.kind === "run") {
+    const refreshed = project.workflowRuns.find((run) => run.id === selection.run.id);
+    return refreshed ? { kind: "run", run: refreshed, focusedJobId: selection.focusedJobId ?? null } : selection;
+  }
+
+  if (selection.kind === "workflow") {
+    const refreshed = project.workflows.find((workflow) => workflow.id === selection.workflow.id);
+    return refreshed ? { kind: "workflow", workflow: refreshed } : selection;
+  }
+
+  return selection;
 }
 
 function uniqueRepos(repos: RepoSummary[]): RepoSummary[] {
@@ -589,6 +624,8 @@ export function App() {
   );
 
   const selectedRepoKey = selectedRepo ? repoKey(selectedRepo) : "";
+  const selectedPullRequestNumber = selection.kind === "pr" ? selection.pr.number : null;
+  const selectedWorkflowRunId = selection.kind === "run" ? selection.run.id : null;
   const selectedWorkflowStars = useMemo(
     () => (selectedRepoKey ? starredWorkflowKeys[selectedRepoKey] ?? [] : []),
     [selectedRepoKey, starredWorkflowKeys]
@@ -744,7 +781,7 @@ export function App() {
   );
 
   const loadProject = useCallback(
-    async (repo: RepoSummary, showSpinner = true, force = false) => {
+    async (repo: RepoSummary, showSpinner = true, force = false): Promise<ProjectSnapshot | null> => {
       if (showSpinner) {
         setProjectLoading(true);
       }
@@ -760,13 +797,23 @@ export function App() {
           api.getWorkflowRuns(repo, options)
         ]);
 
-        setSelectedRepo(repoDetail.data);
-        setPullRequests(prs.data);
-        setIssues(repoIssues.data);
-        setWorkflows(repoWorkflows.data);
-        setWorkflowRuns(runs.data);
+        const project = {
+          repo: repoDetail.data,
+          pullRequests: prs.data,
+          issues: repoIssues.data,
+          workflows: repoWorkflows.data,
+          workflowRuns: runs.data
+        };
+
+        setSelectedRepo(project.repo);
+        setPullRequests(project.pullRequests);
+        setIssues(project.issues);
+        setWorkflows(project.workflows);
+        setWorkflowRuns(project.workflowRuns);
+        return project;
       } catch (error) {
         setProjectError(error instanceof Error ? error.message : "Unable to load repository data.");
+        return null;
       } finally {
         if (showSpinner) {
           setProjectLoading(false);
@@ -887,36 +934,30 @@ export function App() {
     [loadProject]
   );
 
-  const refreshWorkflowRun = useCallback(
-    async (
-      repo: RepoSummary,
-      runId: number,
-      options: { force?: boolean; showProjectSpinner?: boolean } = {}
-    ): Promise<WorkflowRunDetail> => {
-      const cacheOptions = options.force ? { force: true } : undefined;
-      const [detailResponse] = await Promise.all([
-        api.getWorkflowRun(repo, runId, cacheOptions),
-        loadProject(repo, options.showProjectSpinner ?? false, true)
-      ]);
-      setRunDetail(detailResponse.data);
-      setSelection((current) =>
-        current.kind === "run" && current.run.id === runId ? { ...current, run: detailResponse.data } : current
-      );
-      return detailResponse.data;
-    },
-    [loadProject]
-  );
-
   const refreshActivePane = useCallback(async () => {
     if (!selectedRepo) {
       return;
     }
 
-    if (selection.kind === "pr") {
+    const activeSelection = selection;
+    const project = await loadProject(selectedRepo, true, true);
+    const refreshedRepo = project?.repo ?? selectedRepo;
+    const refreshedSelection = refreshSelectionFromProject(activeSelection, project);
+    if (refreshedSelection !== activeSelection) {
+      setSelection(refreshedSelection);
+    }
+
+    if (activeSelection.kind === "pr") {
       setContentLoading(true);
       setContentError(null);
       try {
-        await refreshPullRequest(selectedRepo, selection.pr.number, { force: true, showProjectSpinner: true });
+        const response = await api.getPullRequest(refreshedRepo, activeSelection.pr.number, { force: true });
+        setPrDetail(response.data);
+        setSelection((current) =>
+          current.kind === "pr" && current.pr.number === activeSelection.pr.number
+            ? { kind: "pr", pr: response.data }
+            : current
+        );
       } catch (error) {
         setContentError(error instanceof Error ? error.message : "Unable to refresh pull request.");
       } finally {
@@ -925,11 +966,17 @@ export function App() {
       return;
     }
 
-    if (selection.kind === "run") {
+    if (activeSelection.kind === "run") {
       setContentLoading(true);
       setContentError(null);
       try {
-        await refreshWorkflowRun(selectedRepo, selection.run.id, { force: true, showProjectSpinner: true });
+        const response = await api.getWorkflowRun(refreshedRepo, activeSelection.run.id, { force: true });
+        setRunDetail(response.data);
+        setSelection((current) =>
+          current.kind === "run" && current.run.id === activeSelection.run.id
+            ? { ...current, run: response.data }
+            : current
+        );
       } catch (error) {
         setContentError(error instanceof Error ? error.message : "Unable to refresh workflow run.");
       } finally {
@@ -937,9 +984,7 @@ export function App() {
       }
       return;
     }
-
-    await loadProject(selectedRepo, true, true);
-  }, [loadProject, refreshPullRequest, refreshWorkflowRun, selectedRepo, selection]);
+  }, [loadProject, selectedRepo, selection]);
 
   const submitPullRequestReview = useCallback(
     async (pr: PullRequestSummary, event: PullRequestReviewEvent) => {
@@ -1341,7 +1386,7 @@ export function App() {
   }, [auth?.configured, loadProject, selectedRepoKey]);
 
   useEffect(() => {
-    if (!selectedRepo || selection.kind !== "pr") {
+    if (!selectedRepo || selectedPullRequestNumber === null) {
       return;
     }
 
@@ -1350,7 +1395,7 @@ export function App() {
     setContentError(null);
     setPrDetail(null);
     void api
-      .getPullRequest(selectedRepo, selection.pr.number)
+      .getPullRequest(selectedRepo, selectedPullRequestNumber)
       .then((response) => {
         if (!cancelled) {
           setPrDetail(response.data);
@@ -1370,10 +1415,10 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedRepoKey, selection]);
+  }, [selectedPullRequestNumber, selectedRepoKey]);
 
   useEffect(() => {
-    if (!selectedRepo || selection.kind !== "run") {
+    if (!selectedRepo || selectedWorkflowRunId === null) {
       return;
     }
 
@@ -1382,7 +1427,7 @@ export function App() {
     setContentError(null);
     setRunDetail(null);
     void api
-      .getWorkflowRun(selectedRepo, selection.run.id)
+      .getWorkflowRun(selectedRepo, selectedWorkflowRunId)
       .then((response) => {
         if (!cancelled) {
           setRunDetail(response.data);
@@ -1402,7 +1447,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedRepoKey, selection]);
+  }, [selectedRepoKey, selectedWorkflowRunId]);
 
   useEffect(() => {
     const unsubscribe = api.onCacheUpdated((key) => {
