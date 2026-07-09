@@ -1741,20 +1741,19 @@ button.pr-label-chip:disabled {
 }
 
 .pr-title-row {
-  display: flex;
-  align-items: flex-start;
+  display: block;
   min-width: 0;
-  gap: 8px;
 }
 
 .pr-title-row h1 {
+  display: inline;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.pr-title-action {
-  flex: 0 0 auto;
-  margin-top: 1px;
+.pr-title-row > .pr-title-action {
+  margin-left: 8px;
+  vertical-align: 0.1em;
 }
 
 .pr-title-edit {
@@ -1762,7 +1761,7 @@ button.pr-label-chip:disabled {
   align-items: flex-start;
   width: min(760px, 100%);
   min-width: 0;
-  gap: 8px;
+  gap: 4px;
 }
 
 .pr-title-input {
