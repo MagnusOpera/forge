@@ -4,8 +4,13 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.15]
+
+
 - Defaulted first-run sidebar appearance to glass mode.
 - Moved animated titlebar toolbar underlines inside the active icon button.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.14...0.0.15
 
 ## [0.0.14]
 
