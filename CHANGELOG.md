@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Moved glass appearance into the theme picker with per-theme settings and smoother transitions.
+
 ## [0.0.12]
 
 

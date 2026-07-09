@@ -36,6 +36,7 @@ import {
   Star,
   StarOff,
   Sun,
+  SwatchBook,
   ThumbsDown,
   ThumbsUp,
   Workflow,
@@ -199,6 +200,7 @@ const accentColors = [
   "#f2cc60"
 ] as const;
 const favoriteProjectRefreshIntervalMs = 5 * 60 * 1000;
+const sidebarAppearanceTransitionMs = 360;
 const ClockCheck = createLucideIcon("ClockCheck", [
   ["path", { d: "M12 6v6l4 2", key: "mmk7yg" }],
   ["path", { d: "M22 12a10 10 0 1 0-11 9.95", key: "17dhok" }],
@@ -359,6 +361,20 @@ function normalizeThemePreference(value: ThemePreference): ThemePreference {
 
 function normalizeSidebarAppearanceMode(value: SidebarAppearanceMode): SidebarAppearanceMode {
   return value === "normal" ? "normal" : "glass";
+}
+
+function readStoredSidebarAppearance(key: string): SidebarAppearanceMode | null {
+  const stored = localStorage.getItem(key);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    const value = JSON.parse(stored);
+    return value === "normal" || value === "glass" ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function nextThemePreference(preference: ThemePreference): ThemePreference {
@@ -862,11 +878,18 @@ export function App() {
   const systemTheme = useSystemTheme();
   const activeTheme: ThemeMode = themePreference === "system" ? systemTheme : themePreference;
   const nativeThemeSource: NativeThemeSource = themePreference === "system" ? "system" : activeTheme;
-  const [storedSidebarAppearance, setStoredSidebarAppearance] = useStoredState<SidebarAppearanceMode>(
-    "github-focus:sidebar-appearance",
-    "glass"
+  const legacySidebarAppearance = useMemo(() => readStoredSidebarAppearance("github-focus:sidebar-appearance"), []);
+  const [darkSidebarAppearance, setDarkSidebarAppearance] = useStoredState<SidebarAppearanceMode>(
+    "github-focus:sidebar-appearance:dark",
+    legacySidebarAppearance ?? "glass"
   );
-  const sidebarAppearance = normalizeSidebarAppearanceMode(storedSidebarAppearance);
+  const [lightSidebarAppearance, setLightSidebarAppearance] = useStoredState<SidebarAppearanceMode>(
+    "github-focus:sidebar-appearance:light",
+    legacySidebarAppearance ?? "glass"
+  );
+  const sidebarAppearance = normalizeSidebarAppearanceMode(
+    activeTheme === "dark" ? darkSidebarAppearance : lightSidebarAppearance
+  );
   const legacyAccentColor = useMemo(() => readStoredAccentColor("github-focus:accent-color"), []);
   const [darkAccentColor, setDarkAccentColor] = useStoredState<string>(
     "github-focus:accent-color:dark",
@@ -890,6 +913,8 @@ export function App() {
   const [layoutAnimating, setLayoutAnimating] = useState(false);
   const lastGPress = useRef(0);
   const layoutAnimationTimer = useRef<number | null>(null);
+  const nativeSidebarAppearanceTimer = useRef<number | null>(null);
+  const previousSidebarAppearance = useRef<SidebarAppearanceMode | null>(null);
   const optimisticMutationSequence = useRef(0);
   const optimisticMutationIds = useRef(new Map<string, number>());
   const restoringNavigation = useRef(false);
@@ -2498,11 +2523,42 @@ export function App() {
     "--accent": selectedAccent
   };
   const toggleSidebarAppearance = useCallback(() => {
-    setStoredSidebarAppearance((current) => (normalizeSidebarAppearanceMode(current) === "glass" ? "normal" : "glass"));
-  }, [setStoredSidebarAppearance]);
+    const setAppearance = activeTheme === "dark" ? setDarkSidebarAppearance : setLightSidebarAppearance;
+    setAppearance((current) => (normalizeSidebarAppearanceMode(current) === "glass" ? "normal" : "glass"));
+  }, [activeTheme, setDarkSidebarAppearance, setLightSidebarAppearance]);
 
   useEffect(() => {
-    void api.setSidebarAppearanceMode(sidebarAppearance).catch(() => undefined);
+    if (nativeSidebarAppearanceTimer.current) {
+      window.clearTimeout(nativeSidebarAppearanceTimer.current);
+      nativeSidebarAppearanceTimer.current = null;
+    }
+
+    const previous = previousSidebarAppearance.current;
+    previousSidebarAppearance.current = sidebarAppearance;
+    const prefersReducedMotion =
+      typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const shouldDelayNativeNormalMode =
+      api.platform === "darwin" &&
+      previous === "glass" &&
+      sidebarAppearance === "normal" &&
+      !prefersReducedMotion;
+
+    if (!shouldDelayNativeNormalMode) {
+      void api.setSidebarAppearanceMode(sidebarAppearance).catch(() => undefined);
+      return;
+    }
+
+    nativeSidebarAppearanceTimer.current = window.setTimeout(() => {
+      nativeSidebarAppearanceTimer.current = null;
+      void api.setSidebarAppearanceMode(sidebarAppearance).catch(() => undefined);
+    }, sidebarAppearanceTransitionMs);
+
+    return () => {
+      if (nativeSidebarAppearanceTimer.current) {
+        window.clearTimeout(nativeSidebarAppearanceTimer.current);
+        nativeSidebarAppearanceTimer.current = null;
+      }
+    };
   }, [sidebarAppearance]);
 
   useEffect(() => {
@@ -2532,7 +2588,6 @@ export function App() {
         favoriteMonitorChecking={favoriteProjectMonitorStatus.checking}
         favoriteMonitorLastCheckedAt={favoriteProjectMonitorStatus.lastCheckedAt}
         loading={initialLoading}
-        onToggleSidebarAppearance={toggleSidebarAppearance}
       />
       <div
         className={cx("resize-handle", "left-resize-handle", sidebarCollapsed && "collapsed")}
@@ -2600,12 +2655,14 @@ export function App() {
         theme={activeTheme}
         themePreference={themePreference}
         systemTheme={systemTheme}
+        sidebarAppearance={sidebarAppearance}
         canNavigateBack={canNavigateBack}
         canNavigateForward={canNavigateForward}
         accentColor={selectedAccent}
         onNavigateBack={() => navigateHistory(-1)}
         onNavigateForward={() => navigateHistory(1)}
         onToggleTheme={() => setStoredThemePreference(nextThemePreference(themePreference))}
+        onToggleSidebarAppearance={toggleSidebarAppearance}
         onAccentChange={setActiveAccentColor}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
@@ -2651,7 +2708,6 @@ interface SidebarProps {
   loading: boolean;
   onSearch(value: string): void;
   onToggle(): void;
-  onToggleSidebarAppearance(): void;
   onSelectRepo(repo: RepoSummary): void;
   onToggleFavorite(repo: RepoSummary): void;
   onReorderFavoriteRepo(sourceKey: string, targetKey: string): void;
@@ -2695,14 +2751,9 @@ function Sidebar(props: SidebarProps) {
     >
       <div className="pane-header app-drag">
         <div className="brand-mark">
-          <button
-            className="brand-logo-button"
-            type="button"
-            aria-label="Toggle sidebar appearance"
-            onClick={props.onToggleSidebarAppearance}
-          >
+          <span className="brand-logo" aria-hidden="true">
             <Github size={18} />
-          </button>
+          </span>
           <span>Forge</span>
         </div>
         <button className="icon-button" aria-label="Collapse sidebar" onClick={props.onToggle}>
@@ -3519,6 +3570,7 @@ function ContentPane(props: {
   theme: ThemeMode;
   themePreference: ThemePreference;
   systemTheme: ThemeMode;
+  sidebarAppearance: SidebarAppearanceMode;
   workflowRuns: WorkflowRunSummary[];
   canNavigateBack: boolean;
   canNavigateForward: boolean;
@@ -3532,6 +3584,7 @@ function ContentPane(props: {
   onNavigateBack(): void;
   onNavigateForward(): void;
   onToggleTheme(): void;
+  onToggleSidebarAppearance(): void;
   onAccentChange(color: string): void;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
@@ -3748,21 +3801,35 @@ function ContentPane(props: {
             >
               <ThemePreferenceIcon preference={props.themePreference} />
             </button>
-            <div className="accent-picker" role="radiogroup" aria-label="Accent color">
-              {accentColors.map((color, index) => (
-                <button
-                  key={color}
-                  className={cx("accent-swatch", props.accentColor === color && "active")}
-                  style={{ "--swatch-color": color } as SwatchCssVars}
-                  role="radio"
-                  aria-checked={props.accentColor === color}
-                  aria-label={`Accent ${index + 1}`}
-                  onClick={(event) => {
-                    props.onAccentChange(color);
-                    event.currentTarget.blur();
-                  }}
-                />
-              ))}
+            <div className="accent-picker" role="group" aria-label="Theme appearance">
+              <button
+                className={cx("accent-picker-glass-toggle", props.sidebarAppearance === "glass" && "active")}
+                type="button"
+                aria-label={`${props.sidebarAppearance === "glass" ? "Disable" : "Enable"} glass mode for ${props.theme} theme`}
+                aria-pressed={props.sidebarAppearance === "glass"}
+                onClick={(event) => {
+                  props.onToggleSidebarAppearance();
+                  event.currentTarget.blur();
+                }}
+              >
+                <SwatchBook size={16} />
+              </button>
+              <div className="accent-swatch-grid" role="radiogroup" aria-label="Accent color">
+                {accentColors.map((color, index) => (
+                  <button
+                    key={color}
+                    className={cx("accent-swatch", props.accentColor === color && "active")}
+                    style={{ "--swatch-color": color } as SwatchCssVars}
+                    role="radio"
+                    aria-checked={props.accentColor === color}
+                    aria-label={`Accent ${index + 1}`}
+                    onClick={(event) => {
+                      props.onAccentChange(color);
+                      event.currentTarget.blur();
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>

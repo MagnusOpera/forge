@@ -1,6 +1,8 @@
 :root {
   --color-scheme: dark;
   --app-bg: #22272e;
+  --sidebar-appearance-duration: 360ms;
+  --sidebar-appearance-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --sidebar-solid-bg: #1c2128;
   --sidebar-bg: rgb(28 33 40 / 0.78);
   --sidebar-border: rgb(205 217 229 / 0.14);
@@ -260,13 +262,14 @@ input {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: transparent;
+  background-color: transparent;
   color: var(--text-base);
   color-scheme: var(--color-scheme);
+  transition: background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
 }
 
 .app-shell[data-sidebar-appearance="normal"] {
-  background: var(--app-bg);
+  background-color: var(--app-bg);
 }
 
 .app-shell.layout-animating {
@@ -294,7 +297,7 @@ input {
   background: transparent;
   border-right: 1px solid var(--border);
   transition:
-    border-color 180ms cubic-bezier(0.2, 0, 0, 1),
+    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
     opacity 120ms ease;
 }
 
@@ -302,18 +305,35 @@ input {
   border-right-color: var(--border);
 }
 
-.sidebar::before {
+.sidebar::before,
+.sidebar::after {
   position: absolute;
   z-index: 0;
+  content: "";
+  pointer-events: none;
+  transition:
+    opacity var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    -webkit-backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
+  will-change: opacity;
+}
+
+.sidebar::before {
   top: 48px;
   right: 0;
   bottom: 0;
   left: 0;
-  background: var(--sidebar-bg);
+  background-color: var(--sidebar-bg);
   backdrop-filter: var(--sidebar-glass-filter);
   -webkit-backdrop-filter: var(--sidebar-glass-filter);
-  content: "";
-  pointer-events: none;
+  opacity: 1;
+}
+
+.sidebar::after {
+  inset: 0;
+  background-color: var(--sidebar-solid-bg);
+  opacity: 0;
 }
 
 .sidebar > * {
@@ -322,13 +342,16 @@ input {
 }
 
 .app-shell[data-sidebar-appearance="normal"] .sidebar {
-  background: var(--sidebar-solid-bg);
   border-right-color: var(--border);
   box-shadow: none;
 }
 
 .app-shell[data-sidebar-appearance="normal"] .sidebar::before {
-  display: none;
+  opacity: 0;
+}
+
+.app-shell[data-sidebar-appearance="normal"] .sidebar::after {
+  opacity: 1;
 }
 
 .sidebar-hidden {
@@ -353,9 +376,12 @@ input {
 .resize-handle {
   width: 5px;
   min-width: 5px;
-  background: var(--app-bg);
+  background-color: var(--app-bg);
   border-right: 1px solid var(--border-strong);
   cursor: col-resize;
+  transition:
+    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
   -webkit-app-region: no-drag;
 }
 
@@ -364,12 +390,12 @@ input {
 }
 
 .app-shell[data-sidebar-appearance="glass"] .left-resize-handle {
-  background: var(--app-bg);
+  background-color: var(--app-bg);
 }
 
 .resize-handle:hover,
 .app-shell[data-sidebar-appearance="glass"] .left-resize-handle:hover {
-  background: var(--resize-hover-bg);
+  background-color: var(--resize-hover-bg);
 }
 
 .left-resize-handle.collapsed {
@@ -392,25 +418,65 @@ input {
 }
 
 .pane-header {
-  transition: padding-left 180ms cubic-bezier(0.2, 0, 0, 1);
+  transition:
+    padding-left 180ms cubic-bezier(0.2, 0, 0, 1),
+    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    box-shadow var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
 }
 
 .sidebar .pane-header {
+  position: relative;
+  overflow: hidden;
   flex: 0 0 48px;
   padding-left: 76px;
-  background: var(--sidebar-titlebar-bg);
+  background: transparent;
   border-bottom-color: var(--sidebar-border);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2);
+}
+
+.sidebar .pane-header::before,
+.sidebar .pane-header::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  transition:
+    opacity var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    -webkit-backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
+  will-change: opacity;
+}
+
+.sidebar .pane-header::before {
+  background-color: var(--sidebar-titlebar-bg);
   backdrop-filter: var(--sidebar-titlebar-filter);
   -webkit-backdrop-filter: var(--sidebar-titlebar-filter);
+  opacity: 1;
+}
+
+.sidebar .pane-header::after {
+  background-color: var(--sidebar-solid-bg);
+  opacity: 0;
+}
+
+.sidebar .pane-header > * {
+  position: relative;
+  z-index: 1;
 }
 
 .app-shell[data-sidebar-appearance="normal"] .sidebar .pane-header {
-  background: var(--sidebar-solid-bg);
   border-bottom-color: var(--border);
   box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+}
+
+.app-shell[data-sidebar-appearance="normal"] .sidebar .pane-header::before {
+  opacity: 0;
+}
+
+.app-shell[data-sidebar-appearance="normal"] .sidebar .pane-header::after {
+  opacity: 1;
 }
 
 .collapsed-project-header {
@@ -423,8 +489,19 @@ input {
 
 @media (prefers-reduced-motion: reduce) {
   .app-shell.layout-animating,
+  .app-shell,
   .pane-header,
-  .sidebar {
+  .sidebar,
+  .sidebar::before,
+  .sidebar::after,
+  .sidebar .pane-header::before,
+  .sidebar .pane-header::after,
+  .resize-handle,
+  .search-box,
+  .palette-input,
+  .sidebar-tabs,
+  .repo-group-toggle,
+  .repo-button-wrap {
     transition: none;
   }
 }
@@ -471,25 +548,17 @@ input {
   font-weight: 650;
 }
 
-.brand-logo-button {
+.brand-logo {
   display: inline-grid;
   width: 18px;
   height: 22px;
   padding: 0;
   place-items: center;
-  border-radius: 6px;
-  background: transparent;
   color: inherit;
-  -webkit-app-region: no-drag;
 }
 
-.brand-logo-button svg {
+.brand-logo svg {
   pointer-events: none;
-}
-
-.brand-logo-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 .pane-title,
@@ -647,6 +716,59 @@ input {
   -webkit-app-region: no-drag;
 }
 
+.accent-swatch-grid {
+  display: grid;
+  gap: 7px;
+}
+
+.accent-picker-glass-toggle {
+  position: relative;
+  display: grid;
+  width: 22px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--icon);
+  -webkit-app-region: no-drag;
+}
+
+.accent-picker-glass-toggle:hover {
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+.accent-picker-glass-toggle.active {
+  color: var(--text-hover);
+}
+
+.accent-picker-glass-toggle svg {
+  pointer-events: none;
+}
+
+.accent-picker-glass-toggle::after {
+  position: absolute;
+  right: 5px;
+  bottom: 2px;
+  left: 5px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+  opacity: 0;
+  transform: scaleX(0.4);
+  transform-origin: center;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.accent-picker-glass-toggle.active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
 .theme-accent-control:hover .accent-picker,
 .theme-accent-control:focus-within .accent-picker {
   opacity: 1;
@@ -658,6 +780,10 @@ input {
 @media (prefers-reduced-motion: reduce) {
   .accent-picker {
     transform: translate3d(0, 0, 0) scale(1);
+    transition: none;
+  }
+
+  .accent-picker-glass-toggle::after {
     transition: none;
   }
 }
@@ -690,8 +816,15 @@ input {
   min-height: 34px;
   border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: var(--input-bg);
+  background-color: var(--input-bg);
   color: var(--text-muted-alt);
+  transition:
+    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    box-shadow var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    -webkit-backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
 }
 
 .search-box input,
@@ -711,7 +844,7 @@ input {
 
 .sidebar .search-box {
   border-color: var(--sidebar-control-border);
-  background: var(--sidebar-control-bg);
+  background-color: var(--sidebar-control-bg);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.24),
     0 8px 22px rgb(0 0 0 / 0.05);
@@ -721,10 +854,12 @@ input {
 
 .app-shell[data-sidebar-appearance="normal"] .sidebar .search-box {
   border-color: var(--border-soft);
-  background: var(--input-bg);
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background-color: var(--input-bg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0),
+    0 8px 22px rgb(0 0 0 / 0);
+  backdrop-filter: blur(0px) saturate(1) brightness(1);
+  -webkit-backdrop-filter: blur(0px) saturate(1) brightness(1);
 }
 
 .search-clear-button {
@@ -742,19 +877,19 @@ input {
 }
 
 .search-clear-button:hover {
-  background: var(--hover-subtle-bg);
+  background-color: var(--hover-subtle-bg);
   color: var(--text-strong);
 }
 
 .sidebar .search-clear-button:hover {
-  background: var(--sidebar-row-hover-bg);
+  background-color: var(--sidebar-row-hover-bg);
 }
 
 .app-shell[data-sidebar-appearance="normal"] .sidebar .icon-button:hover:not(:disabled),
 .app-shell[data-sidebar-appearance="normal"] .sidebar .search-clear-button:hover,
 .app-shell[data-sidebar-appearance="normal"] .repo-group-toggle:hover,
 .app-shell[data-sidebar-appearance="normal"] .repo-button-wrap:hover {
-  background: var(--hover-bg);
+  background-color: var(--hover-bg);
 }
 
 .sidebar-tabs {
@@ -768,6 +903,7 @@ input {
   box-shadow: inset 0 -1px 0 var(--sidebar-tab-border);
   background: transparent;
   overflow: visible;
+  transition: box-shadow var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
   -webkit-app-region: no-drag;
 }
 
@@ -963,9 +1099,12 @@ input {
   gap: 4px;
   padding: 0 8px;
   border-radius: 7px;
-  background: transparent;
+  background-color: transparent;
   color: var(--text-secondary);
   font-size: 12px;
+  transition:
+    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
 }
 
 .repo-group-toggle span {
@@ -975,7 +1114,7 @@ input {
 }
 
 .repo-group-toggle:hover {
-  background: var(--sidebar-row-hover-bg);
+  background-color: var(--sidebar-row-hover-bg);
 }
 
 .repo-button-wrap {
@@ -986,11 +1125,14 @@ input {
   min-height: 30px;
   border-radius: 7px;
   overflow: hidden;
+  transition:
+    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
 }
 
 .repo-button-wrap:hover,
 .repo-button-wrap.selected {
-  background: var(--sidebar-row-hover-bg);
+  background-color: var(--sidebar-row-hover-bg);
 }
 
 .repo-button-wrap.draggable,
@@ -1009,7 +1151,7 @@ input {
 }
 
 .repo-button-wrap.drag-over {
-  background: var(--sidebar-row-active-bg);
+  background-color: var(--sidebar-row-active-bg);
 }
 
 .workflow-row.drag-over {
@@ -1017,13 +1159,13 @@ input {
 }
 
 .repo-button-wrap.selected {
-  background: var(--sidebar-row-active-bg);
+  background-color: var(--sidebar-row-active-bg);
   color: var(--active-text);
 }
 
 .app-shell[data-sidebar-appearance="normal"] .repo-button-wrap.drag-over,
 .app-shell[data-sidebar-appearance="normal"] .repo-button-wrap.selected {
-  background: var(--row-active-bg);
+  background-color: var(--row-active-bg);
 }
 
 .repo-button-wrap.selected::before {
