@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Prevented the GitHub token prompt from flashing during startup authentication checks.
+
 ## [0.0.13]
 
 

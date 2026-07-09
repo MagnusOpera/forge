@@ -834,6 +834,7 @@ function GithubUrlActionButton(props: {
 
 export function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [tokenDraft, setTokenDraft] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(false);
@@ -989,12 +990,16 @@ export function App() {
   const visiblePullRequests = projectPullRequestTab === "closed" ? closedPullRequests : openPullRequests;
 
   useEffect(() => {
-    authConfiguredRef.current = Boolean(auth?.configured);
-    if (!auth?.configured) {
+    if (!auth) {
+      return;
+    }
+
+    authConfiguredRef.current = auth.configured;
+    if (!auth.configured) {
       favoriteProjectNotificationSnapshots.current.clear();
       setFavoriteProjectMonitorStatus({ checking: false, lastCheckedAt: null });
     }
-  }, [auth?.configured]);
+  }, [auth]);
 
   useEffect(() => {
     selectedRepoKeyRef.current = selectedRepoKey;
@@ -2286,7 +2291,29 @@ export function App() {
   }, [paletteItems, paletteQuery]);
 
   useEffect(() => {
-    void api.getAuthStatus().then(setAuth);
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const nextAuth = await api.getAuthStatus();
+        if (!cancelled) {
+          setAuth(nextAuth);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAuth({ configured: false, encryptionAvailable: false, viewerLogin: null });
+          setAuthError(userFacingError(error, "Unable to check GitHub token."));
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthChecking(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(
@@ -2695,6 +2722,7 @@ export function App() {
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
       <ContentPane
         auth={auth}
+        authChecking={authChecking}
         authError={authError}
         tokenDraft={tokenDraft}
         onTokenChange={setTokenDraft}
@@ -3616,6 +3644,7 @@ function WorkflowSection(props: {
 
 function ContentPane(props: {
   auth: AuthStatus | null;
+  authChecking: boolean;
   authError: string | null;
   tokenDraft: string;
   repo: RepoSummary | null;
@@ -3895,7 +3924,9 @@ function ContentPane(props: {
           </div>
         </div>
       </div>
-      {!props.auth?.configured ? (
+      {props.authChecking ? (
+        <EmptyPane icon={<Loader2 className="spin" size={24} />} title="Checking GitHub token" />
+      ) : !props.auth?.configured ? (
         <TokenGate
           auth={props.auth}
           error={props.authError}
