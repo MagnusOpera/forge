@@ -27,6 +27,7 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  Orbit,
   Pencil,
   Play,
   Plus,
@@ -133,6 +134,7 @@ interface PaletteItem {
 }
 
 type ThemeMode = "dark" | "light";
+type ThemePreference = ThemeMode | "system";
 type SidebarRepoTab = "favorites" | "all";
 type ProjectFocusView = "pull-requests" | "workflow-runs" | "issues" | "workflows";
 type StoredProjectFocusView = ProjectFocusView | "starred-actions";
@@ -204,6 +206,7 @@ const defaultAccentByTheme: Record<ThemeMode, AccentColor> = {
   dark: accentColors[0],
   light: accentColors[1]
 };
+const themePreferenceOptions: ThemePreference[] = ["system", "light", "dark"];
 type AccentColor = (typeof accentColors)[number];
 type AppCssVars = React.CSSProperties & Record<"--accent", string>;
 type SwatchCssVars = React.CSSProperties & Record<"--swatch-color", string>;
@@ -305,6 +308,49 @@ function readStoredAccentColor(key: string): string | null {
 
 function normalizeAccentColor(value: string, fallback: string): string {
   return accentColors.includes(value as AccentColor) ? value : fallback;
+}
+
+function getSystemTheme(): ThemeMode {
+  if (typeof window.matchMedia !== "function") {
+    return "dark";
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function normalizeThemePreference(value: ThemePreference): ThemePreference {
+  return themePreferenceOptions.includes(value) ? value : themePreferenceOptions[0];
+}
+
+function nextThemePreference(preference: ThemePreference): ThemePreference {
+  const currentIndex = themePreferenceOptions.indexOf(preference);
+  return themePreferenceOptions[(currentIndex + 1) % themePreferenceOptions.length];
+}
+
+function themePreferenceLabel(preference: ThemePreference, activeTheme: ThemeMode): string {
+  if (preference === "system") {
+    return `system (${activeTheme})`;
+  }
+  return preference;
+}
+
+function useSystemTheme(): ThemeMode {
+  const [systemTheme, setSystemTheme] = useState<ThemeMode>(() => getSystemTheme());
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setSystemTheme(media.matches ? "dark" : "light");
+
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  return systemTheme;
 }
 
 function useSlidingUnderline(layoutKey: string) {
@@ -772,15 +818,18 @@ export function App() {
     "github-focus:project-workflow-tab",
     "favorites"
   );
-  const [theme, setTheme] = useStoredState<ThemeMode>("github-focus:theme", "dark");
+  const [storedThemePreference, setStoredThemePreference] = useStoredState<ThemePreference>("github-focus:theme", "system");
+  const themePreference = normalizeThemePreference(storedThemePreference);
+  const systemTheme = useSystemTheme();
+  const activeTheme: ThemeMode = themePreference === "system" ? systemTheme : themePreference;
   const legacyAccentColor = useMemo(() => readStoredAccentColor("github-focus:accent-color"), []);
   const [darkAccentColor, setDarkAccentColor] = useStoredState<string>(
     "github-focus:accent-color:dark",
-    theme === "dark" ? legacyAccentColor ?? defaultAccentByTheme.dark : defaultAccentByTheme.dark
+    activeTheme === "dark" ? legacyAccentColor ?? defaultAccentByTheme.dark : defaultAccentByTheme.dark
   );
   const [lightAccentColor, setLightAccentColor] = useStoredState<string>(
     "github-focus:accent-color:light",
-    theme === "light" ? legacyAccentColor ?? defaultAccentByTheme.light : defaultAccentByTheme.light
+    activeTheme === "light" ? legacyAccentColor ?? defaultAccentByTheme.light : defaultAccentByTheme.light
   );
   const [leftWidth, setLeftWidth] = useStoredState("github-focus:left-width", 280);
   const [middleWidth, setMiddleWidth] = useStoredState("github-focus:middle-width", 392);
@@ -963,13 +1012,13 @@ export function App() {
 
   const setActiveAccentColor = useCallback(
     (color: string) => {
-      if (theme === "light") {
+      if (activeTheme === "light") {
         setLightAccentColor(color);
       } else {
         setDarkAccentColor(color);
       }
     },
-    [setDarkAccentColor, setLightAccentColor, theme]
+    [activeTheme, setDarkAccentColor, setLightAccentColor]
   );
 
   const setSidebarCollapsedWithAnimation = useCallback(
@@ -2397,7 +2446,6 @@ export function App() {
   const gridTemplateColumns = sidebarCollapsed
     ? `0px 0px ${middleWidth}px 5px minmax(0, 1fr)`
     : `${leftWidth}px 5px ${middleWidth}px 5px minmax(0, 1fr)`;
-  const activeTheme: ThemeMode = theme === "light" ? "light" : "dark";
   const activeAccentColor = activeTheme === "dark" ? darkAccentColor : lightAccentColor;
   const selectedAccent = normalizeAccentColor(activeAccentColor, defaultAccentByTheme[activeTheme]);
   const appStyle: AppCssVars = {
@@ -2487,12 +2535,14 @@ export function App() {
         error={contentError}
         prActionSubmitting={prActionSubmitting}
         theme={activeTheme}
+        themePreference={themePreference}
+        systemTheme={systemTheme}
         canNavigateBack={canNavigateBack}
         canNavigateForward={canNavigateForward}
         accentColor={selectedAccent}
         onNavigateBack={() => navigateHistory(-1)}
         onNavigateForward={() => navigateHistory(1)}
-        onToggleTheme={() => setTheme(activeTheme === "dark" ? "light" : "dark")}
+        onToggleTheme={() => setStoredThemePreference(nextThemePreference(themePreference))}
         onAccentChange={setActiveAccentColor}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
@@ -3396,6 +3446,8 @@ function ContentPane(props: {
   error: string | null;
   prActionSubmitting: boolean;
   theme: ThemeMode;
+  themePreference: ThemePreference;
+  systemTheme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
   canNavigateBack: boolean;
   canNavigateForward: boolean;
@@ -3620,10 +3672,10 @@ function ContentPane(props: {
           <div className="theme-accent-control">
             <button
               className="theme-toggle-button"
-              aria-label={props.theme === "dark" ? "Current theme: dark. Switch to light theme." : "Current theme: light. Switch to dark theme."}
+              aria-label={`Current theme: ${themePreferenceLabel(props.themePreference, props.systemTheme)}. Switch to ${themePreferenceLabel(nextThemePreference(props.themePreference), props.systemTheme)} theme.`}
               onClick={props.onToggleTheme}
             >
-              {props.theme === "dark" ? <Moon size={15} /> : <Sun size={15} />}
+              <ThemePreferenceIcon preference={props.themePreference} />
             </button>
             <div className="accent-picker" role="radiogroup" aria-label="Accent color">
               {accentColors.map((color, index) => (
@@ -3709,6 +3761,16 @@ function ContentPane(props: {
       )}
     </main>
   );
+}
+
+function ThemePreferenceIcon(props: { preference: ThemePreference }) {
+  if (props.preference === "system") {
+    return <Orbit size={15} />;
+  }
+  if (props.preference === "light") {
+    return <Sun size={15} />;
+  }
+  return <Moon size={15} />;
 }
 
 function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | null }) {

@@ -532,14 +532,17 @@ input {
   transition:
     opacity 150ms ease,
     transform 190ms cubic-bezier(0.18, 0.89, 0.32, 1.12);
+  visibility: hidden;
   will-change: opacity, transform;
   -webkit-app-region: no-drag;
 }
 
-.theme-accent-control:hover .accent-picker {
+.theme-accent-control:hover .accent-picker,
+.theme-accent-control:focus-within .accent-picker {
   opacity: 1;
   pointer-events: auto;
   transform: translate3d(0, 0, 0) scale(1);
+  visibility: visible;
 }
 
 @media (prefers-reduced-motion: reduce) {
