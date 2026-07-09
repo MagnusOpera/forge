@@ -367,12 +367,9 @@ input {
   background: var(--app-bg);
 }
 
-.resize-handle:hover {
+.resize-handle:hover,
+.app-shell[data-sidebar-appearance="glass"] .left-resize-handle:hover {
   background: var(--resize-hover-bg);
-}
-
-.left-resize-handle:hover {
-  background: var(--app-bg);
 }
 
 .left-resize-handle.collapsed {

@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Restored the first pane splitter hover highlight.
+
 ## [0.0.11]
 
 
