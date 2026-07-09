@@ -5,6 +5,7 @@ All notable changes to Forge are documented in this file.
 ## [Unreleased]
 
 - Defaulted first-run sidebar appearance to glass mode.
+- Moved animated titlebar toolbar underlines inside the active icon button.
 
 ## [0.0.14]
 

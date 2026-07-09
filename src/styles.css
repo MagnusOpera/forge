@@ -698,12 +698,14 @@ input {
 
 .project-view-button {
   position: relative;
+  overflow: hidden;
   width: 28px;
   height: 28px;
   border-radius: 6px;
 }
 
 .project-view-button.active {
+  background: var(--hover-bg);
   color: var(--text-strong);
 }
 
@@ -1025,10 +1027,9 @@ input {
 }
 
 .project-view-switcher .sliding-tab-underline {
-  right: auto;
-  bottom: -4px;
-  width: calc(var(--tab-underline-width, 0px) - 10px);
-  transform: translateX(calc(var(--tab-underline-left, 0px) + 5px));
+  bottom: 3px;
+  width: calc(var(--tab-underline-width, 0px) - 12px);
+  transform: translateX(calc(var(--tab-underline-left, 0px) + 6px));
 }
 
 .sidebar-tab span,
