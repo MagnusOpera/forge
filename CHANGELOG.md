@@ -4,8 +4,10 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Fixed pull request auto-merge on repositories that only allow squash or rebase merging.
+- Split pull request titlebar controls into ready/draft and auto-merge menus.
 - Added contributor-only pull request controls for auto-merge state, merge, and close.
-- Used construction, check, and trophy icons for pull request state controls.
+- Used clearer icons for pull request readiness and auto-merge state controls.
 - Removed hover tooltips from Forge controls to reduce interface clutter.
 - Kept rapid pull request label removals from reappearing during background sync.
 - Closed pull request state and review pickers after leaving them with the pointer.

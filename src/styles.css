@@ -1640,10 +1640,8 @@ button.pr-label-chip:disabled {
   -webkit-app-region: no-drag;
 }
 
-.pr-state-actions::after {
-  width: calc((30px * 3) + (7px * 2) + 14px);
-}
-
+.pr-state-actions::after,
+.pr-auto-merge-actions::after,
 .pr-review-actions::after {
   width: calc((30px * 2) + 7px + 14px);
 }
@@ -1696,7 +1694,8 @@ button.pr-label-chip:disabled {
   height: 30px;
 }
 
-.pr-state-picker {
+.pr-state-picker,
+.pr-auto-merge-picker {
   grid-auto-flow: column;
   grid-auto-columns: 30px;
 }

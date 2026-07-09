@@ -8,6 +8,8 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  CircleCheckBig,
+  Clock,
   Code2,
   Command,
   Construction,
@@ -34,7 +36,6 @@ import {
   Sun,
   ThumbsDown,
   ThumbsUp,
-  Trophy,
   Workflow,
   X,
   XCircle
@@ -3040,7 +3041,6 @@ function ContentPane(props: {
   const showLabelActions = props.repo && canUpdatePullRequestLabels(props.repo);
   const showPullRequestManagementActions =
     props.repo && reviewPr && reviewPr.state === "OPEN" && canManagePullRequest(props.repo);
-  const showPullRequestStateAction = Boolean(reviewPr && (showDraftAction || showPullRequestManagementActions));
   const showReviewActions =
     props.repo &&
     reviewPr &&
@@ -3050,26 +3050,36 @@ function ContentPane(props: {
     props.prDetail && reviewPr
       ? latestViewerPullRequestReviewEvent(props.prDetail.reviews, props.auth?.viewerLogin)
       : null;
-  const setPullRequestState = useCallback((state: PullRequestToolbarState) => {
+  const setPullRequestReadiness = useCallback((draft: boolean) => {
     if (!reviewPr) {
       return;
     }
-    const currentState = pullRequestToolbarState(reviewPr);
-    if (state === currentState) {
+    if (draft === reviewPr.isDraft) {
       return;
     }
 
     void (async () => {
-      if (state === "draft") {
-        if (reviewPr.autoMergeEnabled) {
-          const disabled = await props.onDisablePullRequestAutoMerge(reviewPr);
-          if (!disabled) {
-            return;
-          }
+      if (draft && reviewPr.autoMergeEnabled) {
+        const disabled = await props.onDisablePullRequestAutoMerge(reviewPr);
+        if (!disabled) {
+          return;
         }
-        if (!reviewPr.isDraft) {
-          await props.onUpdatePullRequestDraftState(reviewPr, true);
-        }
+      }
+      await props.onUpdatePullRequestDraftState(reviewPr, draft);
+    })();
+  }, [props.onDisablePullRequestAutoMerge, props.onUpdatePullRequestDraftState, reviewPr]);
+
+  const setPullRequestAutoMerge = useCallback((enabled: boolean) => {
+    if (!reviewPr) {
+      return;
+    }
+    if (enabled === reviewPr.autoMergeEnabled) {
+      return;
+    }
+
+    void (async () => {
+      if (!enabled) {
+        await props.onDisablePullRequestAutoMerge(reviewPr);
         return;
       }
 
@@ -3079,21 +3089,11 @@ function ContentPane(props: {
           return;
         }
       }
-
-      if (state === "autoMerge") {
-        if (!reviewPr.autoMergeEnabled) {
-          await props.onEnablePullRequestAutoMerge(reviewPr);
-        }
-        return;
-      }
-
-      if (reviewPr.autoMergeEnabled) {
-        await props.onDisablePullRequestAutoMerge(reviewPr);
-      }
+      await props.onEnablePullRequestAutoMerge(reviewPr);
     })();
   }, [
-    props.onDisablePullRequestAutoMerge,
     props.onEnablePullRequestAutoMerge,
+    props.onDisablePullRequestAutoMerge,
     props.onUpdatePullRequestDraftState,
     reviewPr
   ]);
@@ -3130,13 +3130,18 @@ function ContentPane(props: {
             >
               <ExternalLink size={16} />
             </button>
-            {showPullRequestStateAction && reviewPr && (
-              <PullRequestStateToggle
+            {showDraftAction && reviewPr && (
+              <PullRequestReadinessToggle
                 disabled={props.prActionSubmitting}
-                state={pullRequestToolbarState(reviewPr)}
-                canSetReadyDraft={Boolean(showDraftAction)}
-                canSetAutoMerge={Boolean(showPullRequestManagementActions)}
-                onChange={setPullRequestState}
+                isDraft={reviewPr.isDraft}
+                onChange={setPullRequestReadiness}
+              />
+            )}
+            {showPullRequestManagementActions && reviewPr && (
+              <PullRequestAutoMergeToggle
+                disabled={props.prActionSubmitting}
+                autoMergeEnabled={reviewPr.autoMergeEnabled}
+                onChange={setPullRequestAutoMerge}
               />
             )}
             {showReviewActions && (
@@ -3270,43 +3275,17 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
   return <span>{props.selection.workflow.name}</span>;
 }
 
-type PullRequestToolbarState = "ready" | "autoMerge" | "draft";
-
-function pullRequestToolbarState(pr: PullRequestSummary): PullRequestToolbarState {
-  if (pr.isDraft) {
-    return "draft";
-  }
-  return pr.autoMergeEnabled ? "autoMerge" : "ready";
-}
-
-function PullRequestToolbarStateIcon(props: { state: PullRequestToolbarState; size: number }) {
-  if (props.state === "draft") {
-    return <Construction size={props.size} />;
-  }
-  if (props.state === "autoMerge") {
-    return <Trophy size={props.size} />;
-  }
-  return <Check size={props.size} />;
-}
-
-function PullRequestStateToggle(props: {
+function PullRequestReadinessToggle(props: {
   disabled: boolean;
-  state: PullRequestToolbarState;
-  canSetReadyDraft: boolean;
-  canSetAutoMerge: boolean;
-  onChange(state: PullRequestToolbarState): void;
+  isDraft: boolean;
+  onChange(draft: boolean): void;
 }) {
-  const label =
-    props.state === "draft"
-      ? "Draft pull request. Change state"
-      : props.state === "autoMerge"
-        ? "Auto-merge enabled. Change state"
-        : "Ready pull request. Change state";
+  const label = props.isDraft ? "Draft pull request. Change readiness" : "Ready pull request. Change readiness";
 
   return (
     <div
       className="titlebar-picker pr-state-actions"
-      aria-label="Pull request state selector"
+      aria-label="Pull request readiness selector"
       onPointerLeave={(event) => blurFocusedElementIn(event.currentTarget)}
     >
       <button
@@ -3317,45 +3296,80 @@ function PullRequestStateToggle(props: {
         aria-pressed={true}
         disabled={props.disabled}
       >
-        <PullRequestToolbarStateIcon state={props.state} size={17} />
+        {props.isDraft ? <Construction size={17} /> : <Check size={17} />}
       </button>
-      <div className="titlebar-picker-menu pr-state-picker" role="group" aria-label="Change pull request state">
-        {props.canSetReadyDraft && (
-          <button
-            type="button"
-            className={cx("review-action-button", props.state === "ready" && "active")}
-            aria-label="Mark pull request ready for review"
-            aria-pressed={props.state === "ready"}
-            disabled={props.disabled}
-            onClick={() => props.onChange("ready")}
-          >
-            <Check size={15} />
-          </button>
-        )}
-        {props.canSetAutoMerge && (
-          <button
-            type="button"
-            className={cx("review-action-button", props.state === "autoMerge" && "active")}
-            aria-label="Enable auto-merge when pull request requirements are met"
-            aria-pressed={props.state === "autoMerge"}
-            disabled={props.disabled}
-            onClick={() => props.onChange("autoMerge")}
-          >
-            <Trophy size={15} />
-          </button>
-        )}
-        {props.canSetReadyDraft && (
-          <button
-            type="button"
-            className={cx("review-action-button", props.state === "draft" && "active")}
-            aria-label="Convert pull request to draft"
-            aria-pressed={props.state === "draft"}
-            disabled={props.disabled}
-            onClick={() => props.onChange("draft")}
-          >
-            <Construction size={15} />
-          </button>
-        )}
+      <div className="titlebar-picker-menu pr-state-picker" role="group" aria-label="Change pull request readiness">
+        <button
+          type="button"
+          className={cx("review-action-button", !props.isDraft && "active")}
+          aria-label="Mark pull request ready for review"
+          aria-pressed={!props.isDraft}
+          disabled={props.disabled}
+          onClick={() => props.onChange(false)}
+        >
+          <Check size={15} />
+        </button>
+        <button
+          type="button"
+          className={cx("review-action-button", props.isDraft && "active")}
+          aria-label="Convert pull request to draft"
+          aria-pressed={props.isDraft}
+          disabled={props.disabled}
+          onClick={() => props.onChange(true)}
+        >
+          <Construction size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PullRequestAutoMergeToggle(props: {
+  disabled: boolean;
+  autoMergeEnabled: boolean;
+  onChange(enabled: boolean): void;
+}) {
+  const label = props.autoMergeEnabled
+    ? "Auto-merge enabled. Change auto-merge"
+    : "Auto-merge disabled. Change auto-merge";
+
+  return (
+    <div
+      className="titlebar-picker pr-auto-merge-actions"
+      aria-label="Pull request auto-merge selector"
+      onPointerLeave={(event) => blurFocusedElementIn(event.currentTarget)}
+    >
+      <button
+        type="button"
+        className="review-action-button titlebar-state-action active"
+        aria-label={label}
+        aria-haspopup="true"
+        aria-pressed={true}
+        disabled={props.disabled}
+      >
+        {props.autoMergeEnabled ? <CircleCheckBig size={17} /> : <Clock size={17} />}
+      </button>
+      <div className="titlebar-picker-menu pr-auto-merge-picker" role="group" aria-label="Change pull request auto-merge">
+        <button
+          type="button"
+          className={cx("review-action-button", props.autoMergeEnabled && "active")}
+          aria-label="Enable auto-merge when pull request requirements are met"
+          aria-pressed={props.autoMergeEnabled}
+          disabled={props.disabled}
+          onClick={() => props.onChange(true)}
+        >
+          <CircleCheckBig size={15} />
+        </button>
+        <button
+          type="button"
+          className={cx("review-action-button", !props.autoMergeEnabled && "active")}
+          aria-label="Disable auto-merge"
+          aria-pressed={!props.autoMergeEnabled}
+          disabled={props.disabled}
+          onClick={() => props.onChange(false)}
+        >
+          <Clock size={15} />
+        </button>
       </div>
     </div>
   );

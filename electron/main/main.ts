@@ -1742,6 +1742,37 @@ function ensurePullRequestId(value: string): string {
   return pullRequestId;
 }
 
+type GraphqlMergeMethod = "SQUASH" | "MERGE" | "REBASE";
+type RestMergeMethod = "squash" | "merge" | "rebase";
+
+function preferredMergeMethods(repo: any): GraphqlMergeMethod[] {
+  const methods: GraphqlMergeMethod[] = [];
+  if (repo.mergeCommitAllowed ?? repo.allow_merge_commit) {
+    methods.push("MERGE");
+  }
+  if (repo.squashMergeAllowed ?? repo.allow_squash_merge) {
+    methods.push("SQUASH");
+  }
+  if (repo.rebaseMergeAllowed ?? repo.allow_rebase_merge) {
+    methods.push("REBASE");
+  }
+  return methods.length > 0 ? methods : ["MERGE"];
+}
+
+function toRestMergeMethod(method: GraphqlMergeMethod): RestMergeMethod {
+  return method.toLowerCase() as RestMergeMethod;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function canTryAlternateMergeMethod(error: unknown): boolean {
+  return /merge method|merge commits? (is|are) not allowed|squash (is|merges are) not allowed|rebase (is|merges are) not allowed/i.test(
+    errorMessage(error)
+  );
+}
+
 async function addPullRequestLabel(payload: PullRequestLabelPayload): Promise<void> {
   const repo = ensureRepo(payload.repo);
   const labelName = ensureLabelName(payload);
@@ -1780,20 +1811,41 @@ async function enablePullRequestAutoMerge(payload: PullRequestAutoMergePayload):
   const repo = ensureRepo(payload.repo);
   const pullNumber = ensurePullNumber(payload.pullNumber);
   const pullRequestId = ensurePullRequestId(payload.pullRequestId);
-  const { gql } = await getClients();
-  await gql(
-    `
-      mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
-        enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId }) {
-          pullRequest {
-            id
-            autoMergeRequest { enabledAt }
+  const { gql, octokit } = await getClients();
+  const repoResponse = await octokit.repos.get({
+    owner: repo.owner,
+    repo: repo.name
+  });
+  let lastError: unknown = null;
+
+  for (const mergeMethod of preferredMergeMethods(repoResponse.data)) {
+    try {
+      await gql(
+        `
+          mutation EnablePullRequestAutoMerge($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
+            enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, mergeMethod: $mergeMethod }) {
+              pullRequest {
+                id
+                autoMergeRequest { enabledAt mergeMethod }
+              }
+            }
           }
-        }
+        `,
+        { pullRequestId, mergeMethod }
+      );
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (!canTryAlternateMergeMethod(error)) {
+        throw error;
       }
-    `,
-    { pullRequestId }
-  );
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
 
   await Promise.all([
     invalidateCacheKey(pullRequestsCacheKey(repo)),
@@ -1830,11 +1882,33 @@ async function mergePullRequest(payload: PullRequestActionPayload): Promise<void
   const repo = ensureRepo(payload.repo);
   const pullNumber = ensurePullNumber(payload.pullNumber);
   const { octokit } = await getClients();
-  await octokit.pulls.merge({
+  const repoResponse = await octokit.repos.get({
     owner: repo.owner,
-    repo: repo.name,
-    pull_number: pullNumber
+    repo: repo.name
   });
+  let lastError: unknown = null;
+
+  for (const mergeMethod of preferredMergeMethods(repoResponse.data)) {
+    try {
+      await octokit.pulls.merge({
+        owner: repo.owner,
+        repo: repo.name,
+        pull_number: pullNumber,
+        merge_method: toRestMergeMethod(mergeMethod)
+      });
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (!canTryAlternateMergeMethod(error)) {
+        throw error;
+      }
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
 
   await Promise.all([
     invalidateCacheKey(pullRequestsCacheKey(repo)),
