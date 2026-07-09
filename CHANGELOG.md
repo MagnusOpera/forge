@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.8]
+
+
 - Started Forge at the same scale as one Electron zoom-in step.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.7...0.0.8
 
 ## [0.0.7]
 
