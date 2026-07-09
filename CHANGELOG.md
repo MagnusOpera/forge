@@ -4,8 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
-## [0.0.7]
+- Started Forge at the same scale as one Electron zoom-in step.
 
+## [0.0.7]
 
 - Merged pull request ready and auto-merge controls when their state maps cleanly to Forge workflows.
 - Hid pull request auto-merge actions when the repository does not allow auto-merge.

@@ -71,6 +71,7 @@ const legacyAppName = "github-focus";
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
 const defaultTtlMs = 5 * 60 * 1000;
+const appDefaultZoomFactor = 1.1;
 
 app.setName(appDisplayName);
 app.setAppUserModelId("com.magnusopera.forge");
@@ -279,6 +280,11 @@ function createApplicationMenu(): void {
     return;
   }
 
+  const resetZoomToAppDefault = (): void => {
+    const focusedWindow = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    focusedWindow?.webContents.setZoomFactor(appDefaultZoomFactor);
+  };
+
   const viewMenu: MenuItemConstructorOptions[] = [
     ...(isDev
       ? ([
@@ -288,7 +294,7 @@ function createApplicationMenu(): void {
           { type: "separator" }
         ] satisfies MenuItemConstructorOptions[])
       : []),
-    { role: "resetZoom" },
+    { label: "Reset Zoom", accelerator: "CommandOrControl+0", click: resetZoomToAppDefault },
     { role: "zoomIn" },
     { role: "zoomOut" },
     { type: "separator" },
@@ -2040,6 +2046,7 @@ function createWindow(): void {
       preload: path.join(__dirname, "../preload/preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      zoomFactor: appDefaultZoomFactor,
       sandbox: true
     }
   });
