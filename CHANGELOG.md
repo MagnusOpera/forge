@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Prevented pointer-clicked controls from leaving focus rings in screenshots.
 - Kept the repository splitter body and borders independent from the glass sidebar.
 - Matched native macOS glass appearance to the selected Forge theme.
 - Improved the dark sidebar glass transparency and search-field contrast.

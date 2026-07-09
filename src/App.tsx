@@ -214,6 +214,37 @@ type AppCssVars = React.CSSProperties & Record<"--accent", string>;
 type SwatchCssVars = React.CSSProperties & Record<"--swatch-color", string>;
 type SlidingUnderlineVars = React.CSSProperties & Record<"--tab-underline-left" | "--tab-underline-width", string>;
 
+function clearPointerActivatedControlFocus(event: React.MouseEvent<HTMLElement>): void {
+  if (event.detail === 0) {
+    return;
+  }
+
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const control = target.closest("button, [role='button'], a[href], input, textarea, select, [contenteditable='true']");
+  if (!(control instanceof HTMLElement)) {
+    return;
+  }
+
+  const tagName = control.tagName;
+  if (
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    tagName === "SELECT" ||
+    control.getAttribute("contenteditable") === "true"
+  ) {
+    return;
+  }
+
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLElement && (activeElement === control || control.contains(activeElement))) {
+    activeElement.blur();
+  }
+}
+
 function ipcUnavailable<T>(): Promise<T> {
   return Promise.reject(new Error("GitHub IPC is available only inside the Electron app."));
 }
@@ -2483,6 +2514,7 @@ export function App() {
       className={cx("app-shell", layoutAnimating && "layout-animating")}
       data-theme={activeTheme}
       data-sidebar-appearance={sidebarAppearance}
+      onClickCapture={clearPointerActivatedControlFocus}
       style={appStyle}
     >
       <Sidebar
