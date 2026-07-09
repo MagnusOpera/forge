@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.10]
+
+
 - Added a sidebar status for favorite project background checks.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.9...0.0.10
 
 ## [0.0.9]
 
