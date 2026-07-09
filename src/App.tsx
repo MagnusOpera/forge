@@ -53,10 +53,14 @@ import {
   canUpdatePullRequestDraftState,
   canUpdatePullRequestLabels,
   canUpdatePullRequestTitle,
+  failedWorkflowRunNotificationKeys,
+  findNewFailedWorkflowRuns,
+  findNewOpenPullRequests,
   formatDuration,
   isLiveStatus,
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
+  openPullRequestNotificationKeys,
   pullRequestTabForState,
   pullRequestWorkflowState,
   repositoryAllowsPullRequestAutoMerge,
@@ -77,6 +81,9 @@ import type {
   GithubFocusApi,
   IssueSummary,
   LabelSummary,
+  NativeNotificationPayload,
+  NativeNotificationPermission,
+  NativeNotificationSource,
   OrganizationSummary,
   PullRequestDetail,
   PullRequestReview,
@@ -155,6 +162,10 @@ type WorkflowJobLogLoadState = {
   error?: string | null;
   detail?: WorkflowJobLogDetail | null;
 };
+type FavoriteProjectNotificationSnapshot = {
+  failedWorkflowRunKeys: string[];
+  pullRequestKeys: string[];
+};
 
 interface WorkflowCheckGroup {
   check: CheckSummary;
@@ -178,6 +189,7 @@ const accentColors = [
   "#ffa198",
   "#f2cc60"
 ] as const;
+const favoriteProjectRefreshIntervalMs = 5 * 60 * 1000;
 const ClockCheck = createLucideIcon("ClockCheck", [
   ["path", { d: "M12 6v6l4 2", key: "mmk7yg" }],
   ["path", { d: "M22 12a10 10 0 1 0-11 9.95", key: "17dhok" }],
@@ -227,6 +239,17 @@ const browserApi: GithubFocusApi = {
   mergePullRequest: () => ipcUnavailable(),
   closePullRequest: () => ipcUnavailable(),
   openInGitHub: () => ipcUnavailable(),
+  requestNotificationPermission: async () => {
+    if (typeof Notification === "undefined") {
+      return "unsupported";
+    }
+    if (Notification.permission !== "default" || typeof Notification.requestPermission !== "function") {
+      return Notification.permission;
+    }
+    return Notification.requestPermission();
+  },
+  showNativeNotification: async () => false,
+  onNativeNotificationClicked: () => () => undefined,
   onCacheUpdated: () => () => undefined
 };
 
@@ -586,6 +609,37 @@ function openUrlForSelection(selection: ContentSelection, repo: RepoSummary | nu
   return null;
 }
 
+function workflowRunDisplayName(run: WorkflowRunSummary): string {
+  return run.displayTitle || run.name || `Run ${run.id}`;
+}
+
+function pullRequestNotificationPayload(repo: RepoSummary, pr: PullRequestSummary): NativeNotificationPayload {
+  return {
+    id: `favorite-project:${repoKey(repo)}:pull-request:${pr.number}:${pr.id}`,
+    title: `New pull request in ${repo.fullName}`,
+    body: `#${pr.number} ${pr.title}`,
+    source: {
+      kind: "pull-request",
+      repo,
+      pullRequest: pr
+    }
+  };
+}
+
+function workflowFailureNotificationPayload(repo: RepoSummary, run: WorkflowRunSummary): NativeNotificationPayload {
+  const branch = run.branch ? ` on ${run.branch}` : "";
+  return {
+    id: `favorite-project:${repoKey(repo)}:workflow-run:${run.id}`,
+    title: `Workflow failed in ${repo.fullName}`,
+    body: `${workflowRunDisplayName(run)}${branch}`,
+    source: {
+      kind: "workflow-run",
+      repo,
+      run
+    }
+  };
+}
+
 export function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [tokenDraft, setTokenDraft] = useState("");
@@ -661,6 +715,12 @@ export function App() {
   const optimisticMutationSequence = useRef(0);
   const optimisticMutationIds = useRef(new Map<string, number>());
   const restoringNavigation = useRef(false);
+  const authConfiguredRef = useRef(false);
+  const favoriteReposRef = useRef<RepoSummary[]>([]);
+  const selectedRepoKeyRef = useRef("");
+  const favoriteProjectNotificationSnapshots = useRef(new Map<string, FavoriteProjectNotificationSnapshot>());
+  const favoriteProjectRefreshInFlight = useRef(false);
+  const nativeNotificationPermission = useRef<NativeNotificationPermission | null>(null);
 
   const loadedRepos = useMemo(
     () => uniqueRepos([...(selectedRepo ? [selectedRepo] : []), ...starredRepos, ...recentRepos, ...repositories]),
@@ -687,6 +747,7 @@ export function App() {
     () => favoriteKeys.map((key) => reposByKey.get(key)).filter(Boolean) as RepoSummary[],
     [favoriteKeys, reposByKey]
   );
+  const favoriteProjectRefreshKey = useMemo(() => favoriteRepos.map(repoKey).join("|"), [favoriteRepos]);
 
   const selectedRepoKey = selectedRepo ? repoKey(selectedRepo) : "";
   const selectedPullRequestNumber = selection.kind === "pr" ? selection.pr.number : null;
@@ -711,6 +772,27 @@ export function App() {
     [pullRequests]
   );
   const visiblePullRequests = projectPullRequestTab === "closed" ? closedPullRequests : openPullRequests;
+
+  useEffect(() => {
+    authConfiguredRef.current = Boolean(auth?.configured);
+    if (!auth?.configured) {
+      favoriteProjectNotificationSnapshots.current.clear();
+    }
+  }, [auth?.configured]);
+
+  useEffect(() => {
+    selectedRepoKeyRef.current = selectedRepoKey;
+  }, [selectedRepoKey]);
+
+  useEffect(() => {
+    favoriteReposRef.current = favoriteRepos;
+    const activeKeys = new Set(favoriteRepos.map(repoKey));
+    for (const key of favoriteProjectNotificationSnapshots.current.keys()) {
+      if (!activeKeys.has(key)) {
+        favoriteProjectNotificationSnapshots.current.delete(key);
+      }
+    }
+  }, [favoriteRepos]);
 
   const visibleRepos = useMemo(() => {
     const needle = sidebarSearch.trim().toLowerCase();
@@ -1584,6 +1666,148 @@ export function App() {
     [selectRun, setProjectPullRequestTab]
   );
 
+  const ensureNativeNotificationPermission = useCallback(async (): Promise<boolean> => {
+    if (nativeNotificationPermission.current === "granted") {
+      return true;
+    }
+
+    const permission = await api.requestNotificationPermission();
+    nativeNotificationPermission.current = permission;
+    return permission !== "denied";
+  }, []);
+
+  const showFavoriteProjectNotification = useCallback(
+    async (payload: NativeNotificationPayload): Promise<void> => {
+      if (!(await ensureNativeNotificationPermission())) {
+        return;
+      }
+
+      await api.showNativeNotification(payload);
+    },
+    [ensureNativeNotificationPermission]
+  );
+
+  const focusNotificationSource = useCallback(
+    (source: NativeNotificationSource) => {
+      const repo = reposByKey.get(repoKey(source.repo)) ?? source.repo;
+      const targetRepoKey = repoKey(repo);
+      const alreadySelectedRepo = selectedRepoKeyRef.current === targetRepoKey;
+      selectedRepoKeyRef.current = targetRepoKey;
+      setSelectedRepo(repo);
+      setRepoLabels([]);
+      setContentError(null);
+      setPaletteOpen(false);
+      setLocalRecentKeys((current) => [targetRepoKey, ...current.filter((key) => key !== targetRepoKey)].slice(0, 20));
+
+      if (source.kind === "pull-request") {
+        setStoredProjectFocusView("pull-requests");
+        setProjectPullRequestTab(pullRequestTabForState(source.pullRequest));
+        if (alreadySelectedRepo) {
+          setPullRequests((current) =>
+            current.some((pr) => pr.number === source.pullRequest.number)
+              ? current.map((pr) => (pr.number === source.pullRequest.number ? source.pullRequest : pr))
+              : [source.pullRequest, ...current]
+          );
+        } else {
+          setPullRequests([source.pullRequest]);
+          setWorkflowRuns([]);
+          setIssues([]);
+          setWorkflows([]);
+        }
+        setPrDetail(null);
+        setRunDetail(null);
+        setPrTab("Description");
+        setSelection({ kind: "pr", pr: source.pullRequest });
+        return;
+      }
+
+      setStoredProjectFocusView("workflow-runs");
+      if (alreadySelectedRepo) {
+        setWorkflowRuns((current) =>
+          current.some((run) => run.id === source.run.id)
+            ? current.map((run) => (run.id === source.run.id ? source.run : run))
+            : [source.run, ...current]
+        );
+      } else {
+        setWorkflowRuns([source.run]);
+        setPullRequests([]);
+        setIssues([]);
+        setWorkflows([]);
+      }
+      setPrDetail(null);
+      setRunDetail(null);
+      setRunTab("Summary");
+      setSelection({ kind: "run", run: source.run });
+    },
+    [
+      reposByKey,
+      setLocalRecentKeys,
+      setProjectPullRequestTab,
+      setStoredProjectFocusView
+    ]
+  );
+
+  const refreshFavoriteProjectsForNotifications = useCallback(async (): Promise<void> => {
+    if (!authConfiguredRef.current || favoriteProjectRefreshInFlight.current) {
+      return;
+    }
+
+    const favoriteReposToRefresh = favoriteReposRef.current;
+    if (!favoriteReposToRefresh.length) {
+      return;
+    }
+
+    favoriteProjectRefreshInFlight.current = true;
+    try {
+      for (const repo of favoriteReposToRefresh) {
+        const key = repoKey(repo);
+        try {
+          const [prs, runs] = await Promise.all([
+            api.getPullRequests(repo, { force: true }),
+            api.getWorkflowRuns(repo, { force: true })
+          ]);
+          const previous = favoriteProjectNotificationSnapshots.current.get(key);
+          const nextSnapshot: FavoriteProjectNotificationSnapshot = {
+            pullRequestKeys: openPullRequestNotificationKeys(prs.data),
+            failedWorkflowRunKeys: failedWorkflowRunNotificationKeys(runs.data)
+          };
+
+          if (previous) {
+            const newPullRequests = findNewOpenPullRequests(previous.pullRequestKeys, prs.data);
+            const newFailedRuns = findNewFailedWorkflowRuns(previous.failedWorkflowRunKeys, runs.data);
+            for (const pr of newPullRequests) {
+              await showFavoriteProjectNotification(pullRequestNotificationPayload(repo, pr));
+            }
+            for (const run of newFailedRuns) {
+              await showFavoriteProjectNotification(workflowFailureNotificationPayload(repo, run));
+            }
+          }
+
+          favoriteProjectNotificationSnapshots.current.set(key, nextSnapshot);
+          if (selectedRepoKeyRef.current === key) {
+            setPullRequests(prs.data);
+            setWorkflowRuns(runs.data);
+            setSelection((current) => {
+              if (current.kind === "pr") {
+                const refreshed = prs.data.find((pr) => pr.number === current.pr.number);
+                return refreshed ? { kind: "pr", pr: refreshed } : current;
+              }
+              if (current.kind === "run") {
+                const refreshed = runs.data.find((run) => run.id === current.run.id);
+                return refreshed ? { ...current, run: refreshed } : current;
+              }
+              return current;
+            });
+          }
+        } catch (error) {
+          console.warn(`Unable to background refresh ${key}`, error);
+        }
+      }
+    } finally {
+      favoriteProjectRefreshInFlight.current = false;
+    }
+  }, [showFavoriteProjectNotification]);
+
   const openGithub = useCallback(() => {
     if (currentGithubUrl) {
       void api.openInGitHub(currentGithubUrl);
@@ -1917,6 +2141,20 @@ export function App() {
     });
     return unsubscribe;
   }, [loadInitial, loadProject, selectedRepo]);
+
+  useEffect(() => api.onNativeNotificationClicked(focusNotificationSource), [focusNotificationSource]);
+
+  useEffect(() => {
+    if (!auth?.configured || !favoriteProjectRefreshKey) {
+      return undefined;
+    }
+
+    void refreshFavoriteProjectsForNotifications();
+    const interval = window.setInterval(() => {
+      void refreshFavoriteProjectsForNotifications();
+    }, favoriteProjectRefreshIntervalMs);
+    return () => window.clearInterval(interval);
+  }, [auth?.configured, favoriteProjectRefreshKey, refreshFavoriteProjectsForNotifications]);
 
   useEffect(() => {
     if (paletteIndex >= filteredPaletteItems.length) {

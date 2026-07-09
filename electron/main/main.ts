@@ -5,6 +5,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  Notification,
   safeStorage,
   shell,
   type IpcMainInvokeEvent,
@@ -30,6 +31,8 @@ import type {
   DispatchWorkflowPayload,
   IssueSummary,
   LabelSummary,
+  NativeNotificationPayload,
+  NativeNotificationSource,
   OrganizationSummary,
   PullRequestActionPayload,
   PullRequestAutoMergePayload,
@@ -81,6 +84,7 @@ let aboutWindow: BrowserWindow | null = null;
 let octokitClient: Octokit | null = null;
 let graphqlClient: GraphqlClient | null = null;
 let activeTokenHash: string | null = null;
+const activeNotifications = new Set<Notification>();
 
 function appIconPath(extension: "png" | "icns" = "png"): string {
   return path.join(app.getAppPath(), "assets", `forge-icon.${extension}`);
@@ -2031,6 +2035,64 @@ async function openInGitHub(rawUrl: string): Promise<void> {
   await shell.openExternal(url.toString());
 }
 
+function notificationText(value: unknown, fallback: string): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  return (text || fallback).slice(0, 240);
+}
+
+function focusMainWindow(): BrowserWindow {
+  if (!mainWindow) {
+    createWindow();
+  }
+
+  const targetWindow = mainWindow as BrowserWindow;
+  if (targetWindow.isMinimized()) {
+    targetWindow.restore();
+  }
+  targetWindow.show();
+  targetWindow.focus();
+  if (process.platform === "darwin") {
+    app.focus({ steal: true });
+  }
+  return targetWindow;
+}
+
+function sendNotificationClick(source: NativeNotificationSource): void {
+  const targetWindow = focusMainWindow();
+  const send = (): void => {
+    targetWindow.webContents.send("notifications:clicked", source);
+  };
+
+  if (targetWindow.webContents.isLoading()) {
+    targetWindow.webContents.once("did-finish-load", send);
+    return;
+  }
+
+  send();
+}
+
+function showNativeNotification(payload: NativeNotificationPayload): boolean {
+  if (!Notification.isSupported()) {
+    return false;
+  }
+
+  const icon = nativeImage.createFromPath(appIconPath("png"));
+  const notification = new Notification({
+    title: notificationText(payload.title, appDisplayName),
+    body: notificationText(payload.body, "New Forge notification"),
+    icon: icon.isEmpty() ? undefined : icon
+  });
+
+  activeNotifications.add(notification);
+  notification.once("click", () => {
+    activeNotifications.delete(notification);
+    sendNotificationClick(payload.source);
+  });
+  notification.once("close", () => activeNotifications.delete(notification));
+  notification.show();
+  return true;
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -2158,6 +2220,9 @@ function registerIpc(): void {
     closePullRequest(payload)
   );
   ipcMain.handle("github:open-in-github", (_event, url: string) => openInGitHub(url));
+  ipcMain.handle("notifications:show", (_event, payload: NativeNotificationPayload) =>
+    showNativeNotification(payload)
+  );
 }
 
 registerIpc();

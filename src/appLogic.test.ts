@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { LabelSummary, PullRequestReview, PullRequestSummary, RepoSummary } from "../shared/github";
+import type {
+  LabelSummary,
+  PullRequestReview,
+  PullRequestSummary,
+  RepoSummary,
+  WorkflowRunSummary
+} from "../shared/github";
 import {
   addPullRequestLabelOptimistically,
   canManagePullRequest,
@@ -8,11 +14,16 @@ import {
   canUpdatePullRequestLabels,
   canUpdatePullRequestDraftState,
   canUpdatePullRequestTitle,
+  failedWorkflowRunNotificationKeys,
+  findNewFailedWorkflowRuns,
+  findNewOpenPullRequests,
   formatDuration,
+  isFailedWorkflowRun,
   isPullRequestAuthor,
   isLiveStatus,
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
+  openPullRequestNotificationKeys,
   pullRequestTabForState,
   pullRequestWorkflowState,
   repositoryAllowsPullRequestAutoMerge,
@@ -245,5 +256,49 @@ describe("appLogic", () => {
     expect(isLiveStatus("in_progress")).toBe(true);
     expect(isLiveStatus("QUEUED")).toBe(true);
     expect(isLiveStatus("success")).toBe(false);
+  });
+
+  it("seeds pull request notifications without reporting existing open pull requests", () => {
+    const pullRequests = [
+      { id: "pr-1", number: 1, state: "OPEN" },
+      { id: "pr-2", number: 2, state: "CLOSED" }
+    ] as PullRequestSummary[];
+
+    expect(findNewOpenPullRequests(null, pullRequests)).toEqual([]);
+    expect(openPullRequestNotificationKeys(pullRequests)).toEqual(["pr-1"]);
+  });
+
+  it("detects new open pull requests after the favorite project baseline", () => {
+    const pullRequests = [
+      { id: "pr-2", number: 2, state: "OPEN" },
+      { id: "pr-1", number: 1, state: "OPEN" },
+      { id: "pr-3", number: 3, state: "MERGED" }
+    ] as PullRequestSummary[];
+
+    expect(findNewOpenPullRequests(["pr-1"], pullRequests)).toEqual([pullRequests[0]]);
+  });
+
+  it("detects newly failed workflow runs after a previous running sample", () => {
+    const running = [
+      { id: 101, status: "in_progress", conclusion: null },
+      { id: 100, status: "completed", conclusion: "success" }
+    ] as WorkflowRunSummary[];
+    const refreshed = [
+      { id: 101, status: "completed", conclusion: "failure" },
+      { id: 100, status: "completed", conclusion: "success" }
+    ] as WorkflowRunSummary[];
+
+    expect(failedWorkflowRunNotificationKeys(running)).toEqual([]);
+    expect(findNewFailedWorkflowRuns(failedWorkflowRunNotificationKeys(running), refreshed)).toEqual([refreshed[0]]);
+  });
+
+  it("does not repeat notifications for workflow runs that were already failed", () => {
+    const failed = [
+      { id: 101, status: "completed", conclusion: "failure" },
+      { id: 100, status: "completed", conclusion: "timed_out" }
+    ] as WorkflowRunSummary[];
+
+    expect(isFailedWorkflowRun(failed[0])).toBe(true);
+    expect(findNewFailedWorkflowRuns(failedWorkflowRunNotificationKeys(failed), failed)).toEqual([]);
   });
 });

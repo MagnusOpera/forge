@@ -252,6 +252,27 @@ export interface WorkflowJobLogDetail {
   logUnavailableReason?: string | null;
 }
 
+export type NativeNotificationPermission = "default" | "denied" | "granted" | "unsupported";
+
+export type NativeNotificationSource =
+  | {
+      kind: "pull-request";
+      repo: RepoSummary;
+      pullRequest: PullRequestSummary;
+    }
+  | {
+      kind: "workflow-run";
+      repo: RepoSummary;
+      run: WorkflowRunSummary;
+    };
+
+export interface NativeNotificationPayload {
+  id: string;
+  title: string;
+  body: string;
+  source: NativeNotificationSource;
+}
+
 export interface DispatchWorkflowPayload {
   repo: RepoRef;
   workflowId: number | string;
@@ -332,6 +353,9 @@ export interface GithubFocusApi {
   mergePullRequest(payload: PullRequestActionPayload): Promise<void>;
   closePullRequest(payload: PullRequestActionPayload): Promise<void>;
   openInGitHub(url: string): Promise<void>;
+  requestNotificationPermission(): Promise<NativeNotificationPermission>;
+  showNativeNotification(payload: NativeNotificationPayload): Promise<boolean>;
+  onNativeNotificationClicked(callback: (source: NativeNotificationSource) => void): () => void;
   onCacheUpdated(callback: (key: string) => void): () => void;
   platform: string;
 }

@@ -4,6 +4,9 @@ import type {
   CacheRequestOptions,
   DispatchWorkflowPayload,
   GithubFocusApi,
+  NativeNotificationPermission,
+  NativeNotificationPayload,
+  NativeNotificationSource,
   PullRequestActionPayload,
   PullRequestAutoMergePayload,
   PullRequestLabelPayload,
@@ -12,6 +15,26 @@ import type {
   UpdatePullRequestDraftStatePayload,
   UpdatePullRequestTitlePayload
 } from "../../shared/github.js";
+
+function currentNotificationPermission(): NativeNotificationPermission {
+  if (typeof Notification === "undefined") {
+    return "unsupported";
+  }
+
+  return Notification.permission;
+}
+
+async function requestNotificationPermission(): Promise<NativeNotificationPermission> {
+  if (typeof Notification === "undefined") {
+    return "unsupported";
+  }
+
+  if (Notification.permission !== "default" || typeof Notification.requestPermission !== "function") {
+    return Notification.permission;
+  }
+
+  return Notification.requestPermission();
+}
 
 const api: GithubFocusApi = {
   platform: process.platform,
@@ -64,6 +87,17 @@ const api: GithubFocusApi = {
   closePullRequest: (payload: PullRequestActionPayload) =>
     ipcRenderer.invoke("github:close-pull-request", payload),
   openInGitHub: (url: string) => ipcRenderer.invoke("github:open-in-github", url),
+  requestNotificationPermission: async () => {
+    const permission = await requestNotificationPermission();
+    return permission === "unsupported" ? currentNotificationPermission() : permission;
+  },
+  showNativeNotification: (payload: NativeNotificationPayload) =>
+    ipcRenderer.invoke("notifications:show", payload),
+  onNativeNotificationClicked: (callback: (source: NativeNotificationSource) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, source: NativeNotificationSource) => callback(source);
+    ipcRenderer.on("notifications:clicked", listener);
+    return () => ipcRenderer.removeListener("notifications:clicked", listener);
+  },
   onCacheUpdated: (callback: (key: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, key: string) => callback(key);
     ipcRenderer.on("github:cache-updated", listener);

@@ -3,7 +3,8 @@ import type {
   PullRequestReview,
   PullRequestReviewEvent,
   PullRequestSummary,
-  RepoSummary
+  RepoSummary,
+  WorkflowRunSummary
 } from "../shared/github";
 
 export type ProjectPullRequestTab = "open" | "closed";
@@ -276,4 +277,65 @@ export function latestViewerPullRequestReviewEvent(
 
 export function isLiveStatus(status?: string | null): boolean {
   return ["queued", "waiting", "pending", "requested", "in_progress"].includes((status ?? "").toLowerCase());
+}
+
+function notificationKeySet(keys: ReadonlySet<string> | readonly string[] | null | undefined): Set<string> | null {
+  if (!keys) {
+    return null;
+  }
+  return keys instanceof Set ? new Set(keys) : new Set(keys);
+}
+
+function isOpenPullRequest(pr: PullRequestSummary): boolean {
+  return pr.state !== "CLOSED" && pr.state !== "MERGED";
+}
+
+export function openPullRequestNotificationKey(pr: PullRequestSummary): string {
+  return pr.id || `pull-request:${pr.number}`;
+}
+
+export function openPullRequestNotificationKeys(pullRequests: PullRequestSummary[]): string[] {
+  return pullRequests.filter(isOpenPullRequest).map(openPullRequestNotificationKey);
+}
+
+export function findNewOpenPullRequests(
+  previousKeys: ReadonlySet<string> | readonly string[] | null | undefined,
+  pullRequests: PullRequestSummary[]
+): PullRequestSummary[] {
+  const previous = notificationKeySet(previousKeys);
+  if (!previous) {
+    return [];
+  }
+
+  return pullRequests.filter(
+    (pr) => isOpenPullRequest(pr) && !previous.has(openPullRequestNotificationKey(pr))
+  );
+}
+
+export function isFailedWorkflowRun(run: WorkflowRunSummary): boolean {
+  return ["failure", "timed_out", "action_required", "startup_failure"].includes(
+    (run.conclusion ?? "").toLowerCase()
+  );
+}
+
+export function failedWorkflowRunNotificationKey(run: WorkflowRunSummary): string {
+  return String(run.id);
+}
+
+export function failedWorkflowRunNotificationKeys(workflowRuns: WorkflowRunSummary[]): string[] {
+  return workflowRuns.filter(isFailedWorkflowRun).map(failedWorkflowRunNotificationKey);
+}
+
+export function findNewFailedWorkflowRuns(
+  previousKeys: ReadonlySet<string> | readonly string[] | null | undefined,
+  workflowRuns: WorkflowRunSummary[]
+): WorkflowRunSummary[] {
+  const previous = notificationKeySet(previousKeys);
+  if (!previous) {
+    return [];
+  }
+
+  return workflowRuns.filter(
+    (run) => isFailedWorkflowRun(run) && !previous.has(failedWorkflowRunNotificationKey(run))
+  );
 }

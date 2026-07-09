@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added native notifications for new pull requests and workflow failures in favorite repositories.
+
 ## [0.0.8]
 
 
