@@ -2514,8 +2514,8 @@ export function App() {
   };
 
   const gridTemplateColumns = sidebarCollapsed
-    ? `0px 0px ${middleWidth}px 5px minmax(0, 1fr)`
-    : `${leftWidth}px 5px ${middleWidth}px 5px minmax(0, 1fr)`;
+    ? `0px 0px ${middleWidth}px 1px minmax(0, 1fr)`
+    : `${leftWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`;
   const activeAccentColor = activeTheme === "dark" ? darkAccentColor : lightAccentColor;
   const selectedAccent = normalizeAccentColor(activeAccentColor, defaultAccentByTheme[activeTheme]);
   const appStyle: AppCssVars = {

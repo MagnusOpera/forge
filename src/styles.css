@@ -17,8 +17,9 @@
   --sidebar-control-filter: blur(30px) saturate(0.95) brightness(0.82);
   --project-bg: #22272e;
   --content-bg: #22272e;
-  --resize-bg: #1c2128;
-  --resize-hover-bg: var(--accent-muted-bg);
+  --splitter-color: rgb(255 255 255 / 0.12);
+  --splitter-hover-color: rgb(255 255 255 / 0.24);
+  --splitter-hit-area: 9px;
   --border: #373e47;
   --border-strong: #2d333b;
   --border-soft: #373e47;
@@ -129,8 +130,8 @@
   --sidebar-control-filter: blur(30px) saturate(1.6);
   --project-bg: #ffffff;
   --content-bg: #fbfcfd;
-  --resize-bg: #edf0f3;
-  --resize-hover-bg: var(--accent-muted-bg);
+  --splitter-color: rgb(29 35 42 / 0.12);
+  --splitter-hover-color: rgb(29 35 42 / 0.24);
   --border: #d8dce2;
   --border-strong: #c8ced6;
   --border-soft: #d4d8df;
@@ -295,14 +296,9 @@ input {
   display: flex;
   flex-direction: column;
   background: transparent;
-  border-right: 1px solid var(--border);
+  border-right: 0;
   transition:
-    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
     opacity 120ms ease;
-}
-
-.app-shell[data-sidebar-appearance="glass"] .sidebar {
-  border-right-color: var(--border);
 }
 
 .sidebar::before,
@@ -342,7 +338,6 @@ input {
 }
 
 .app-shell[data-sidebar-appearance="normal"] .sidebar {
-  border-right-color: var(--border);
   box-shadow: none;
 }
 
@@ -355,7 +350,6 @@ input {
 }
 
 .sidebar-hidden {
-  border-right-color: transparent;
   opacity: 0;
   pointer-events: none;
 }
@@ -364,7 +358,6 @@ input {
   display: flex;
   flex-direction: column;
   background: var(--project-bg);
-  border-right: 1px solid var(--border);
 }
 
 .content-pane {
@@ -374,36 +367,43 @@ input {
 }
 
 .resize-handle {
-  width: 5px;
-  min-width: 5px;
-  background-color: var(--app-bg);
-  border-right: 1px solid var(--border-strong);
+  position: relative;
+  z-index: 3;
+  justify-self: center;
+  width: var(--splitter-hit-area);
+  min-width: var(--splitter-hit-area);
+  background: transparent;
   cursor: col-resize;
-  transition:
-    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
-    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
   -webkit-app-region: no-drag;
 }
 
-.left-resize-handle {
-  z-index: 2;
+.resize-handle::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background-color: var(--splitter-color);
+  content: "";
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: background-color 180ms ease;
 }
 
-.app-shell[data-sidebar-appearance="glass"] .left-resize-handle {
-  background-color: var(--app-bg);
-}
-
-.resize-handle:hover,
-.app-shell[data-sidebar-appearance="glass"] .left-resize-handle:hover {
-  background-color: var(--resize-hover-bg);
+.resize-handle:hover::before,
+.resize-handle:active::before {
+  background-color: var(--splitter-hover-color);
 }
 
 .left-resize-handle.collapsed {
   width: 0;
   min-width: 0;
-  border-right-color: transparent;
   cursor: default;
   pointer-events: none;
+}
+
+.left-resize-handle.collapsed::before {
+  opacity: 0;
 }
 
 .pane-header,
@@ -497,6 +497,7 @@ input {
   .sidebar .pane-header::before,
   .sidebar .pane-header::after,
   .resize-handle,
+  .resize-handle::before,
   .search-box,
   .palette-input,
   .sidebar-tabs,
