@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Removed the selected background from titlebar view icons while widening their animated underline.
+
 ## [0.0.15]
 
 

@@ -705,7 +705,6 @@ input {
 }
 
 .project-view-button.active {
-  background: var(--hover-bg);
   color: var(--text-strong);
 }
 
@@ -1028,8 +1027,8 @@ input {
 
 .project-view-switcher .sliding-tab-underline {
   bottom: 3px;
-  width: calc(var(--tab-underline-width, 0px) - 12px);
-  transform: translateX(calc(var(--tab-underline-left, 0px) + 6px));
+  width: calc(var(--tab-underline-width, 0px) - 4px);
+  transform: translateX(calc(var(--tab-underline-left, 0px) + 2px));
 }
 
 .sidebar-tab span,
