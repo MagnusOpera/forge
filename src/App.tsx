@@ -167,6 +167,10 @@ type FavoriteProjectNotificationSnapshot = {
   failedWorkflowRunKeys: string[];
   pullRequestKeys: string[];
 };
+type FavoriteProjectMonitorStatus = {
+  checking: boolean;
+  lastCheckedAt: string | null;
+};
 
 interface WorkflowCheckGroup {
   check: CheckSummary;
@@ -785,6 +789,10 @@ export function App() {
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [navigation, setNavigation] = useState<NavigationState>({ entries: [], index: -1 });
+  const [favoriteProjectMonitorStatus, setFavoriteProjectMonitorStatus] = useState<FavoriteProjectMonitorStatus>({
+    checking: false,
+    lastCheckedAt: null
+  });
   const [layoutAnimating, setLayoutAnimating] = useState(false);
   const lastGPress = useRef(0);
   const layoutAnimationTimer = useRef<number | null>(null);
@@ -853,6 +861,7 @@ export function App() {
     authConfiguredRef.current = Boolean(auth?.configured);
     if (!auth?.configured) {
       favoriteProjectNotificationSnapshots.current.clear();
+      setFavoriteProjectMonitorStatus({ checking: false, lastCheckedAt: null });
     }
   }, [auth?.configured]);
 
@@ -1830,10 +1839,12 @@ export function App() {
 
     const favoriteReposToRefresh = favoriteReposRef.current;
     if (!favoriteReposToRefresh.length) {
+      setFavoriteProjectMonitorStatus({ checking: false, lastCheckedAt: null });
       return;
     }
 
     favoriteProjectRefreshInFlight.current = true;
+    setFavoriteProjectMonitorStatus((current) => ({ ...current, checking: true }));
     try {
       for (const repo of favoriteReposToRefresh) {
         const key = repoKey(repo);
@@ -1881,6 +1892,10 @@ export function App() {
       }
     } finally {
       favoriteProjectRefreshInFlight.current = false;
+      setFavoriteProjectMonitorStatus({
+        checking: false,
+        lastCheckedAt: new Date().toISOString()
+      });
     }
   }, [showFavoriteProjectNotification]);
 
@@ -2404,6 +2419,8 @@ export function App() {
         onToggleFavorite={toggleFavorite}
         onReorderFavoriteRepo={reorderFavoriteRepos}
         favoriteKeys={favoriteKeys}
+        favoriteMonitorChecking={favoriteProjectMonitorStatus.checking}
+        favoriteMonitorLastCheckedAt={favoriteProjectMonitorStatus.lastCheckedAt}
         loading={initialLoading}
       />
       <div
@@ -2516,6 +2533,8 @@ interface SidebarProps {
   selectedRepo: RepoSummary | null;
   search: string;
   favoriteKeys: string[];
+  favoriteMonitorChecking: boolean;
+  favoriteMonitorLastCheckedAt: string | null;
   loading: boolean;
   onSearch(value: string): void;
   onToggle(): void;
@@ -2535,6 +2554,11 @@ function Sidebar(props: SidebarProps) {
   const searchActive = props.search.trim().length > 0;
   const allRepoCount = props.repoGroups.reduce((total, [, repos]) => total + repos.length, 0);
   const repoTabsUnderline = useSlidingUnderline(`${repoTab}:${props.favoriteRepos.length}:${allRepoCount}`);
+  const favoriteMonitorText = props.favoriteMonitorChecking
+    ? "Checking favorites"
+    : props.favoriteMonitorLastCheckedAt
+      ? `Checked ${formatRelative(props.favoriteMonitorLastCheckedAt)}`
+      : "Monitoring favorites";
 
   useEffect(() => {
     const sidebar = sidebarRef.current;
@@ -2647,6 +2671,12 @@ function Sidebar(props: SidebarProps) {
           />
         )}
       </nav>
+      {!searchActive && repoTab === "favorites" && props.favoriteRepos.length > 0 && (
+        <div className="sidebar-monitor-status" aria-live="polite">
+          {props.favoriteMonitorChecking ? <Loader2 className="spin" size={13} /> : <Activity size={13} />}
+          <span>{favoriteMonitorText}</span>
+        </div>
+      )}
     </aside>
   );
 }

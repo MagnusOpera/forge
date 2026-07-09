@@ -724,6 +724,23 @@ input {
   width: 100%;
 }
 
+.sidebar-monitor-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 20px;
+  margin: 0 12px 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.sidebar-monitor-status svg {
+  flex: 0 0 auto;
+}
+
 .sidebar-scroll,
 .project-scroll,
 .content-scroll {
@@ -732,6 +749,7 @@ input {
 }
 
 .sidebar-scroll {
+  flex: 1 1 auto;
   padding: 0 8px 14px;
 }
 

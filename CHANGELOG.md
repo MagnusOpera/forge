@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added a sidebar status for favorite project background checks.
+
 ## [0.0.9]
 
 
