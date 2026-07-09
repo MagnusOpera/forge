@@ -42,6 +42,7 @@ export interface RepoSummary extends RepoRef {
   description?: string | null;
   defaultBranch?: string | null;
   viewerPermission?: RepositoryPermission;
+  autoMergeAllowed?: boolean;
   isPrivate: boolean;
   isArchived: boolean;
   isFork: boolean;

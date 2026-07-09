@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Merged pull request ready and auto-merge controls when their state maps cleanly to Forge workflows.
+- Hid pull request auto-merge actions when the repository does not allow auto-merge.
 - Clarified GitHub API auto-merge failures and recovered stale pull request auto-merge state.
 - Fixed pull request auto-merge on repositories that only allow squash or rebase merging.
 - Split pull request titlebar controls into ready/draft and auto-merge menus.

@@ -1642,8 +1642,13 @@ button.pr-label-chip:disabled {
 
 .pr-state-actions::after,
 .pr-auto-merge-actions::after,
+.pr-workflow-actions::after,
 .pr-review-actions::after {
   width: calc((30px * 2) + 7px + 14px);
+}
+
+.pr-workflow-actions::after {
+  width: calc((30px * 3) + (7px * 2) + 14px);
 }
 
 .titlebar-picker .review-action-button {
@@ -1695,7 +1700,8 @@ button.pr-label-chip:disabled {
 }
 
 .pr-state-picker,
-.pr-auto-merge-picker {
+.pr-auto-merge-picker,
+.pr-workflow-picker {
   grid-auto-flow: column;
   grid-auto-columns: 30px;
 }

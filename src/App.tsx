@@ -13,6 +13,7 @@ import {
   Code2,
   Command,
   Construction,
+  createLucideIcon,
   ExternalLink,
   FileCode2,
   FileText,
@@ -57,12 +58,15 @@ import {
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
+  pullRequestWorkflowState,
+  repositoryAllowsPullRequestAutoMerge,
   removePullRequestLabelOptimistically,
   reviewDecisionForReviewEvent,
   shortSha,
   statusTone,
   type FavoriteRepoSnapshots,
-  type ProjectPullRequestTab
+  type ProjectPullRequestTab,
+  type PullRequestWorkflowState
 } from "./appLogic";
 import { CLASSIC_TOKEN_SETTINGS_URL } from "../shared/auth";
 import { userFacingError } from "../shared/errors";
@@ -174,6 +178,11 @@ const accentColors = [
   "#ffa198",
   "#f2cc60"
 ] as const;
+const ClockCheck = createLucideIcon("ClockCheck", [
+  ["path", { d: "M12 6v6l4 2", key: "mmk7yg" }],
+  ["path", { d: "M22 12a10 10 0 1 0-11 9.95", key: "17dhok" }],
+  ["path", { d: "m22 16-5.5 5.5L14 19", key: "1eibut" }]
+]);
 const defaultAccentByTheme: Record<ThemeMode, AccentColor> = {
   dark: accentColors[0],
   light: accentColors[1]
@@ -1269,31 +1278,28 @@ export function App() {
       const mutationKey = `pr:${pr.number}:draft`;
       const mutationId = beginOptimisticMutation(mutationKey);
       patchPullRequestOptimistically(pr.number, { isDraft: draft });
-      void api
-        .updatePullRequestDraftState({
+      try {
+        await api.updatePullRequestDraftState({
           repo: selectedRepo,
           pullNumber: pr.number,
           pullRequestId: pr.id,
           draft
-        })
-        .then(() => {
-          if (!isCurrentOptimisticMutation(mutationKey, mutationId)) {
-            return;
-          }
-          void refreshPullRequest(selectedRepo, pr.number).catch((error) => {
+        });
+        if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
+          await refreshPullRequest(selectedRepo, pr.number).catch((error) => {
             flash(error instanceof Error ? error.message : "Pull request state updated, but refresh failed.");
           });
-        })
-        .catch((error) => {
-          if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
-            patchPullRequestOptimistically(pr.number, { isDraft: previousIsDraft });
-          }
-          flash(error instanceof Error ? error.message : "Unable to update pull request state.");
-        })
-        .finally(() => {
-          finishOptimisticMutation(mutationKey, mutationId);
-        });
-      return true;
+        }
+        return true;
+      } catch (error) {
+        if (isCurrentOptimisticMutation(mutationKey, mutationId)) {
+          patchPullRequestOptimistically(pr.number, { isDraft: previousIsDraft });
+        }
+        flash(error instanceof Error ? error.message : "Unable to update pull request state.");
+        return false;
+      } finally {
+        finishOptimisticMutation(mutationKey, mutationId);
+      }
     },
     [
       auth?.viewerLogin,
@@ -1420,6 +1426,10 @@ export function App() {
       }
       if (pr.autoMergeEnabled) {
         flash("Auto-merge is already enabled.");
+        return false;
+      }
+      if (selectedRepo.autoMergeAllowed === false) {
+        flash("Auto-merge is not enabled for this repository.");
         return false;
       }
 
@@ -3041,6 +3051,14 @@ function ContentPane(props: {
     props.prDetail && reviewPr
       ? latestViewerPullRequestReviewEvent(props.prDetail.reviews, props.auth?.viewerLogin)
       : null;
+  const prWorkflowState = reviewPr ? pullRequestWorkflowState(reviewPr) : null;
+  const repositoryAllowsAutoMerge = props.repo ? repositoryAllowsPullRequestAutoMerge(props.repo) : false;
+  const showPullRequestWorkflowActions = Boolean(
+    showDraftAction && showPullRequestManagementActions && prWorkflowState
+  );
+  const showPullRequestAutoMergeActions = Boolean(
+    showPullRequestManagementActions && reviewPr && (repositoryAllowsAutoMerge || reviewPr.autoMergeEnabled)
+  );
   const setPullRequestReadiness = useCallback((draft: boolean) => {
     if (!reviewPr) {
       return;
@@ -3067,6 +3085,9 @@ function ContentPane(props: {
     if (enabled === reviewPr.autoMergeEnabled) {
       return;
     }
+    if (enabled && !repositoryAllowsAutoMerge) {
+      return;
+    }
 
     void (async () => {
       if (!enabled) {
@@ -3086,6 +3107,48 @@ function ContentPane(props: {
     props.onEnablePullRequestAutoMerge,
     props.onDisablePullRequestAutoMerge,
     props.onUpdatePullRequestDraftState,
+    repositoryAllowsAutoMerge,
+    reviewPr
+  ]);
+  const setPullRequestWorkflow = useCallback((state: PullRequestWorkflowState) => {
+    if (!reviewPr) {
+      return;
+    }
+    if (state === pullRequestWorkflowState(reviewPr)) {
+      return;
+    }
+    if (state === "auto-ready" && !repositoryAllowsAutoMerge) {
+      return;
+    }
+
+    void (async () => {
+      if (state === "auto-ready") {
+        if (reviewPr.isDraft) {
+          const markedReady = await props.onUpdatePullRequestDraftState(reviewPr, false);
+          if (!markedReady) {
+            return;
+          }
+        }
+        if (!reviewPr.autoMergeEnabled) {
+          await props.onEnablePullRequestAutoMerge(reviewPr);
+        }
+        return;
+      }
+
+      if (reviewPr.autoMergeEnabled) {
+        const disabled = await props.onDisablePullRequestAutoMerge(reviewPr);
+        if (!disabled) {
+          return;
+        }
+      }
+
+      await props.onUpdatePullRequestDraftState(reviewPr, state === "draft");
+    })();
+  }, [
+    props.onEnablePullRequestAutoMerge,
+    props.onDisablePullRequestAutoMerge,
+    props.onUpdatePullRequestDraftState,
+    repositoryAllowsAutoMerge,
     reviewPr
   ]);
 
@@ -3122,14 +3185,24 @@ function ContentPane(props: {
               <ExternalLink size={16} />
             </button>
             {showDraftAction && reviewPr && (
-              <PullRequestReadinessToggle
-                disabled={props.prActionSubmitting}
-                isDraft={reviewPr.isDraft}
-                onChange={setPullRequestReadiness}
-              />
+              showPullRequestWorkflowActions && prWorkflowState ? (
+                <PullRequestWorkflowToggle
+                  canEnableAutoMerge={repositoryAllowsAutoMerge}
+                  disabled={props.prActionSubmitting}
+                  state={prWorkflowState}
+                  onChange={setPullRequestWorkflow}
+                />
+              ) : (
+                <PullRequestReadinessToggle
+                  disabled={props.prActionSubmitting}
+                  isDraft={reviewPr.isDraft}
+                  onChange={setPullRequestReadiness}
+                />
+              )
             )}
-            {showPullRequestManagementActions && reviewPr && (
+            {!showPullRequestWorkflowActions && showPullRequestAutoMergeActions && reviewPr && (
               <PullRequestAutoMergeToggle
+                canEnableAutoMerge={repositoryAllowsAutoMerge}
                 disabled={props.prActionSubmitting}
                 autoMergeEnabled={reviewPr.autoMergeEnabled}
                 onChange={setPullRequestAutoMerge}
@@ -3266,6 +3339,82 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
   return <span>{props.selection.workflow.name}</span>;
 }
 
+function PullRequestWorkflowToggle(props: {
+  canEnableAutoMerge: boolean;
+  disabled: boolean;
+  state: PullRequestWorkflowState;
+  onChange(state: PullRequestWorkflowState): void;
+}) {
+  const labels: Record<PullRequestWorkflowState, string> = {
+    "auto-ready": "Auto-merge and ready pull request. Change workflow",
+    "manual-ready": "Manual merge and ready pull request. Change workflow",
+    draft: "Draft pull request. Change workflow"
+  };
+
+  return (
+    <div
+      className="titlebar-picker pr-workflow-actions"
+      aria-label="Pull request workflow selector"
+      onPointerLeave={(event) => blurFocusedElementIn(event.currentTarget)}
+    >
+      <button
+        type="button"
+        className="review-action-button titlebar-state-action active"
+        aria-label={labels[props.state]}
+        aria-haspopup="true"
+        aria-pressed={true}
+        disabled={props.disabled}
+      >
+        <PullRequestWorkflowIcon state={props.state} size={17} />
+      </button>
+      <div className="titlebar-picker-menu pr-workflow-picker" role="group" aria-label="Change pull request workflow">
+        {props.canEnableAutoMerge && (
+          <button
+            type="button"
+            className={cx("review-action-button", props.state === "auto-ready" && "active")}
+            aria-label="Enable auto-merge and mark pull request ready"
+            aria-pressed={props.state === "auto-ready"}
+            disabled={props.disabled}
+            onClick={() => props.onChange("auto-ready")}
+          >
+            <CircleCheckBig size={15} />
+          </button>
+        )}
+        <button
+          type="button"
+          className={cx("review-action-button", props.state === "manual-ready" && "active")}
+          aria-label="Disable auto-merge and mark pull request ready"
+          aria-pressed={props.state === "manual-ready"}
+          disabled={props.disabled}
+          onClick={() => props.onChange("manual-ready")}
+        >
+          <ClockCheck size={15} />
+        </button>
+        <button
+          type="button"
+          className={cx("review-action-button", props.state === "draft" && "active")}
+          aria-label="Disable auto-merge and convert pull request to draft"
+          aria-pressed={props.state === "draft"}
+          disabled={props.disabled}
+          onClick={() => props.onChange("draft")}
+        >
+          <Construction size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PullRequestWorkflowIcon(props: { state: PullRequestWorkflowState; size: number }) {
+  if (props.state === "auto-ready") {
+    return <CircleCheckBig size={props.size} />;
+  }
+  if (props.state === "manual-ready") {
+    return <ClockCheck size={props.size} />;
+  }
+  return <Construction size={props.size} />;
+}
+
 function PullRequestReadinessToggle(props: {
   disabled: boolean;
   isDraft: boolean;
@@ -3316,6 +3465,7 @@ function PullRequestReadinessToggle(props: {
 }
 
 function PullRequestAutoMergeToggle(props: {
+  canEnableAutoMerge: boolean;
   disabled: boolean;
   autoMergeEnabled: boolean;
   onChange(enabled: boolean): void;
@@ -3341,16 +3491,18 @@ function PullRequestAutoMergeToggle(props: {
         {props.autoMergeEnabled ? <CircleCheckBig size={17} /> : <Clock size={17} />}
       </button>
       <div className="titlebar-picker-menu pr-auto-merge-picker" role="group" aria-label="Change pull request auto-merge">
-        <button
-          type="button"
-          className={cx("review-action-button", props.autoMergeEnabled && "active")}
-          aria-label="Enable auto-merge when pull request requirements are met"
-          aria-pressed={props.autoMergeEnabled}
-          disabled={props.disabled}
-          onClick={() => props.onChange(true)}
-        >
-          <CircleCheckBig size={15} />
-        </button>
+        {props.canEnableAutoMerge && (
+          <button
+            type="button"
+            className={cx("review-action-button", props.autoMergeEnabled && "active")}
+            aria-label="Enable auto-merge when pull request requirements are met"
+            aria-pressed={props.autoMergeEnabled}
+            disabled={props.disabled}
+            onClick={() => props.onChange(true)}
+          >
+            <CircleCheckBig size={15} />
+          </button>
+        )}
         <button
           type="button"
           className={cx("review-action-button", !props.autoMergeEnabled && "active")}

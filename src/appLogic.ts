@@ -7,6 +7,7 @@ import type {
 } from "../shared/github";
 
 export type ProjectPullRequestTab = "open" | "closed";
+export type PullRequestWorkflowState = "auto-ready" | "manual-ready" | "draft";
 export type FavoriteRepoSnapshots = Record<string, RepoSummary>;
 
 function repoSnapshotKey(repo: Pick<RepoSummary, "owner" | "name">): string {
@@ -98,12 +99,26 @@ export function pullRequestTabForState(pr: PullRequestSummary): ProjectPullReque
   return pr.state === "CLOSED" || pr.state === "MERGED" ? "closed" : "open";
 }
 
+export function pullRequestWorkflowState(pr: PullRequestSummary): PullRequestWorkflowState | null {
+  if (pr.isDraft && pr.autoMergeEnabled) {
+    return null;
+  }
+  if (pr.isDraft) {
+    return "draft";
+  }
+  return pr.autoMergeEnabled ? "auto-ready" : "manual-ready";
+}
+
 export function canSubmitPullRequestReview(repo: RepoSummary): boolean {
   return ["ADMIN", "MAINTAIN", "WRITE"].includes(repo.viewerPermission ?? "");
 }
 
 export function canManagePullRequest(repo: RepoSummary): boolean {
   return canSubmitPullRequestReview(repo);
+}
+
+export function repositoryAllowsPullRequestAutoMerge(repo: RepoSummary): boolean {
+  return repo.autoMergeAllowed !== false;
 }
 
 export function canUpdatePullRequestLabels(repo: RepoSummary): boolean {

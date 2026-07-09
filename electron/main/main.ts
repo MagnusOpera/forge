@@ -586,7 +586,7 @@ async function cached<T>(
 const cacheMemory = new Map<string, CacheRecord<unknown>>();
 
 function repoCacheKey(repo: RepoRef): string {
-  return `repo:${repo.owner}/${repo.name}:v2`;
+  return `repo:${repo.owner}/${repo.name}:v3`;
 }
 
 function repoLabelsCacheKey(repo: RepoRef): string {
@@ -669,6 +669,13 @@ function toRepositoryPermission(repo: any): RepoSummary["viewerPermission"] {
 }
 
 function toRepo(repo: any): RepoSummary {
+  const autoMergeAllowed =
+    typeof repo.autoMergeAllowed === "boolean"
+      ? repo.autoMergeAllowed
+      : typeof repo.allow_auto_merge === "boolean"
+        ? repo.allow_auto_merge
+        : undefined;
+
   return {
     id: String(repo.id),
     owner: repo.owner.login,
@@ -677,6 +684,7 @@ function toRepo(repo: any): RepoSummary {
     description: repo.description ?? null,
     defaultBranch: repo.defaultBranchRef?.name ?? repo.default_branch ?? null,
     viewerPermission: toRepositoryPermission(repo),
+    autoMergeAllowed,
     isPrivate: Boolean(repo.isPrivate ?? repo.private),
     isArchived: Boolean(repo.isArchived ?? repo.archived),
     isFork: Boolean(repo.isFork ?? repo.fork),
@@ -783,7 +791,7 @@ function ensureRepo(repo: RepoRef): RepoRef {
 }
 
 async function getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
-  return cached("viewer:starred-repos:v2", async () => {
+  return cached("viewer:starred-repos:v3", async () => {
     const { gql } = await getClients();
     const result: any = await gql(`
       query StarredRepos {
@@ -800,6 +808,7 @@ async function getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
               updatedAt
               pushedAt
               viewerPermission
+              autoMergeAllowed
               url
               owner { login avatarUrl }
               defaultBranchRef { name }
@@ -813,7 +822,7 @@ async function getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
 }
 
 async function getRepositories(): Promise<CacheEnvelope<RepoSummary[]>> {
-  return cached("viewer:repositories:v3", async () => {
+  return cached("viewer:repositories:v4", async () => {
     const { octokit } = await getClients();
     const [viewerRepositories, organizations] = await Promise.all([
       octokit.paginate(octokit.repos.listForAuthenticatedUser, {
@@ -849,7 +858,7 @@ async function getRepositories(): Promise<CacheEnvelope<RepoSummary[]>> {
 }
 
 async function getRecentRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
-  return cached("viewer:recent-repos:v2", async () => {
+  return cached("viewer:recent-repos:v3", async () => {
     const { gql } = await getClients();
     const result: any = await gql(`
       query RecentRepos {
@@ -870,6 +879,7 @@ async function getRecentRepos(): Promise<CacheEnvelope<RepoSummary[]>> {
               updatedAt
               pushedAt
               viewerPermission
+              autoMergeAllowed
               url
               owner { login avatarUrl }
               defaultBranchRef { name }
@@ -921,6 +931,7 @@ async function getRepo(repoRef: RepoRef, options?: CacheRequestOptions): Promise
             updatedAt
             pushedAt
             viewerPermission
+            autoMergeAllowed
             url
             owner { login avatarUrl }
             defaultBranchRef { name }

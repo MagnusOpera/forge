@@ -14,6 +14,8 @@ import {
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
   pullRequestTabForState,
+  pullRequestWorkflowState,
+  repositoryAllowsPullRequestAutoMerge,
   removePullRequestLabelOptimistically,
   reviewDecisionForReviewEvent,
   shortSha,
@@ -39,6 +41,13 @@ describe("appLogic", () => {
     expect(pullRequestTabForState({ state: "MERGED" } as PullRequestSummary)).toBe("closed");
   });
 
+  it("maps pull requests to the merged titlebar workflow state", () => {
+    expect(pullRequestWorkflowState({ isDraft: false, autoMergeEnabled: true } as PullRequestSummary)).toBe("auto-ready");
+    expect(pullRequestWorkflowState({ isDraft: false, autoMergeEnabled: false } as PullRequestSummary)).toBe("manual-ready");
+    expect(pullRequestWorkflowState({ isDraft: true, autoMergeEnabled: false } as PullRequestSummary)).toBe("draft");
+    expect(pullRequestWorkflowState({ isDraft: true, autoMergeEnabled: true } as PullRequestSummary)).toBe(null);
+  });
+
   it("enables review submission for write-level repository permissions", () => {
     expect(canSubmitPullRequestReview({ viewerPermission: "ADMIN" } as RepoSummary)).toBe(true);
     expect(canSubmitPullRequestReview({ viewerPermission: "MAINTAIN" } as RepoSummary)).toBe(true);
@@ -54,6 +63,12 @@ describe("appLogic", () => {
     expect(canManagePullRequest({ viewerPermission: "TRIAGE" } as RepoSummary)).toBe(false);
     expect(canManagePullRequest({ viewerPermission: "READ" } as RepoSummary)).toBe(false);
     expect(canManagePullRequest({ viewerPermission: null } as RepoSummary)).toBe(false);
+  });
+
+  it("treats missing repository auto-merge settings as unknown but allowed", () => {
+    expect(repositoryAllowsPullRequestAutoMerge({ autoMergeAllowed: true } as RepoSummary)).toBe(true);
+    expect(repositoryAllowsPullRequestAutoMerge({ autoMergeAllowed: false } as RepoSummary)).toBe(false);
+    expect(repositoryAllowsPullRequestAutoMerge({} as RepoSummary)).toBe(true);
   });
 
   it("prevents review actions on pull requests authored by the viewer", () => {
