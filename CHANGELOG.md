@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.11]
+
+
 - Prevented pointer-clicked controls from leaving focus rings in screenshots.
 - Kept the repository splitter body and borders independent from the glass sidebar.
 - Matched native macOS glass appearance to the selected Forge theme.
@@ -11,6 +14,8 @@ All notable changes to Forge are documented in this file.
 - Let the sidebar Octocat switch between glass and normal sidebar appearances.
 - Gave the repository sidebar a more macOS-like translucent material treatment.
 - Added a system theme option that follows the current macOS appearance.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.10...0.0.11
 
 ## [0.0.10]
 
