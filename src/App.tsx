@@ -78,6 +78,7 @@ import {
 } from "./appLogic";
 import { CLASSIC_TOKEN_SETTINGS_URL } from "../shared/auth";
 import { userFacingError } from "../shared/errors";
+import { DEFAULT_SIDEBAR_APPEARANCE_MODE } from "../shared/github";
 import type {
   AuthStatus,
   CheckSummary,
@@ -367,7 +368,7 @@ function normalizeThemePreference(value: ThemePreference): ThemePreference {
 }
 
 function normalizeSidebarAppearanceMode(value: SidebarAppearanceMode): SidebarAppearanceMode {
-  return value === "normal" ? "normal" : "glass";
+  return value === "normal" ? "normal" : DEFAULT_SIDEBAR_APPEARANCE_MODE;
 }
 
 function prefersReducedMotion(): boolean {
@@ -893,11 +894,11 @@ export function App() {
   const legacySidebarAppearance = useMemo(() => readStoredSidebarAppearance("github-focus:sidebar-appearance"), []);
   const [darkSidebarAppearance, setDarkSidebarAppearance] = useStoredState<SidebarAppearanceMode>(
     "github-focus:sidebar-appearance:dark",
-    legacySidebarAppearance ?? "glass"
+    legacySidebarAppearance ?? DEFAULT_SIDEBAR_APPEARANCE_MODE
   );
   const [lightSidebarAppearance, setLightSidebarAppearance] = useStoredState<SidebarAppearanceMode>(
     "github-focus:sidebar-appearance:light",
-    legacySidebarAppearance ?? "glass"
+    legacySidebarAppearance ?? DEFAULT_SIDEBAR_APPEARANCE_MODE
   );
   const sidebarAppearance = normalizeSidebarAppearanceMode(
     activeTheme === "dark" ? darkSidebarAppearance : lightSidebarAppearance

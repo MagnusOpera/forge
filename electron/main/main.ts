@@ -56,6 +56,7 @@ import type {
   WorkflowRunSummary,
   WorkflowSummary
 } from "../../shared/github.js";
+import { DEFAULT_SIDEBAR_APPEARANCE_MODE } from "../../shared/github.js";
 import {
   isClassicPersonalAccessToken,
   missingRequiredClassicTokenScopes,
@@ -90,7 +91,7 @@ let octokitClient: Octokit | null = null;
 let graphqlClient: GraphqlClient | null = null;
 let activeTokenHash: string | null = null;
 const activeNotifications = new Set<Notification>();
-let sidebarAppearanceMode: SidebarAppearanceMode = "glass";
+let sidebarAppearanceMode: SidebarAppearanceMode = DEFAULT_SIDEBAR_APPEARANCE_MODE;
 
 function appIconPath(extension: "png" | "icns" = "png"): string {
   return path.join(app.getAppPath(), "assets", `forge-icon.${extension}`);
@@ -2146,7 +2147,7 @@ function createWindow(): void {
 }
 
 function normalizeSidebarAppearanceMode(mode: unknown): SidebarAppearanceMode {
-  return mode === "normal" ? "normal" : "glass";
+  return mode === "normal" ? "normal" : DEFAULT_SIDEBAR_APPEARANCE_MODE;
 }
 
 function normalizeNativeThemeSource(source: unknown): NativeThemeSource {

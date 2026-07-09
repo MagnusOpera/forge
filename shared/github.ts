@@ -276,6 +276,7 @@ export interface NativeNotificationPayload {
 export type NativeThemeSource = "system" | "light" | "dark";
 
 export type SidebarAppearanceMode = "glass" | "normal";
+export const DEFAULT_SIDEBAR_APPEARANCE_MODE: SidebarAppearanceMode = "glass";
 
 export interface DispatchWorkflowPayload {
   repo: RepoRef;
