@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.16]
+
+
 - Removed the selected background from titlebar view icons while widening their animated underline.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.15...0.0.16
 
 ## [0.0.15]
 
