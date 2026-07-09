@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.7]
+
+
 - Merged pull request ready and auto-merge controls when their state maps cleanly to Forge workflows.
 - Hid pull request auto-merge actions when the repository does not allow auto-merge.
 - Clarified GitHub API auto-merge failures and recovered stale pull request auto-merge state.
@@ -23,6 +26,8 @@ All notable changes to Forge are documented in this file.
 - Highlighted the current pull request review action after approving or requesting changes.
 - Preserved favorite repositories after clearing the stored GitHub token.
 - Validated saved GitHub tokens as classic tokens with the required repo and read:project permissions.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.6...0.0.7
 
 ## [0.0.6]
 
