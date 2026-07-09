@@ -420,6 +420,35 @@ input {
   opacity: 0.35;
 }
 
+.underline-action {
+  position: relative;
+  overflow: hidden;
+}
+
+.underline-action::after {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  left: 6px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.underline-action.copied,
+.underline-action.invoked {
+  color: var(--accent);
+}
+
+.underline-action.copied::after,
+.underline-action.invoked::after {
+  animation: copy-meta-underline 620ms ease-out;
+}
+
 .icon-button.small {
   width: 26px;
   height: 26px;

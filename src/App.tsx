@@ -57,6 +57,7 @@ import {
   findNewFailedWorkflowRuns,
   findNewOpenPullRequests,
   formatDuration,
+  githubUrlClickActionForDetail,
   isLiveStatus,
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
@@ -638,6 +639,81 @@ function workflowFailureNotificationPayload(repo: RepoSummary, run: WorkflowRunS
       run
     }
   };
+}
+
+function GithubUrlActionButton(props: {
+  url?: string | null;
+  className?: string;
+  ariaLabel?: string;
+  onCopyText(value: string): Promise<boolean>;
+  onOpenUrl(url: string): void;
+}) {
+  const { ariaLabel, className, onCopyText, onOpenUrl, url } = props;
+  const [copied, setCopied] = useState(false);
+  const copyFeedbackTimer = useRef<number | null>(null);
+  const copyFeedbackFrame = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyFeedbackTimer.current) {
+        window.clearTimeout(copyFeedbackTimer.current);
+      }
+      if (copyFeedbackFrame.current) {
+        window.cancelAnimationFrame(copyFeedbackFrame.current);
+      }
+    },
+    []
+  );
+
+  const showCopied = useCallback(() => {
+    if (copyFeedbackTimer.current) {
+      window.clearTimeout(copyFeedbackTimer.current);
+    }
+    if (copyFeedbackFrame.current) {
+      window.cancelAnimationFrame(copyFeedbackFrame.current);
+    }
+
+    setCopied(false);
+    copyFeedbackFrame.current = window.requestAnimationFrame(() => {
+      setCopied(true);
+      copyFeedbackFrame.current = null;
+      copyFeedbackTimer.current = window.setTimeout(() => {
+        setCopied(false);
+        copyFeedbackTimer.current = null;
+      }, 620);
+    });
+  }, []);
+
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (!url) {
+        return;
+      }
+
+      if (githubUrlClickActionForDetail(event.detail) === "open") {
+        onOpenUrl(url);
+        return;
+      }
+
+      void onCopyText(url).then((didCopy) => {
+        if (didCopy) {
+          showCopied();
+        }
+      });
+    },
+    [onCopyText, onOpenUrl, showCopied, url]
+  );
+
+  return (
+    <button
+      className={cx("icon-button underline-action github-url-action", className, copied && "copied")}
+      aria-label={ariaLabel ?? "Copy GitHub URL. Double-click to open in GitHub"}
+      onClick={handleClick}
+      disabled={!url}
+    >
+      <ExternalLink size={16} />
+    </button>
+  );
 }
 
 export function App() {
@@ -2359,7 +2435,8 @@ export function App() {
         onWorkflowTab={setProjectWorkflowTab}
         onRefresh={() => void refreshActivePane()}
         onToggleSidebar={() => setSidebarCollapsedWithAnimation(false)}
-        onOpenGithub={openGithub}
+        onOpenGithubUrl={openGithubUrl}
+        onCopyText={copyToClipboard}
         onSelectPr={(pr) => {
           setProjectPullRequestTab(pullRequestTabForState(pr));
           setSelection({ kind: "pr", pr });
@@ -2400,7 +2477,6 @@ export function App() {
         onNavigateForward={() => navigateHistory(1)}
         onToggleTheme={() => setTheme(activeTheme === "dark" ? "light" : "dark")}
         onAccentChange={setActiveAccentColor}
-        onOpenGithub={openGithub}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
         onCopyText={copyToClipboard}
@@ -2774,7 +2850,8 @@ function ProjectPane(props: {
   onWorkflowTab(tab: ProjectWorkflowTab): void;
   onRefresh(): void;
   onToggleSidebar(): void;
-  onOpenGithub(): void;
+  onOpenGithubUrl(url: string): void;
+  onCopyText(value: string): Promise<boolean>;
   onSelectPr(pr: PullRequestSummary): void;
   onSelectIssue(issue: IssueSummary): void;
   onSelectRun(run: WorkflowRunSummary): void;
@@ -2783,6 +2860,46 @@ function ProjectPane(props: {
   onReorderFavoriteWorkflow(sourceId: number, targetId: number): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
+  const [syncInvoked, setSyncInvoked] = useState(false);
+  const syncFeedbackTimer = useRef<number | null>(null);
+  const syncFeedbackFrame = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (syncFeedbackTimer.current) {
+        window.clearTimeout(syncFeedbackTimer.current);
+      }
+      if (syncFeedbackFrame.current) {
+        window.cancelAnimationFrame(syncFeedbackFrame.current);
+      }
+    },
+    []
+  );
+
+  const animateSync = useCallback(() => {
+    if (syncFeedbackTimer.current) {
+      window.clearTimeout(syncFeedbackTimer.current);
+    }
+    if (syncFeedbackFrame.current) {
+      window.cancelAnimationFrame(syncFeedbackFrame.current);
+    }
+
+    setSyncInvoked(false);
+    syncFeedbackFrame.current = window.requestAnimationFrame(() => {
+      setSyncInvoked(true);
+      syncFeedbackFrame.current = null;
+      syncFeedbackTimer.current = window.setTimeout(() => {
+        setSyncInvoked(false);
+        syncFeedbackTimer.current = null;
+      }, 620);
+    });
+  }, []);
+
+  const refreshProject = useCallback(() => {
+    animateSync();
+    props.onRefresh();
+  }, [animateSync, props.onRefresh]);
+
   return (
     <section className="project-pane" tabIndex={0}>
       <div className={cx("pane-header", props.sidebarCollapsed && "collapsed-project-header")}>
@@ -2808,12 +2925,20 @@ function ProjectPane(props: {
             onView={props.onFocusView}
           />
           <span className="toolbar-divider" />
-          <button className="icon-button" aria-label="Refresh" onClick={props.onRefresh} disabled={!props.repo}>
+          <button
+            className={cx("icon-button underline-action", syncInvoked && "invoked")}
+            aria-label="Refresh"
+            onClick={refreshProject}
+            disabled={!props.repo}
+          >
             <RefreshCw size={16} />
           </button>
-          <button className="icon-button" aria-label="Open in GitHub" onClick={props.onOpenGithub} disabled={!props.repo}>
-            <ExternalLink size={16} />
-          </button>
+          <GithubUrlActionButton
+            url={props.repo?.url ?? null}
+            ariaLabel="Copy project GitHub URL. Double-click to open in GitHub"
+            onCopyText={props.onCopyText}
+            onOpenUrl={props.onOpenGithubUrl}
+          />
         </div>
       </div>
       {!props.repo ? (
@@ -3255,7 +3380,6 @@ function ContentPane(props: {
   onNavigateForward(): void;
   onToggleTheme(): void;
   onAccentChange(color: string): void;
-  onOpenGithub(): void;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onCopyText(value: string): Promise<boolean>;
@@ -3289,6 +3413,7 @@ function ContentPane(props: {
     props.prDetail && reviewPr
       ? latestViewerPullRequestReviewEvent(props.prDetail.reviews, props.auth?.viewerLogin)
       : null;
+  const githubUrl = openUrlForSelection(props.selection, props.repo);
   const prWorkflowState = reviewPr ? pullRequestWorkflowState(reviewPr) : null;
   const repositoryAllowsAutoMerge = props.repo ? repositoryAllowsPullRequestAutoMerge(props.repo) : false;
   const showPullRequestWorkflowActions = Boolean(
@@ -3414,14 +3539,13 @@ function ContentPane(props: {
           </div>
           <div className="content-title">
             <ContentTitle selection={props.selection} repo={props.repo} />
-            <button
-              className="icon-button content-title-action"
-              aria-label="Open in GitHub"
-              onClick={props.onOpenGithub}
-              disabled={!props.repo}
-            >
-              <ExternalLink size={16} />
-            </button>
+            <GithubUrlActionButton
+              url={githubUrl}
+              className="content-title-action"
+              ariaLabel="Copy content GitHub URL. Double-click to open in GitHub"
+              onCopyText={props.onCopyText}
+              onOpenUrl={props.onOpenGithubUrl}
+            />
             {showDraftAction && reviewPr && (
               showPullRequestWorkflowActions && prWorkflowState ? (
                 <PullRequestWorkflowToggle

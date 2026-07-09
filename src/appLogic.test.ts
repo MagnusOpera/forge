@@ -18,6 +18,7 @@ import {
   findNewFailedWorkflowRuns,
   findNewOpenPullRequests,
   formatDuration,
+  githubUrlClickActionForDetail,
   isFailedWorkflowRun,
   isPullRequestAuthor,
   isLiveStatus,
@@ -256,6 +257,12 @@ describe("appLogic", () => {
     expect(isLiveStatus("in_progress")).toBe(true);
     expect(isLiveStatus("QUEUED")).toBe(true);
     expect(isLiveStatus("success")).toBe(false);
+  });
+
+  it("maps GitHub URL clicks to copy first and open on double-click", () => {
+    expect(githubUrlClickActionForDetail(0)).toBe("copy");
+    expect(githubUrlClickActionForDetail(1)).toBe("copy");
+    expect(githubUrlClickActionForDetail(2)).toBe("open");
   });
 
   it("seeds pull request notifications without reporting existing open pull requests", () => {

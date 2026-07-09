@@ -10,6 +10,7 @@ import type {
 export type ProjectPullRequestTab = "open" | "closed";
 export type PullRequestWorkflowState = "auto-ready" | "manual-ready" | "draft";
 export type FavoriteRepoSnapshots = Record<string, RepoSummary>;
+export type GithubUrlClickAction = "copy" | "open";
 
 function repoSnapshotKey(repo: Pick<RepoSummary, "owner" | "name">): string {
   return `${repo.owner}/${repo.name}`;
@@ -277,6 +278,10 @@ export function latestViewerPullRequestReviewEvent(
 
 export function isLiveStatus(status?: string | null): boolean {
   return ["queued", "waiting", "pending", "requested", "in_progress"].includes((status ?? "").toLowerCase());
+}
+
+export function githubUrlClickActionForDetail(detail: number): GithubUrlClickAction {
+  return detail >= 2 ? "open" : "copy";
 }
 
 function notificationKeySet(keys: ReadonlySet<string> | readonly string[] | null | undefined): Set<string> | null {
