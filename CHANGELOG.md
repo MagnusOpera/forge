@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.12]
+
+
 - Restored the first pane splitter hover highlight.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.11...0.0.12
 
 ## [0.0.11]
 
