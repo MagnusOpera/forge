@@ -4,10 +4,15 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.9]
+
+
 - Kept pull request title controls attached to the title text without resizing the edit field.
 - Animated the project sync control when refresh is invoked.
 - Changed project and content GitHub URL buttons to copy first and open on double-click.
 - Added native notifications for new pull requests and workflow failures in favorite repositories.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.8...0.0.9
 
 ## [0.0.8]
 
