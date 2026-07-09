@@ -3,6 +3,8 @@
   --app-bg: #22272e;
   --sidebar-appearance-duration: 360ms;
   --sidebar-appearance-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --theme-transition-duration: 320ms;
+  --theme-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --sidebar-solid-bg: #1c2128;
   --sidebar-bg: rgb(28 33 40 / 0.78);
   --sidebar-border: rgb(205 217 229 / 0.14);
@@ -240,6 +242,41 @@ body,
   height: 100%;
   margin: 0;
   background: transparent;
+}
+
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition-property:
+    background-color,
+    color,
+    border-color,
+    outline-color,
+    text-decoration-color,
+    fill,
+    stroke,
+    box-shadow,
+    opacity,
+    backdrop-filter,
+    -webkit-backdrop-filter;
+  transition-duration: var(--theme-transition-duration);
+  transition-timing-function: var(--theme-transition-easing);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--theme-transition-duration);
+  animation-timing-function: var(--theme-transition-easing);
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  animation-name: forge-theme-fade-out;
+}
+
+::view-transition-new(root) {
+  animation-name: forge-theme-fade-in;
 }
 
 button,
@@ -488,6 +525,18 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html.theme-transitioning,
+  html.theme-transitioning *,
+  html.theme-transitioning *::before,
+  html.theme-transitioning *::after {
+    transition: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0ms;
+  }
+
   .app-shell.layout-animating,
   .app-shell,
   .pane-header,
@@ -1615,6 +1664,24 @@ input {
   100% {
     opacity: 0;
     transform: scaleX(1);
+  }
+}
+
+@keyframes forge-theme-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes forge-theme-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 

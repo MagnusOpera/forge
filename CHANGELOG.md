@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Animated theme changes when switching between system, light, and dark appearances.
 - Made pane splitters thinner with animated non-accent hover colors.
 - Moved glass appearance into the theme picker with per-theme settings and smoother transitions.
 

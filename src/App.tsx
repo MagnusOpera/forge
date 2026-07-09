@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import type { PatchDiffProps } from "@pierre/diffs/react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
@@ -201,6 +202,8 @@ const accentColors = [
 ] as const;
 const favoriteProjectRefreshIntervalMs = 5 * 60 * 1000;
 const sidebarAppearanceTransitionMs = 360;
+const themeTransitionMs = 320;
+const themeTransitionClass = "theme-transitioning";
 const ClockCheck = createLucideIcon("ClockCheck", [
   ["path", { d: "M12 6v6l4 2", key: "mmk7yg" }],
   ["path", { d: "M22 12a10 10 0 1 0-11 9.95", key: "17dhok" }],
@@ -215,6 +218,10 @@ type AccentColor = (typeof accentColors)[number];
 type AppCssVars = React.CSSProperties & Record<"--accent", string>;
 type SwatchCssVars = React.CSSProperties & Record<"--swatch-color", string>;
 type SlidingUnderlineVars = React.CSSProperties & Record<"--tab-underline-left" | "--tab-underline-width", string>;
+type ViewTransitionHandle = { finished: Promise<void> };
+type DocumentWithViewTransition = Document & {
+  startViewTransition?: (updateCallback: () => void) => ViewTransitionHandle;
+};
 
 function clearPointerActivatedControlFocus(event: React.MouseEvent<HTMLElement>): void {
   if (event.detail === 0) {
@@ -361,6 +368,10 @@ function normalizeThemePreference(value: ThemePreference): ThemePreference {
 
 function normalizeSidebarAppearanceMode(value: SidebarAppearanceMode): SidebarAppearanceMode {
   return value === "normal" ? "normal" : "glass";
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function readStoredSidebarAppearance(key: string): SidebarAppearanceMode | null {
@@ -915,6 +926,7 @@ export function App() {
   const layoutAnimationTimer = useRef<number | null>(null);
   const nativeSidebarAppearanceTimer = useRef<number | null>(null);
   const previousSidebarAppearance = useRef<SidebarAppearanceMode | null>(null);
+  const themeTransitionTimer = useRef<number | null>(null);
   const optimisticMutationSequence = useRef(0);
   const optimisticMutationIds = useRef(new Map<string, number>());
   const restoringNavigation = useRef(false);
@@ -1090,6 +1102,55 @@ export function App() {
     },
     [activeTheme, setDarkAccentColor, setLightAccentColor]
   );
+
+  const setThemePreferenceWithTransition = useCallback(
+    (preference: ThemePreference) => {
+      const root = document.documentElement;
+      const updateThemePreference = () => setStoredThemePreference(preference);
+
+      if (themeTransitionTimer.current) {
+        window.clearTimeout(themeTransitionTimer.current);
+        themeTransitionTimer.current = null;
+      }
+
+      if (prefersReducedMotion()) {
+        root.classList.remove(themeTransitionClass);
+        updateThemePreference();
+        return;
+      }
+
+      const viewTransitionDocument = document as DocumentWithViewTransition;
+      if (typeof viewTransitionDocument.startViewTransition === "function") {
+        const transition = viewTransitionDocument.startViewTransition(() => {
+          flushSync(updateThemePreference);
+        });
+        void transition.finished.catch(() => undefined);
+        return;
+      }
+
+      root.classList.add(themeTransitionClass);
+      flushSync(updateThemePreference);
+      themeTransitionTimer.current = window.setTimeout(() => {
+        root.classList.remove(themeTransitionClass);
+        themeTransitionTimer.current = null;
+      }, themeTransitionMs);
+    },
+    [setStoredThemePreference]
+  );
+
+  const toggleThemePreference = useCallback(() => {
+    setThemePreferenceWithTransition(nextThemePreference(themePreference));
+  }, [setThemePreferenceWithTransition, themePreference]);
+
+  useEffect(() => {
+    return () => {
+      if (themeTransitionTimer.current) {
+        window.clearTimeout(themeTransitionTimer.current);
+        themeTransitionTimer.current = null;
+      }
+      document.documentElement.classList.remove(themeTransitionClass);
+    };
+  }, []);
 
   const setSidebarCollapsedWithAnimation = useCallback(
     (next: boolean | ((value: boolean) => boolean)) => {
@@ -2661,7 +2722,7 @@ export function App() {
         accentColor={selectedAccent}
         onNavigateBack={() => navigateHistory(-1)}
         onNavigateForward={() => navigateHistory(1)}
-        onToggleTheme={() => setStoredThemePreference(nextThemePreference(themePreference))}
+        onToggleTheme={toggleThemePreference}
         onToggleSidebarAppearance={toggleSidebarAppearance}
         onAccentChange={setActiveAccentColor}
         onOpenGithubUrl={openGithubUrl}
