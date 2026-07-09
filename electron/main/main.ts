@@ -5,6 +5,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  nativeTheme,
   Notification,
   safeStorage,
   shell,
@@ -33,6 +34,7 @@ import type {
   LabelSummary,
   NativeNotificationPayload,
   NativeNotificationSource,
+  NativeThemeSource,
   OrganizationSummary,
   PullRequestActionPayload,
   PullRequestAutoMergePayload,
@@ -42,6 +44,7 @@ import type {
   PullRequestSummary,
   RepoRef,
   RepoSummary,
+  SidebarAppearanceMode,
   SubmitPullRequestReviewPayload,
   TimelineComment,
   UpdatePullRequestDraftStatePayload,
@@ -75,6 +78,8 @@ const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
 const defaultTtlMs = 5 * 60 * 1000;
 const appDefaultZoomFactor = 1.1;
+const glassWindowBackground = "#00000000";
+const normalWindowBackground = "#0c0e12";
 
 app.setName(appDisplayName);
 app.setAppUserModelId("com.magnusopera.forge");
@@ -85,6 +90,7 @@ let octokitClient: Octokit | null = null;
 let graphqlClient: GraphqlClient | null = null;
 let activeTokenHash: string | null = null;
 const activeNotifications = new Set<Notification>();
+let sidebarAppearanceMode: SidebarAppearanceMode = "glass";
 
 function appIconPath(extension: "png" | "icns" = "png"): string {
   return path.join(app.getAppPath(), "assets", `forge-icon.${extension}`);
@@ -2101,7 +2107,10 @@ function createWindow(): void {
     minHeight: 640,
     title: appDisplayName,
     icon: appIconPath("png"),
-    backgroundColor: "#0c0e12",
+    backgroundColor: process.platform === "darwin" ? glassWindowBackground : normalWindowBackground,
+    transparent: process.platform === "darwin",
+    vibrancy: process.platform === "darwin" ? "sidebar" : undefined,
+    visualEffectState: process.platform === "darwin" ? "followWindow" : undefined,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 14, y: 14 },
     webPreferences: {
@@ -2134,6 +2143,38 @@ function createWindow(): void {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+}
+
+function normalizeSidebarAppearanceMode(mode: unknown): SidebarAppearanceMode {
+  return mode === "normal" ? "normal" : "glass";
+}
+
+function normalizeNativeThemeSource(source: unknown): NativeThemeSource {
+  return source === "light" || source === "dark" ? source : "system";
+}
+
+function setSidebarAppearanceMode(mode: SidebarAppearanceMode): void {
+  sidebarAppearanceMode = mode;
+
+  if (!mainWindow) {
+    return;
+  }
+
+  if (process.platform === "darwin") {
+    mainWindow.setVibrancy(mode === "glass" ? "sidebar" : null);
+    mainWindow.setBackgroundColor(mode === "glass" ? glassWindowBackground : normalWindowBackground);
+    return;
+  }
+
+  mainWindow.setBackgroundColor(normalWindowBackground);
+}
+
+function setNativeThemeSource(source: NativeThemeSource): void {
+  nativeTheme.themeSource = source;
+
+  if (process.platform === "darwin" && mainWindow && sidebarAppearanceMode === "glass") {
+    mainWindow.setVibrancy("sidebar");
+  }
 }
 
 function registerIpc(): void {
@@ -2223,6 +2264,12 @@ function registerIpc(): void {
   ipcMain.handle("notifications:show", (_event, payload: NativeNotificationPayload) =>
     showNativeNotification(payload)
   );
+  ipcMain.handle("window:set-native-theme-source", (_event, source: NativeThemeSource) => {
+    setNativeThemeSource(normalizeNativeThemeSource(source));
+  });
+  ipcMain.handle("window:set-sidebar-appearance-mode", (_event, mode: SidebarAppearanceMode) => {
+    setSidebarAppearanceMode(normalizeSidebarAppearanceMode(mode));
+  });
 }
 
 registerIpc();

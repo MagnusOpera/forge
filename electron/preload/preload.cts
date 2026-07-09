@@ -102,7 +102,9 @@ const api: GithubFocusApi = {
     const listener = (_event: Electron.IpcRendererEvent, key: string) => callback(key);
     ipcRenderer.on("github:cache-updated", listener);
     return () => ipcRenderer.removeListener("github:cache-updated", listener);
-  }
+  },
+  setNativeThemeSource: (source) => ipcRenderer.invoke("window:set-native-theme-source", source),
+  setSidebarAppearanceMode: (mode) => ipcRenderer.invoke("window:set-sidebar-appearance-mode", mode)
 };
 
 contextBridge.exposeInMainWorld("githubFocus", api);

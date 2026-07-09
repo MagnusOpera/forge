@@ -4,6 +4,11 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Kept the repository splitter body and borders independent from the glass sidebar.
+- Matched native macOS glass appearance to the selected Forge theme.
+- Improved the dark sidebar glass transparency and search-field contrast.
+- Let the sidebar Octocat switch between glass and normal sidebar appearances.
+- Gave the repository sidebar a more macOS-like translucent material treatment.
 - Added a system theme option that follows the current macOS appearance.
 
 ## [0.0.10]

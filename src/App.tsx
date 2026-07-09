@@ -86,6 +86,7 @@ import type {
   NativeNotificationPayload,
   NativeNotificationPermission,
   NativeNotificationSource,
+  NativeThemeSource,
   OrganizationSummary,
   PullRequestDetail,
   PullRequestReview,
@@ -93,6 +94,7 @@ import type {
   PullRequestSummary,
   RepoRef,
   RepoSummary,
+  SidebarAppearanceMode,
   WorkflowJobLogDetail,
   WorkflowRunDetail,
   WorkflowRunSummary,
@@ -258,7 +260,9 @@ const browserApi: GithubFocusApi = {
   },
   showNativeNotification: async () => false,
   onNativeNotificationClicked: () => () => undefined,
-  onCacheUpdated: () => () => undefined
+  onCacheUpdated: () => () => undefined,
+  setNativeThemeSource: async () => undefined,
+  setSidebarAppearanceMode: async () => undefined
 };
 
 const api: GithubFocusApi =
@@ -320,6 +324,10 @@ function getSystemTheme(): ThemeMode {
 
 function normalizeThemePreference(value: ThemePreference): ThemePreference {
   return themePreferenceOptions.includes(value) ? value : themePreferenceOptions[0];
+}
+
+function normalizeSidebarAppearanceMode(value: SidebarAppearanceMode): SidebarAppearanceMode {
+  return value === "normal" ? "normal" : "glass";
 }
 
 function nextThemePreference(preference: ThemePreference): ThemePreference {
@@ -822,6 +830,12 @@ export function App() {
   const themePreference = normalizeThemePreference(storedThemePreference);
   const systemTheme = useSystemTheme();
   const activeTheme: ThemeMode = themePreference === "system" ? systemTheme : themePreference;
+  const nativeThemeSource: NativeThemeSource = themePreference === "system" ? "system" : activeTheme;
+  const [storedSidebarAppearance, setStoredSidebarAppearance] = useStoredState<SidebarAppearanceMode>(
+    "github-focus:sidebar-appearance",
+    "glass"
+  );
+  const sidebarAppearance = normalizeSidebarAppearanceMode(storedSidebarAppearance);
   const legacyAccentColor = useMemo(() => readStoredAccentColor("github-focus:accent-color"), []);
   const [darkAccentColor, setDarkAccentColor] = useStoredState<string>(
     "github-focus:accent-color:dark",
@@ -2452,9 +2466,25 @@ export function App() {
     gridTemplateColumns,
     "--accent": selectedAccent
   };
+  const toggleSidebarAppearance = useCallback(() => {
+    setStoredSidebarAppearance((current) => (normalizeSidebarAppearanceMode(current) === "glass" ? "normal" : "glass"));
+  }, [setStoredSidebarAppearance]);
+
+  useEffect(() => {
+    void api.setSidebarAppearanceMode(sidebarAppearance).catch(() => undefined);
+  }, [sidebarAppearance]);
+
+  useEffect(() => {
+    void api.setNativeThemeSource(nativeThemeSource).catch(() => undefined);
+  }, [nativeThemeSource]);
 
   return (
-    <div className={cx("app-shell", layoutAnimating && "layout-animating")} data-theme={activeTheme} style={appStyle}>
+    <div
+      className={cx("app-shell", layoutAnimating && "layout-animating")}
+      data-theme={activeTheme}
+      data-sidebar-appearance={sidebarAppearance}
+      style={appStyle}
+    >
       <Sidebar
         collapsed={sidebarCollapsed}
         favoriteRepos={favoriteRepos}
@@ -2470,6 +2500,7 @@ export function App() {
         favoriteMonitorChecking={favoriteProjectMonitorStatus.checking}
         favoriteMonitorLastCheckedAt={favoriteProjectMonitorStatus.lastCheckedAt}
         loading={initialLoading}
+        onToggleSidebarAppearance={toggleSidebarAppearance}
       />
       <div
         className={cx("resize-handle", "left-resize-handle", sidebarCollapsed && "collapsed")}
@@ -2588,6 +2619,7 @@ interface SidebarProps {
   loading: boolean;
   onSearch(value: string): void;
   onToggle(): void;
+  onToggleSidebarAppearance(): void;
   onSelectRepo(repo: RepoSummary): void;
   onToggleFavorite(repo: RepoSummary): void;
   onReorderFavoriteRepo(sourceKey: string, targetKey: string): void;
@@ -2631,7 +2663,14 @@ function Sidebar(props: SidebarProps) {
     >
       <div className="pane-header app-drag">
         <div className="brand-mark">
-          <Github size={18} />
+          <button
+            className="brand-logo-button"
+            type="button"
+            aria-label="Toggle sidebar appearance"
+            onClick={props.onToggleSidebarAppearance}
+          >
+            <Github size={18} />
+          </button>
           <span>Forge</span>
         </div>
         <button className="icon-button" aria-label="Collapse sidebar" onClick={props.onToggle}>

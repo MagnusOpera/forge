@@ -273,6 +273,10 @@ export interface NativeNotificationPayload {
   source: NativeNotificationSource;
 }
 
+export type NativeThemeSource = "system" | "light" | "dark";
+
+export type SidebarAppearanceMode = "glass" | "normal";
+
 export interface DispatchWorkflowPayload {
   repo: RepoRef;
   workflowId: number | string;
@@ -357,5 +361,7 @@ export interface GithubFocusApi {
   showNativeNotification(payload: NativeNotificationPayload): Promise<boolean>;
   onNativeNotificationClicked(callback: (source: NativeNotificationSource) => void): () => void;
   onCacheUpdated(callback: (key: string) => void): () => void;
+  setNativeThemeSource(source: NativeThemeSource): Promise<void>;
+  setSidebarAppearanceMode(mode: SidebarAppearanceMode): Promise<void>;
   platform: string;
 }
