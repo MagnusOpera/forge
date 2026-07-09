@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.17]
+
+
 - Normalized titlebar icon underline size, alignment, and animated copy rendering without accenting clicked icons.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.16...0.0.17
 
 ## [0.0.16]
 
