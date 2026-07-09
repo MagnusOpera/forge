@@ -55,6 +55,7 @@ import {
   missingRequiredClassicTokenScopes,
   REQUIRED_CLASSIC_TOKEN_SCOPES
 } from "../../shared/auth.js";
+import { AUTO_MERGE_API_UNAVAILABLE_MESSAGE, isAutoMergeNotAllowedMessage } from "../../shared/errors.js";
 
 type GraphqlClient = typeof graphql;
 
@@ -1744,6 +1745,11 @@ function ensurePullRequestId(value: string): string {
 
 type GraphqlMergeMethod = "SQUASH" | "MERGE" | "REBASE";
 type RestMergeMethod = "squash" | "merge" | "rebase";
+interface PullRequestAutoMergeInfo {
+  enabled: boolean;
+  commitBody: string | null;
+  commitHeadline: string | null;
+}
 
 function preferredMergeMethods(repo: any): GraphqlMergeMethod[] {
   const methods: GraphqlMergeMethod[] = [];
@@ -1765,6 +1771,34 @@ function toRestMergeMethod(method: GraphqlMergeMethod): RestMergeMethod {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function getPullRequestAutoMergeInfo(
+  gql: GraphqlClient,
+  repo: RepoRef,
+  pullNumber: number
+): Promise<PullRequestAutoMergeInfo> {
+  const result: any = await gql(
+    `
+      query PullRequestAutoMergeInfo($owner: String!, $name: String!, $pullNumber: Int!) {
+        repository(owner: $owner, name: $name) {
+          pullRequest(number: $pullNumber) {
+            autoMergeRequest { enabledAt mergeMethod }
+            viewerMergeBodyText
+            viewerMergeHeadlineText
+          }
+        }
+      }
+    `,
+    { owner: repo.owner, name: repo.name, pullNumber }
+  );
+  const pullRequest = result.repository?.pullRequest;
+
+  return {
+    enabled: Boolean(pullRequest?.autoMergeRequest),
+    commitBody: pullRequest?.viewerMergeBodyText ?? null,
+    commitHeadline: pullRequest?.viewerMergeHeadlineText ?? null
+  };
 }
 
 function canTryAlternateMergeMethod(error: unknown): boolean {
@@ -1816,14 +1850,34 @@ async function enablePullRequestAutoMerge(payload: PullRequestAutoMergePayload):
     owner: repo.owner,
     repo: repo.name
   });
+  const mergeInfo = await getPullRequestAutoMergeInfo(gql, repo, pullNumber);
+  if (mergeInfo.enabled) {
+    await Promise.all([
+      invalidateCacheKey(pullRequestsCacheKey(repo)),
+      invalidateCacheKey(pullRequestCacheKey(repo, pullNumber))
+    ]);
+    return;
+  }
   let lastError: unknown = null;
 
   for (const mergeMethod of preferredMergeMethods(repoResponse.data)) {
     try {
       await gql(
         `
-          mutation EnablePullRequestAutoMerge($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
-            enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, mergeMethod: $mergeMethod }) {
+          mutation EnablePullRequestAutoMerge(
+            $pullRequestId: ID!
+            $mergeMethod: PullRequestMergeMethod!
+            $commitHeadline: String
+            $commitBody: String
+          ) {
+            enablePullRequestAutoMerge(
+              input: {
+                pullRequestId: $pullRequestId
+                mergeMethod: $mergeMethod
+                commitHeadline: $commitHeadline
+                commitBody: $commitBody
+              }
+            ) {
               pullRequest {
                 id
                 autoMergeRequest { enabledAt mergeMethod }
@@ -1831,12 +1885,29 @@ async function enablePullRequestAutoMerge(payload: PullRequestAutoMergePayload):
             }
           }
         `,
-        { pullRequestId, mergeMethod }
+        {
+          pullRequestId,
+          mergeMethod,
+          commitHeadline: mergeInfo.commitHeadline,
+          commitBody: mergeInfo.commitBody
+        }
       );
       lastError = null;
       break;
     } catch (error) {
       lastError = error;
+      if (isAutoMergeNotAllowedMessage(errorMessage(error))) {
+        try {
+          const latestMergeInfo = await getPullRequestAutoMergeInfo(gql, repo, pullNumber);
+          if (latestMergeInfo.enabled) {
+            lastError = null;
+            break;
+          }
+        } catch {
+          // Keep the original GitHub API limitation as the user-facing failure.
+        }
+        throw new Error(AUTO_MERGE_API_UNAVAILABLE_MESSAGE);
+      }
       if (!canTryAlternateMergeMethod(error)) {
         throw error;
       }

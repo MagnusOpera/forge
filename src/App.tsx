@@ -65,6 +65,7 @@ import {
   type ProjectPullRequestTab
 } from "./appLogic";
 import { CLASSIC_TOKEN_SETTINGS_URL } from "../shared/auth";
+import { userFacingError } from "../shared/errors";
 import type {
   AuthStatus,
   CheckSummary,
@@ -222,16 +223,6 @@ const browserApi: GithubFocusApi = {
 
 const api: GithubFocusApi =
   window.githubFocus && typeof window.githubFocus.getAuthStatus === "function" ? window.githubFocus : browserApi;
-
-function userFacingError(error: unknown, fallback: string): string {
-  if (!(error instanceof Error)) {
-    return fallback;
-  }
-
-  return error.message
-    .replace(/^Error invoking remote method '[^']+':\s*/u, "")
-    .replace(/^Error:\s*/u, "");
-}
 
 function useStoredState<T>(key: string, initialValue: T): [T, (next: T | ((value: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => {
@@ -1444,7 +1435,7 @@ export function App() {
         flash(`Enabled auto-merge for PR #${pr.number}`);
         return true;
       } catch (error) {
-        flash(error instanceof Error ? error.message : "Unable to enable auto-merge.");
+        flash(userFacingError(error, "Unable to enable auto-merge."));
         return false;
       } finally {
         setPrActionSubmitting(false);
@@ -1479,7 +1470,7 @@ export function App() {
         flash(`Disabled auto-merge for PR #${pr.number}`);
         return true;
       } catch (error) {
-        flash(error instanceof Error ? error.message : "Unable to disable auto-merge.");
+        flash(userFacingError(error, "Unable to disable auto-merge."));
         return false;
       } finally {
         setPrActionSubmitting(false);

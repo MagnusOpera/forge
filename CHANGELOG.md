@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Clarified GitHub API auto-merge failures and recovered stale pull request auto-merge state.
 - Fixed pull request auto-merge on repositories that only allow squash or rebase merging.
 - Split pull request titlebar controls into ready/draft and auto-merge menus.
 - Added contributor-only pull request controls for auto-merge state, merge, and close.
