@@ -5,6 +5,12 @@
   --sidebar-appearance-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --theme-transition-duration: 320ms;
   --theme-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --titlebar-icon-underline-width: 22px;
+  --titlebar-icon-underline-half-width: 11px;
+  --titlebar-icon-underline-height: 2px;
+  --titlebar-icon-underline-bottom: 3px;
+  --titlebar-view-icon-size: 28px;
+  --titlebar-view-icon-half-size: 14px;
   --sidebar-solid-bg: #1c2128;
   --sidebar-bg: rgb(28 33 40 / 0.78);
   --sidebar-border: rgb(205 217 229 / 0.14);
@@ -656,21 +662,16 @@ input {
 
 .underline-action::after {
   position: absolute;
-  right: 6px;
-  bottom: 4px;
-  left: 6px;
-  height: 2px;
+  right: auto;
+  bottom: var(--titlebar-icon-underline-bottom);
+  left: calc(50% - var(--titlebar-icon-underline-half-width));
+  width: var(--titlebar-icon-underline-width);
+  height: var(--titlebar-icon-underline-height);
   border-radius: 999px;
   background: var(--accent);
   content: "";
+  clip-path: inset(0 100% 0 0);
   opacity: 0;
-  transform: scaleX(0);
-  transform-origin: left center;
-}
-
-.underline-action.copied,
-.underline-action.invoked {
-  color: var(--accent);
 }
 
 .underline-action.copied::after,
@@ -699,8 +700,8 @@ input {
 .project-view-button {
   position: relative;
   overflow: hidden;
-  width: 28px;
-  height: 28px;
+  width: var(--titlebar-view-icon-size);
+  height: var(--titlebar-view-icon-size);
   border-radius: 6px;
 }
 
@@ -1026,9 +1027,11 @@ input {
 }
 
 .project-view-switcher .sliding-tab-underline {
-  bottom: 3px;
-  width: calc(var(--tab-underline-width, 0px) - 4px);
-  transform: translateX(calc(var(--tab-underline-left, 0px) + 2px));
+  bottom: var(--titlebar-icon-underline-bottom);
+  width: var(--titlebar-icon-underline-width);
+  transform: translateX(
+    calc(var(--tab-underline-left, 0px) + var(--titlebar-view-icon-half-size) - var(--titlebar-icon-underline-half-width))
+  );
 }
 
 .sidebar-tab span,
@@ -1616,9 +1619,8 @@ input {
   background: var(--accent);
   border-radius: 999px;
   content: "";
+  clip-path: inset(0 100% 0 0);
   opacity: 0;
-  transform: scaleX(0);
-  transform-origin: left center;
 }
 
 .copy-meta-button:hover {
@@ -1647,23 +1649,23 @@ input {
 
 @keyframes copy-meta-underline {
   0% {
+    clip-path: inset(0 100% 0 0);
     opacity: 0;
-    transform: scaleX(0);
   }
 
   18% {
+    clip-path: inset(0 0 0 0);
     opacity: 1;
-    transform: scaleX(1);
   }
 
   70% {
+    clip-path: inset(0 0 0 0);
     opacity: 1;
-    transform: scaleX(1);
   }
 
   100% {
+    clip-path: inset(0 0 0 0);
     opacity: 0;
-    transform: scaleX(1);
   }
 }
 
@@ -2206,10 +2208,11 @@ button.pr-label-chip:disabled {
 
 .review-action-button.active::after {
   position: absolute;
-  right: 5px;
-  bottom: 3px;
-  left: 5px;
-  height: 2px;
+  right: auto;
+  bottom: var(--titlebar-icon-underline-bottom);
+  left: calc(50% - var(--titlebar-icon-underline-half-width));
+  width: var(--titlebar-icon-underline-width);
+  height: var(--titlebar-icon-underline-height);
   border-radius: 999px;
   background: var(--accent);
   content: "";

@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Normalized titlebar icon underline size, alignment, and animated copy rendering without accenting clicked icons.
+
 ## [0.0.16]
 
 
