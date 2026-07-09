@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.14]
+
+
 - Prevented the GitHub token prompt from flashing during startup authentication checks.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.13...0.0.14
 
 ## [0.0.13]
 
