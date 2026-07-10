@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build run package-mac-arm64 verify-changelog release-prepare check typecheck test audit preview clean
+.PHONY: help install dev build run package-mac-arm64 website website-build verify-changelog release-prepare check typecheck test audit preview clean
 
 version ?= 0.1.0
 app_version ?= $(patsubst v%,%,$(version))
@@ -15,6 +15,8 @@ help:
 	@printf "  make build      Build Electron main/preload and renderer assets\n"
 	@printf "  make run        Run the built Electron app\n"
 	@printf "  make package-mac-arm64 version=x.y.z  Build unsigned macOS arm64 ZIP\n"
+	@printf "  make website    Preview the GitHub Pages website\n"
+	@printf "  make website-build  Build the GitHub Pages website\n"
 	@printf "  make release-prepare version=x.y.z  Move changelog, commit, and tag\n"
 	@printf "  make test       Run unit tests\n"
 	@printf "  make check      Run typecheck and high-severity audit\n"
@@ -45,6 +47,12 @@ package-mac-arm64:
 	fi; \
 	cp "$$artifact" ".out/forge-$(version)-mac-arm64-unsigned.zip"; \
 	echo "Created .out/forge-$(version)-mac-arm64-unsigned.zip"
+
+website:
+	npm run website
+
+website-build:
+	npm run website:build
 
 verify-changelog:
 	REQUIRE_CHANGELOG_ALWAYS=true .github/scripts/check-unreleased-changelog.sh

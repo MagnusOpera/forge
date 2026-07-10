@@ -255,6 +255,28 @@ function clearPointerActivatedControlFocus(event: React.MouseEvent<HTMLElement>)
   }
 }
 
+function preventTitlebarPointerControlFocus(event: React.MouseEvent<HTMLElement>): void {
+  if (event.button !== 0) {
+    return;
+  }
+
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const control = target.closest("button, [role='button'], a[href]");
+  if (!(control instanceof HTMLElement)) {
+    return;
+  }
+
+  if (!control.closest(".pane-header, .content-header, .titlebar-picker")) {
+    return;
+  }
+
+  event.preventDefault();
+}
+
 function ipcUnavailable<T>(): Promise<T> {
   return Promise.reject(new Error("GitHub IPC is available only inside the Electron app."));
 }
@@ -2659,6 +2681,7 @@ export function App() {
       className={cx("app-shell", layoutAnimating && "layout-animating")}
       data-theme={activeTheme}
       data-sidebar-appearance={sidebarAppearance}
+      onMouseDownCapture={preventTitlebarPointerControlFocus}
       onClickCapture={clearPointerActivatedControlFocus}
       style={appStyle}
     >

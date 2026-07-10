@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Forge is a simple desktop GitHub client for fast operating around active work."
+    />
+    <title>Forge - fast GitHub operations</title>
+    <link rel="icon" href="assets/forge-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/forge-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Forge home">
+        <img src="assets/forge-icon.svg" alt="" />
+        <span>Forge</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="install.html">Install</a>
+      </nav>
+      <div class="header-actions">
+        <a class="github-link" href="https://github.com/MagnusOpera/forge">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 2C6.48 2 2 6.58 2 12.24c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49v-1.9c-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.67.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.95c.85 0 1.69.12 2.48.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.56 5.07.36.32.68.95.68 1.91v2.83c0 .27.18.59.69.49A10.1 10.1 0 0 0 22 12.24C22 6.58 17.52 2 12 2Z"
+            />
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme">
+          <svg
+            class="theme-icon theme-icon-moon"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 3a6.6 6.6 0 0 0 8.6 8.6A8.2 8.2 0 1 1 12 3Z" />
+          </svg>
+          <svg
+            class="theme-icon theme-icon-sun"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2" />
+            <path d="M12 20v2" />
+            <path d="m4.93 4.93 1.41 1.41" />
+            <path d="m17.66 17.66 1.41 1.41" />
+            <path d="M2 12h2" />
+            <path d="M20 12h2" />
+            <path d="m6.34 17.66-1.41 1.41" />
+            <path d="m19.07 4.93-1.41 1.41" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Desktop GitHub client</p>
+          <h1>Forge</h1>
+          <p class="lead">
+            A simple GitHub client for fast operating around pull requests, issues,
+            workflows, and repositories. Forge is not a replacement for the GitHub
+            website. It keeps day-to-day work close and sends configuration back to
+            GitHub.
+          </p>
+        </div>
+
+        <figure class="preview" aria-labelledby="preview-title">
+          <div class="preview-bar">
+            <span id="preview-title">Forge in <strong data-preview-theme>dark</strong> mode</span>
+            <span>Website theme switches the example preview</span>
+          </div>
+          <img
+            data-preview-image
+            src="screenshots/forge-dark.png"
+            alt="Forge desktop app screenshot showing repositories, work lists, and repository details."
+          />
+        </figure>
+      </section>
+
+      <section class="section-grid" id="focus">
+        <article>
+          <h2>Built for work, not configuration.</h2>
+          <p>
+            Forge keeps repositories, pull requests, workflow runs, checks, labels,
+            and review actions in a dense three-pane layout. The GitHub website stays
+            the source of truth for repository settings and advanced administration.
+          </p>
+        </article>
+        <article>
+          <h2>Fast paths stay close.</h2>
+          <p>
+            Search repositories, inspect current work, update pull request metadata,
+            submit reviews, run workflows, and jump back to GitHub when the website
+            is the right tool.
+          </p>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <span>Copyright (c) 2026 Magnus Opera SAS</span>
+      <a href="LICENSE.txt">MIT License</a>
+    </footer>
+
+    <script src="site.js"></script>
+  </body>
+</html>

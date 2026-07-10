@@ -301,6 +301,17 @@ button {
   -webkit-app-region: no-drag;
 }
 
+.pane-header button:focus,
+.content-header button:focus {
+  outline: 0;
+}
+
+.pane-header button:focus-visible,
+.content-header button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
 input {
   -webkit-app-region: no-drag;
 }

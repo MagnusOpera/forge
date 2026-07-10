@@ -4,7 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
-- Added MIT licensing, About copyright, and project README documentation.
+- Added the GitHub Pages website.
 
 ## [0.0.19]
 
