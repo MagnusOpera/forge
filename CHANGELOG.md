@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.20]
+
+
 - Added the GitHub Pages website.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.19...0.0.20
 
 ## [0.0.19]
 
