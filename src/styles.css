@@ -79,7 +79,6 @@
   --card-bg: #22272e;
   --control-bg: #2d333b;
   --palette-bg: #22272e;
-  --token-icon-bg: var(--accent-panel-bg);
   --accent: #7ee787;
   --accent-muted-bg: color-mix(in srgb, var(--accent) 13%, var(--hover-bg));
   --accent-panel-bg: color-mix(in srgb, var(--accent) 14%, var(--panel-bg));
@@ -87,7 +86,6 @@
   --accent-text: color-mix(in srgb, var(--accent) 86%, var(--text-strong));
   --accent-solid: color-mix(in srgb, var(--accent) 86%, #22272e);
   --accent-solid-hover: color-mix(in srgb, var(--accent) 94%, #22272e);
-  --token-accent: var(--accent-text);
   --primary-bg: var(--accent-solid);
   --primary-hover-bg: var(--accent-solid-hover);
   --primary-text: #07120d;
@@ -191,7 +189,6 @@
   --card-bg: #ffffff;
   --control-bg: #ffffff;
   --palette-bg: #ffffff;
-  --token-icon-bg: var(--accent-panel-bg);
   --accent: #7ee787;
   --accent-muted-bg: color-mix(in srgb, var(--accent) 16%, var(--hover-bg));
   --accent-panel-bg: color-mix(in srgb, var(--accent) 12%, var(--panel-bg));
@@ -199,7 +196,6 @@
   --accent-text: color-mix(in srgb, var(--accent) 74%, var(--text-strong));
   --accent-solid: color-mix(in srgb, var(--accent) 82%, #0d1117);
   --accent-solid-hover: color-mix(in srgb, var(--accent) 90%, #0d1117);
-  --token-accent: var(--accent-text);
   --primary-bg: var(--accent-solid);
   --primary-hover-bg: var(--accent-solid-hover);
   --primary-text: #07120d;
@@ -236,7 +232,6 @@
   --accent-text: color-mix(in srgb, var(--accent) 86%, var(--text-strong));
   --accent-solid: color-mix(in srgb, var(--accent) 86%, #22272e);
   --accent-solid-hover: color-mix(in srgb, var(--accent) 94%, #22272e);
-  --token-accent: var(--accent-text);
   --primary-bg: var(--accent-solid);
   --primary-hover-bg: var(--accent-solid-hover);
 }
@@ -333,6 +328,11 @@ input {
 
 .app-shell.layout-animating {
   transition: grid-template-columns 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.app-shell.auth-screen {
+  grid-template-columns: 1fr;
+  background-color: var(--app-bg);
 }
 
 .app-drag {
@@ -1521,14 +1521,20 @@ input {
   background: var(--panel-bg);
 }
 
+.token-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .token-icon {
   display: grid;
   width: 42px;
   height: 42px;
   place-items: center;
   border-radius: 8px;
-  background: var(--token-icon-bg);
-  color: var(--token-accent);
+  background: var(--hover-subtle-bg);
+  color: var(--icon);
 }
 
 .token-panel h1 {
@@ -1549,16 +1555,24 @@ input {
   display: inline-flex;
   width: fit-content;
   align-items: center;
+  justify-self: end;
   gap: 6px;
   padding: 0;
   background: transparent;
-  color: var(--token-accent);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
 
 .token-settings-link:hover {
   color: var(--text-hover);
+}
+
+.token-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 .token-panel input {
@@ -1575,6 +1589,20 @@ input {
 
 .token-panel input:focus {
   border-color: var(--accent);
+}
+
+.token-panel .primary-button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  background: transparent;
+  color: var(--icon);
+}
+
+.token-panel .primary-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: transparent;
 }
 
 .primary-button {

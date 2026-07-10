@@ -32,6 +32,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Save,
   Search,
   Star,
   StarOff,
@@ -2633,6 +2634,9 @@ export function App() {
     gridTemplateColumns,
     "--accent": selectedAccent
   };
+  const authScreenStyle: AppCssVars = {
+    "--accent": selectedAccent
+  };
   const toggleSidebarAppearance = useCallback(() => {
     const setAppearance = activeTheme === "dark" ? setDarkSidebarAppearance : setLightSidebarAppearance;
     setAppearance((current) => (normalizeSidebarAppearanceMode(current) === "glass" ? "normal" : "glass"));
@@ -2675,6 +2679,32 @@ export function App() {
   useEffect(() => {
     void api.setNativeThemeSource(nativeThemeSource).catch(() => undefined);
   }, [nativeThemeSource]);
+
+  if (authChecking || !auth?.configured) {
+    return (
+      <div
+        className={cx("app-shell", "auth-screen")}
+        data-theme={activeTheme}
+        data-sidebar-appearance={sidebarAppearance}
+        onMouseDownCapture={preventTitlebarPointerControlFocus}
+        onClickCapture={clearPointerActivatedControlFocus}
+        style={authScreenStyle}
+      >
+        {authChecking ? (
+          <EmptyPane icon={<Loader2 className="spin" size={24} />} title="Checking GitHub token" />
+        ) : (
+          <TokenGate
+            auth={auth}
+            error={authError}
+            token={tokenDraft}
+            onTokenChange={setTokenDraft}
+            onSave={saveToken}
+            onOpenTokenSettings={() => void api.openInGitHub(CLASSIC_TOKEN_SETTINGS_URL)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -2746,12 +2776,6 @@ export function App() {
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
       <ContentPane
         auth={auth}
-        authChecking={authChecking}
-        authError={authError}
-        tokenDraft={tokenDraft}
-        onTokenChange={setTokenDraft}
-        onSaveToken={saveToken}
-        onOpenTokenSettings={() => void api.openInGitHub(CLASSIC_TOKEN_SETTINGS_URL)}
         onClearToken={clearStoredToken}
         repo={selectedRepo}
         selection={selection}
@@ -3668,9 +3692,6 @@ function WorkflowSection(props: {
 
 function ContentPane(props: {
   auth: AuthStatus | null;
-  authChecking: boolean;
-  authError: string | null;
-  tokenDraft: string;
   repo: RepoSummary | null;
   selection: ContentSelection;
   prDetail: PullRequestDetail | null;
@@ -3689,9 +3710,6 @@ function ContentPane(props: {
   canNavigateBack: boolean;
   canNavigateForward: boolean;
   accentColor: string;
-  onTokenChange(value: string): void;
-  onSaveToken(event: React.FormEvent): void;
-  onOpenTokenSettings(): void;
   onClearToken(): void;
   onPrTabChange(tab: string): void;
   onRunTabChange(tab: string): void;
@@ -3948,18 +3966,7 @@ function ContentPane(props: {
           </div>
         </div>
       </div>
-      {props.authChecking ? (
-        <EmptyPane icon={<Loader2 className="spin" size={24} />} title="Checking GitHub token" />
-      ) : !props.auth?.configured ? (
-        <TokenGate
-          auth={props.auth}
-          error={props.authError}
-          token={props.tokenDraft}
-          onTokenChange={props.onTokenChange}
-          onSave={props.onSaveToken}
-          onOpenTokenSettings={props.onOpenTokenSettings}
-        />
-      ) : props.error ? (
+      {props.error ? (
         <div className="content-scroll">
           <div className="inline-error large">
             <AlertCircle size={18} />
@@ -4352,10 +4359,12 @@ function TokenGate(props: {
   return (
     <div className="token-gate">
       <form className="token-panel" onSubmit={props.onSave}>
-        <div className="token-icon">
-          <KeyRound size={24} />
+        <div className="token-heading">
+          <div className="token-icon">
+            <KeyRound size={24} />
+          </div>
+          <h1>GitHub token</h1>
         </div>
-        <h1>GitHub token</h1>
         <p className="token-help">
           Use a classic PAT with <strong>repo</strong> and <strong>read:project</strong> permissions.
         </p>
@@ -4363,16 +4372,18 @@ function TokenGate(props: {
           <ExternalLink size={14} />
           <span>Open classic token settings</span>
         </button>
-        <input
-          type="password"
-          value={props.token}
-          onChange={(event) => props.onTokenChange(event.target.value)}
-          placeholder="Personal access token"
-          autoFocus
-        />
-        <button className="primary-button" type="submit" disabled={!props.token.trim()}>
-          Store token
-        </button>
+        <div className="token-input-row">
+          <input
+            type="password"
+            value={props.token}
+            onChange={(event) => props.onTokenChange(event.target.value)}
+            placeholder="Personal access token"
+            autoFocus
+          />
+          <button className="primary-button" type="submit" disabled={!props.token.trim()} aria-label="Store token">
+            <Save size={16} />
+          </button>
+        </div>
         {!props.auth?.encryptionAvailable && (
           <div className="inline-error">
             <AlertCircle size={15} />
