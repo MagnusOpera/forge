@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.30]
+
+
 - Fixed the accent color picker appearing behind pull request action controls.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.29...0.0.30
 
 ## [0.0.29]
 
