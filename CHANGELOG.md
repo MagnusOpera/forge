@@ -4,8 +4,13 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.23]
+
+
 - Parallelized Windows and Linux release artifact builds by architecture.
 - Moved workflow and workflow run metadata into the header, made run lists the default view, and made workflow paths, run ids, and commit SHAs copyable.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.22...0.0.23
 
 ## [0.0.22]
 
