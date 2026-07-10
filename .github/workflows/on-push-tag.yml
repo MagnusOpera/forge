@@ -42,8 +42,14 @@ jobs:
           include-hidden-files: true
 
   build-windows:
-    name: Build Windows
+    name: Build Windows ${{ matrix.arch }}
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
 
     steps:
       - name: Checkout
@@ -61,25 +67,27 @@ jobs:
       - name: Build renderer and Electron main
         run: npm run build
 
-      - name: Build unsigned Windows x64 artifact
+      - name: Build unsigned Windows ${{ matrix.arch }} artifact
         shell: bash
-        run: ./.github/scripts/package-electron-artifact.sh windows x64 "${RELEASE_TAG}"
+        run: ./.github/scripts/package-electron-artifact.sh windows "${{ matrix.arch }}" "${RELEASE_TAG}"
 
-      - name: Build unsigned Windows arm64 artifact
-        shell: bash
-        run: ./.github/scripts/package-electron-artifact.sh windows arm64 "${RELEASE_TAG}"
-
-      - name: Upload Windows artifacts
+      - name: Upload Windows ${{ matrix.arch }} artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-windows
-          path: .out/forge-${{ env.RELEASE_TAG }}-windows-*.zip
+          name: release-windows-${{ matrix.arch }}
+          path: .out/forge-${{ env.RELEASE_TAG }}-windows-${{ matrix.arch }}.zip
           if-no-files-found: error
           include-hidden-files: true
 
   build-linux:
-    name: Build Linux
+    name: Build Linux ${{ matrix.arch }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
 
     steps:
       - name: Checkout
@@ -97,17 +105,14 @@ jobs:
       - name: Build renderer and Electron main
         run: npm run build
 
-      - name: Build unsigned Linux x64 artifact
-        run: ./.github/scripts/package-electron-artifact.sh linux x64 "${RELEASE_TAG}"
+      - name: Build unsigned Linux ${{ matrix.arch }} artifact
+        run: ./.github/scripts/package-electron-artifact.sh linux "${{ matrix.arch }}" "${RELEASE_TAG}"
 
-      - name: Build unsigned Linux arm64 artifact
-        run: ./.github/scripts/package-electron-artifact.sh linux arm64 "${RELEASE_TAG}"
-
-      - name: Upload Linux artifacts
+      - name: Upload Linux ${{ matrix.arch }} artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-linux
-          path: .out/forge-${{ env.RELEASE_TAG }}-linux-*.tar.gz
+          name: release-linux-${{ matrix.arch }}
+          path: .out/forge-${{ env.RELEASE_TAG }}-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
           include-hidden-files: true
 
