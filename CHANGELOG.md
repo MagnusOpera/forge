@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.25]
+
+
 - Disabled glass sidebar mode on Linux.
 - Matched Windows glass mode to the native acrylic window backdrop.
 - Switched Windows and Linux release downloads to single-file app artifacts.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.24...0.0.25
 
 ## [0.0.24]
 
