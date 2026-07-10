@@ -19,6 +19,7 @@ import {
   findNewOpenPullRequests,
   formatDuration,
   githubUrlClickActionForDetail,
+  groupRepositoriesByOwner,
   isFailedWorkflowRun,
   isPullRequestAuthor,
   isLiveStatus,
@@ -35,6 +36,24 @@ import {
 } from "./appLogic";
 
 describe("appLogic", () => {
+  it("groups repositories alphabetically by owner and repository name", () => {
+    const repos = [
+      { owner: "zeta", name: "selected", fullName: "zeta/selected", updatedAt: "2026-01-01T00:00:00Z" },
+      { owner: "alpha", name: "zebra", fullName: "alpha/zebra", updatedAt: "2026-01-03T00:00:00Z" },
+      { owner: "alpha", name: "aardvark", fullName: "alpha/aardvark", updatedAt: "2026-01-02T00:00:00Z" },
+      { owner: "beta", name: "repo-10", fullName: "beta/repo-10", updatedAt: "2026-01-04T00:00:00Z" },
+      { owner: "beta", name: "repo-2", fullName: "beta/repo-2", updatedAt: "2026-01-05T00:00:00Z" }
+    ] as RepoSummary[];
+
+    expect(
+      groupRepositoriesByOwner(repos).map(([owner, ownerRepos]) => [owner, ownerRepos.map((repo) => repo.name)])
+    ).toEqual([
+      ["alpha", ["aardvark", "zebra"]],
+      ["beta", ["repo-2", "repo-10"]],
+      ["zeta", ["selected"]]
+    ]);
+  });
+
   it("formats durations for workflow runs", () => {
     expect(formatDuration(null)).toBe("");
     expect(formatDuration(9_800)).toBe("9s");

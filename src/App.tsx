@@ -62,6 +62,7 @@ import {
   findNewOpenPullRequests,
   formatDuration,
   githubUrlClickActionForDetail,
+  groupRepositoriesByOwner,
   isLiveStatus,
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
@@ -1210,13 +1211,7 @@ export function App() {
   }, [allRepos, sidebarSearch]);
 
   const repoGroups = useMemo(() => {
-    const groups = new Map<string, RepoSummary[]>();
-    for (const repo of visibleRepos) {
-      const list = groups.get(repo.owner) ?? [];
-      list.push(repo);
-      groups.set(repo.owner, list);
-    }
-    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return groupRepositoriesByOwner(visibleRepos);
   }, [visibleRepos]);
 
   const middleItems = useMemo<MiddleItem[]>(() => {

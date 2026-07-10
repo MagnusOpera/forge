@@ -16,6 +16,27 @@ function repoSnapshotKey(repo: Pick<RepoSummary, "owner" | "name">): string {
   return `${repo.owner}/${repo.name}`;
 }
 
+const repositoryNameCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base"
+});
+
+export function groupRepositoriesByOwner(repos: RepoSummary[]): Array<[string, RepoSummary[]]> {
+  const groups = new Map<string, RepoSummary[]>();
+  for (const repo of repos) {
+    const list = groups.get(repo.owner) ?? [];
+    list.push(repo);
+    groups.set(repo.owner, list);
+  }
+
+  return Array.from(groups.entries())
+    .map(([owner, ownerRepos]) => [
+      owner,
+      [...ownerRepos].sort((left, right) => repositoryNameCollator.compare(left.name, right.name))
+    ] as [string, RepoSummary[]])
+    .sort(([leftOwner], [rightOwner]) => repositoryNameCollator.compare(leftOwner, rightOwner));
+}
+
 export function mergeFavoriteRepoSnapshots(
   current: FavoriteRepoSnapshots,
   favoriteKeys: string[],

@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Kept the all repositories list alphabetically ordered when selecting a repository.
+
 ## [0.0.31]
 
 
