@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.22]
+
+
 - Fixed release artifact packaging on GitHub Actions.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.21...0.0.22
 
 ## [0.0.21]
 
