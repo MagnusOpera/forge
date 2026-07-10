@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.19]
+
+
 - Tightened the titlebar height and aligned its controls with the macOS traffic lights.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.18...0.0.19
 
 ## [0.0.18]
 
