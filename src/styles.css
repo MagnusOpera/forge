@@ -1802,6 +1802,81 @@ p {
   white-space: nowrap;
 }
 
+.detail-eyebrow-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.detail-eyebrow-value,
+.detail-eyebrow-link {
+  min-width: 0;
+  max-width: min(320px, 34vw);
+  overflow: hidden;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-eyebrow-value.branch,
+.detail-eyebrow-value.commit,
+.detail-eyebrow-value.path,
+.detail-eyebrow-value.ref,
+.detail-eyebrow-link.id,
+.detail-eyebrow-link.path,
+.detail-eyebrow-link.commit {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.detail-eyebrow-value.author {
+  max-width: min(220px, 24vw);
+}
+
+.detail-eyebrow-link {
+  position: relative;
+  padding: 0 3px;
+  border-radius: 5px;
+  background: transparent;
+}
+
+.detail-eyebrow-link::after {
+  position: absolute;
+  right: 3px;
+  bottom: 0;
+  left: 3px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 999px;
+  content: "";
+  clip-path: inset(0 100% 0 0);
+  opacity: 0;
+}
+
+.detail-eyebrow-link:hover {
+  background: var(--hover-bg);
+  color: var(--text-strong);
+}
+
+.detail-eyebrow-link.copied::after {
+  animation: copy-meta-underline 620ms ease-out;
+}
+
+.workflow-run-button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  background: transparent;
+  color: var(--icon);
+}
+
+.workflow-run-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: transparent;
+}
+
 .label-row {
   display: flex;
   flex-wrap: wrap;
@@ -2892,18 +2967,32 @@ button.pr-label-chip:disabled {
 }
 
 .commit-link {
+  position: relative;
   justify-self: end;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--code-text);
+  color: var(--row-strong);
   cursor: pointer;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 11px;
 }
 
-.commit-link:hover {
-  text-decoration: underline;
+.commit-link::after {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 999px;
+  content: "";
+  clip-path: inset(0 100% 0 0);
+  opacity: 0;
+}
+
+.commit-link.copied::after {
+  animation: copy-meta-underline 620ms ease-out;
 }
 
 .commit-link:focus-visible {

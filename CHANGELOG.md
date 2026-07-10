@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Moved workflow and workflow run metadata into the header, made run lists the default view, and made workflow paths, run ids, and commit SHAs copyable.
+
 ## [0.0.22]
 
 

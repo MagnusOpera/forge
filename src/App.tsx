@@ -648,6 +648,24 @@ function formatRelative(value?: string | null): string {
   return `${Math.floor(months / 12)}y`;
 }
 
+function formatAbsoluteDateTime(value?: string | null): string {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
 function formatReviewMeta(state: string, submittedAt?: string | null): string {
   const date = formatRelative(submittedAt);
   return date ? `${state} - ${date}` : state;
@@ -856,6 +874,82 @@ function GithubUrlActionButton(props: {
   );
 }
 
+function CommitActionButton(props: {
+  sha?: string | null;
+  url?: string | null;
+  className?: string;
+  onCopyText(value: string): Promise<boolean>;
+  onOpenUrl(url: string): void;
+}) {
+  const { className, onCopyText, onOpenUrl, sha, url } = props;
+  const [copied, setCopied] = useState(false);
+  const copyFeedbackTimer = useRef<number | null>(null);
+  const copyFeedbackFrame = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyFeedbackTimer.current) {
+        window.clearTimeout(copyFeedbackTimer.current);
+      }
+      if (copyFeedbackFrame.current) {
+        window.cancelAnimationFrame(copyFeedbackFrame.current);
+      }
+    },
+    []
+  );
+
+  const showCopied = useCallback(() => {
+    if (copyFeedbackTimer.current) {
+      window.clearTimeout(copyFeedbackTimer.current);
+    }
+    if (copyFeedbackFrame.current) {
+      window.cancelAnimationFrame(copyFeedbackFrame.current);
+    }
+
+    setCopied(false);
+    copyFeedbackFrame.current = window.requestAnimationFrame(() => {
+      setCopied(true);
+      copyFeedbackFrame.current = null;
+      copyFeedbackTimer.current = window.setTimeout(() => {
+        setCopied(false);
+        copyFeedbackTimer.current = null;
+      }, 620);
+    });
+  }, []);
+
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (!sha) {
+        return;
+      }
+
+      if (url && githubUrlClickActionForDetail(event.detail) === "open") {
+        onOpenUrl(url);
+        return;
+      }
+
+      void onCopyText(sha).then((didCopy) => {
+        if (didCopy) {
+          showCopied();
+        }
+      });
+    },
+    [onCopyText, onOpenUrl, sha, showCopied, url]
+  );
+
+  return (
+    <button
+      type="button"
+      className={cx(className, copied && "copied")}
+      aria-label={`Copy commit ${shortSha(sha)}. Double-click to open in GitHub`}
+      onClick={handleClick}
+      disabled={!sha}
+    >
+      {shortSha(sha)}
+    </button>
+  );
+}
+
 export function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
@@ -884,7 +978,7 @@ export function App() {
   const [contentError, setContentError] = useState<string | null>(null);
   const [prActionSubmitting, setPrActionSubmitting] = useState(false);
   const [prTab, setPrTab] = useState("Description");
-  const [runTab, setRunTab] = useState("Summary");
+  const [runTab, setRunTab] = useState("Jobs");
 
   const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("github-focus:sidebar-collapsed", false);
   const [favoriteKeys, setFavoriteKeys] = useStoredState<string[]>("github-focus:favorites", []);
@@ -1935,7 +2029,7 @@ export function App() {
     (run: WorkflowRunSummary) => {
       setStoredProjectFocusView("workflow-runs");
       setSelection({ kind: "run", run });
-      setRunTab("Summary");
+      setRunTab("Jobs");
     },
     [setStoredProjectFocusView]
   );
@@ -2030,7 +2124,7 @@ export function App() {
       }
       setPrDetail(null);
       setRunDetail(null);
-      setRunTab("Summary");
+      setRunTab("Jobs");
       setSelection({ kind: "run", run: source.run });
     },
     [
@@ -2131,7 +2225,7 @@ export function App() {
       }
       if (entry.selection.kind === "run") {
         const restoredRun = entry.selection.run;
-        setRunTab("Summary");
+        setRunTab("Jobs");
         setWorkflowRuns((current) =>
           current.some((run) => run.id === restoredRun.id)
             ? current
@@ -4009,6 +4103,8 @@ function ContentPane(props: {
           focusedJobId={props.selection.focusedJobId ?? null}
           repo={props.repo}
           tab={props.runTab}
+          onOpenGithubUrl={props.onOpenGithubUrl}
+          onCopyText={props.onCopyText}
           onTab={props.onRunTabChange}
         />
       ) : (
@@ -4017,6 +4113,7 @@ function ContentPane(props: {
           repo={props.repo}
           workflowRuns={props.workflowRuns}
           onSelectRun={props.onSelectRun}
+          onCopyText={props.onCopyText}
           onRun={props.onRunWorkflow}
         />
       )}
@@ -4626,7 +4723,6 @@ function PullRequestContent(props: {
         <div className="detail-heading pr-detail-heading">
           <div className="pr-title-stack">
             <div className="pr-eyebrow-row">
-              <span>Pull request</span>
               <button
                 type="button"
                 className={cx("copy-meta-button", copiedMeta === "number" && "copied")}
@@ -4818,14 +4914,13 @@ function PullRequestContent(props: {
               <div className="commit-row" key={commit.oid}>
                 <GitBranch size={15} />
                 <span>{commit.messageHeadline}</span>
-                <button
-                  type="button"
+                <CommitActionButton
                   className="commit-link"
-                  aria-label={`Open commit ${shortSha(commit.oid)} in GitHub`}
-                  onClick={() => props.onOpenGithubUrl(commit.url)}
-                >
-                  {shortSha(commit.oid)}
-                </button>
+                  sha={commit.oid}
+                  url={commit.url}
+                  onCopyText={props.onCopyText}
+                  onOpenUrl={props.onOpenGithubUrl}
+                />
               </div>
             )}
           />
@@ -5205,72 +5300,102 @@ function WorkflowContent(props: {
   repo: RepoSummary;
   workflowRuns: WorkflowRunSummary[];
   onSelectRun(run: WorkflowRunSummary): void;
+  onCopyText(value: string): Promise<boolean>;
   onRun(workflow: WorkflowSummary): void;
 }) {
-  const [tab, setTab] = useState("Description");
+  const [copiedPath, setCopiedPath] = useState(false);
+  const copyFeedbackTimer = useRef<number | null>(null);
+  const copyFeedbackFrame = useRef<number | null>(null);
+  const workflowPath = props.workflow.path;
   const relatedRuns = useMemo(
     () => props.workflowRuns.filter((run) => run.workflowId === props.workflow.id),
     [props.workflow.id, props.workflowRuns]
   );
 
-  useEffect(() => {
-    setTab("Description");
-  }, [props.workflow.id]);
+  useEffect(
+    () => () => {
+      if (copyFeedbackTimer.current) {
+        window.clearTimeout(copyFeedbackTimer.current);
+      }
+      if (copyFeedbackFrame.current) {
+        window.cancelAnimationFrame(copyFeedbackFrame.current);
+      }
+    },
+    []
+  );
+
+  const copyWorkflowPath = useCallback(async () => {
+    const copied = await props.onCopyText(workflowPath);
+    if (!copied) {
+      return;
+    }
+
+    if (copyFeedbackTimer.current) {
+      window.clearTimeout(copyFeedbackTimer.current);
+    }
+    if (copyFeedbackFrame.current) {
+      window.cancelAnimationFrame(copyFeedbackFrame.current);
+    }
+
+    setCopiedPath(false);
+    copyFeedbackFrame.current = window.requestAnimationFrame(() => {
+      setCopiedPath(true);
+      copyFeedbackFrame.current = null;
+      copyFeedbackTimer.current = window.setTimeout(() => {
+        setCopiedPath(false);
+        copyFeedbackTimer.current = null;
+      }, 620);
+    });
+  }, [props.onCopyText, workflowPath]);
 
   return (
     <div className="content-detail-shell">
       <div className="detail-fixed">
         <div className="detail-heading row-heading">
-          <div>
-            <span className="eyebrow">Workflow</span>
+          <div className="pr-title-stack">
+            <div className="pr-eyebrow-row detail-eyebrow-row" aria-label="Workflow metadata">
+              <span className="detail-eyebrow-value">{props.workflow.state}</span>
+              <span className="eyebrow-separator">·</span>
+              <button
+                type="button"
+                className={cx("detail-eyebrow-link path", copiedPath && "copied")}
+                aria-label="Copy workflow path"
+                onClick={copyWorkflowPath}
+              >
+                {workflowPath}
+              </button>
+              <span className="eyebrow-separator">·</span>
+              <span className="detail-eyebrow-value ref">{props.repo.defaultBranch ?? "main"}</span>
+            </div>
             <h1>{props.workflow.name}</h1>
           </div>
-          <button className="primary-button inline" onClick={() => props.onRun(props.workflow)}>
+          <button
+            className="primary-button workflow-run-button"
+            aria-label={`Run ${props.workflow.name}`}
+            onClick={() => props.onRun(props.workflow)}
+          >
             <Play size={15} />
-            Run
           </button>
         </div>
-        <TabBar tabs={["Description", "Runs"]} selected={tab} onSelect={setTab} />
       </div>
       <div className="detail-body-scroll">
-        {tab === "Description" ? (
-          <div className="stat-grid">
-            <div className="stat">
-              <span>State</span>
-              <strong>{props.workflow.state}</strong>
-            </div>
-            <div className="stat">
-              <span>Path</span>
-              <strong>{props.workflow.path}</strong>
-            </div>
-            <div className="stat">
-              <span>Default ref</span>
-              <strong>{props.repo.defaultBranch ?? "main"}</strong>
-            </div>
-            <div className="stat">
-              <span>Updated</span>
-              <strong>{formatRelative(props.workflow.updatedAt)}</strong>
-            </div>
-          </div>
-        ) : (
-          <StackedList
-            empty="No runs for this workflow"
-            items={relatedRuns}
-            render={(run) => (
-              <button className="workflow-run-row" key={run.id} onClick={() => props.onSelectRun(run)}>
-                <StatusIcon status={run.status} conclusion={run.conclusion} />
-                <span className="focus-main">
-                  <span className="focus-title">{run.displayTitle || run.name || `Run ${run.id}`}</span>
-                  <span className="focus-meta">{run.branch ?? "branch"} {shortSha(run.commitSha)}</span>
-                </span>
-                <span className="muted-line">{formatRelative(run.runStartedAt ?? run.createdAt)}</span>
-                <span className={cx("state-chip", statusTone(run.status, run.conclusion))}>
-                  {run.conclusion ?? run.status ?? "run"}
-                </span>
-              </button>
-            )}
-          />
-        )}
+        <StackedList
+          empty="No runs for this workflow"
+          items={relatedRuns}
+          render={(run) => (
+            <button className="workflow-run-row" key={run.id} onClick={() => props.onSelectRun(run)}>
+              <StatusIcon status={run.status} conclusion={run.conclusion} />
+              <span className="focus-main">
+                <span className="focus-title">{run.displayTitle || run.name || `Run ${run.id}`}</span>
+                <span className="focus-meta">{run.branch ?? "branch"} {shortSha(run.commitSha)}</span>
+              </span>
+              <span className="muted-line">{formatRelative(run.runStartedAt ?? run.createdAt)}</span>
+              <span className={cx("state-chip", statusTone(run.status, run.conclusion))}>
+                {run.conclusion ?? run.status ?? "run"}
+              </span>
+            </button>
+          )}
+        />
       </div>
     </div>
   );
@@ -5282,18 +5407,94 @@ function WorkflowRunContent(props: {
   fallback: WorkflowRunSummary;
   repo: RepoRef;
   tab: string;
+  onOpenGithubUrl(url: string): void;
+  onCopyText(value: string): Promise<boolean>;
   onTab(tab: string): void;
 }) {
+  const [copiedRunId, setCopiedRunId] = useState(false);
+  const copyFeedbackTimer = useRef<number | null>(null);
+  const copyFeedbackFrame = useRef<number | null>(null);
   const run = props.detail ?? props.fallback;
-  const tabs = ["Summary", "Jobs", "Artifacts"];
+  const tabs = ["Jobs", "Artifacts"];
   const selectedTab = tabs.includes(props.tab) ? props.tab : "Jobs";
+  const commitUrl = run.commitSha ? `https://github.com/${props.repo.owner}/${props.repo.name}/commit/${run.commitSha}` : null;
+  const startedAt = formatAbsoluteDateTime(run.runStartedAt ?? run.createdAt);
+
+  useEffect(
+    () => () => {
+      if (copyFeedbackTimer.current) {
+        window.clearTimeout(copyFeedbackTimer.current);
+      }
+      if (copyFeedbackFrame.current) {
+        window.cancelAnimationFrame(copyFeedbackFrame.current);
+      }
+    },
+    []
+  );
+
+  const copyRunId = useCallback(async () => {
+    const copied = await props.onCopyText(String(run.id));
+    if (!copied) {
+      return;
+    }
+
+    if (copyFeedbackTimer.current) {
+      window.clearTimeout(copyFeedbackTimer.current);
+    }
+    if (copyFeedbackFrame.current) {
+      window.cancelAnimationFrame(copyFeedbackFrame.current);
+    }
+
+    setCopiedRunId(false);
+    copyFeedbackFrame.current = window.requestAnimationFrame(() => {
+      setCopiedRunId(true);
+      copyFeedbackFrame.current = null;
+      copyFeedbackTimer.current = window.setTimeout(() => {
+        setCopiedRunId(false);
+        copyFeedbackTimer.current = null;
+      }, 620);
+    });
+  }, [props.onCopyText, run.id]);
 
   return (
     <div className="content-detail-shell">
       <div className="detail-fixed">
         <div className="detail-heading">
-          <div>
-            <span className="eyebrow">Workflow run</span>
+          <div className="pr-title-stack">
+            <div className="pr-eyebrow-row detail-eyebrow-row" aria-label="Workflow run metadata">
+              <button
+                type="button"
+                className={cx("detail-eyebrow-link id", copiedRunId && "copied")}
+                aria-label="Copy workflow run id"
+                onClick={copyRunId}
+              >
+                #{run.id}
+              </button>
+              <span className="eyebrow-separator">·</span>
+              <span className="detail-eyebrow-value">{run.event ?? "unknown"}</span>
+              <span className="eyebrow-separator">·</span>
+              <span className="detail-eyebrow-value branch">{run.branch ?? "unknown"}</span>
+              <span className="eyebrow-separator">·</span>
+              {commitUrl ? (
+                <CommitActionButton
+                  className="detail-eyebrow-link commit"
+                  sha={run.commitSha}
+                  url={commitUrl}
+                  onCopyText={props.onCopyText}
+                  onOpenUrl={props.onOpenGithubUrl}
+                />
+              ) : (
+                <span className="detail-eyebrow-value commit">unknown</span>
+              )}
+              <span className="eyebrow-separator">·</span>
+              <span>by</span>
+              <span className="detail-eyebrow-value author">{run.actor?.login ?? "unknown"}</span>
+            </div>
+            <div className="pr-eyebrow-row detail-eyebrow-row" aria-label="Workflow run timing">
+              <span className="detail-eyebrow-value">{startedAt || "unknown"}</span>
+              <span className="eyebrow-separator">·</span>
+              <span className="detail-eyebrow-value">{formatDuration(run.durationMs) || "running"}</span>
+            </div>
             <h1>{run.displayTitle || run.name || `Run ${run.id}`}</h1>
           </div>
           <span className={cx("state-chip large-chip", statusTone(run.status, run.conclusion))}>
@@ -5305,33 +5506,6 @@ function WorkflowRunContent(props: {
       <div className="detail-body-scroll">
         {!props.detail ? (
           <Skeleton />
-        ) : selectedTab === "Summary" ? (
-          <div className="stat-grid">
-            <div className="stat">
-              <span>Trigger</span>
-              <strong>{run.event ?? "unknown"}</strong>
-            </div>
-            <div className="stat">
-              <span>Branch</span>
-              <strong>{run.branch ?? "unknown"}</strong>
-            </div>
-            <div className="stat">
-              <span>Commit</span>
-              <strong>{shortSha(run.commitSha)}</strong>
-            </div>
-            <div className="stat">
-              <span>Duration</span>
-              <strong>{formatDuration(run.durationMs) || "running"}</strong>
-            </div>
-            <div className="stat">
-              <span>Started</span>
-              <strong>{formatRelative(run.runStartedAt)}</strong>
-            </div>
-            <div className="stat">
-              <span>Actor</span>
-              <strong>{run.actor?.login ?? "unknown"}</strong>
-            </div>
-          </div>
         ) : selectedTab === "Jobs" ? (
           <WorkflowJobsList focusedJobId={props.focusedJobId ?? null} jobs={props.detail.jobs} repo={props.repo} />
         ) : (
@@ -5458,7 +5632,7 @@ function WorkflowJobsList({
         const unavailableReason = logDetail?.logUnavailableReason;
 
         return (
-          <ArticleCard key={job.id} title={job.name} meta={job.conclusion ?? job.status ?? ""}>
+          <ArticleCard key={job.id} title={job.name}>
             {unavailableReason ? (
               <div className="log-pending">
                 {isLiveStatus(logDetail?.status) ? <Loader2 className="spin" size={14} /> : <AlertCircle size={14} />}
