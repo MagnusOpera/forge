@@ -1923,13 +1923,14 @@ p {
   color: var(--text-strong);
   font-size: 12px;
   font-weight: 750;
+  transition: border-color var(--textbox-focus-duration) var(--textbox-focus-easing);
 }
 
 .pr-management-trigger:hover:not(:disabled),
 .pr-management-actions:focus-within .pr-management-trigger {
-  border-color: var(--control-border-strong);
-  background: var(--hover-bg);
-  color: var(--text-hover);
+  border-color: var(--accent);
+  background: transparent;
+  color: var(--text-strong);
 }
 
 .pr-management-trigger:disabled {
