@@ -4,8 +4,13 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.31]
+
+
 - Darkened the non-glass light sidebar background slightly.
 - Made all repositories easier to scan by visually grouping repositories under each owner.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.30...0.0.31
 
 ## [0.0.30]
 
