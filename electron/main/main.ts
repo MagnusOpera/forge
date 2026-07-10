@@ -74,6 +74,7 @@ interface CacheRecord<T> {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appDisplayName = "Forge";
+const appCopyright = "Copyright (c) 2026 Magnus Opera SAS";
 const legacyAppName = "github-focus";
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
@@ -149,6 +150,7 @@ function configureAppPresentation(): void {
     applicationName: appDisplayName,
     applicationVersion: app.getVersion(),
     version: app.getVersion(),
+    copyright: appCopyright,
     iconPath
   });
 
@@ -272,6 +274,11 @@ function showAboutWindow(): void {
         font-size: 18px;
         line-height: 1.3;
       }
+
+      .copyright {
+        color: #5f6368;
+        font-size: 13px;
+      }
     </style>
   </head>
   <body>
@@ -279,6 +286,7 @@ function showAboutWindow(): void {
       <img src="${iconDataUrl}" alt="" />
       <h1>${appDisplayName}</h1>
       <p>Version ${version} (${version})</p>
+      <p class="copyright">${appCopyright}</p>
     </main>
   </body>
 </html>`;
