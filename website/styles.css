@@ -603,6 +603,10 @@ footer a {
     padding: 0 16px;
   }
 
+  .nav-home-link {
+    display: none;
+  }
+
   .platform-tab {
     flex-direction: column;
     gap: 4px;
