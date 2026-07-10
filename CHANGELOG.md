@@ -4,8 +4,13 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.29]
+
+
 - Made workflow run branch or tag names copyable from the run header.
 - Reduced workflow run header metadata and moved run timing into the Jobs tab.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.28...0.0.29
 
 ## [0.0.28]
 
