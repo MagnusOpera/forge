@@ -15,14 +15,18 @@ The app is built with Electron, React, TypeScript, and Vite. It stays local-only
 
 ## Installation
 
-Forge is currently available for macOS. Install it with Homebrew from the Magnus Opera tap:
+Forge is available for macOS, Windows, and Linux.
+
+Install macOS builds with Homebrew from the Magnus Opera tap:
 
 ```sh
 brew tap magnusopera/tap
 brew install forge
 ```
 
-The tap is `magnusopera/tap`, and the formula is `forge`. You can also download the latest macOS build from [GitHub Releases](https://github.com/MagnusOpera/forge/releases/latest).
+The tap is `magnusopera/tap`, and the formula is `forge`. You can also download the latest signed macOS build from [GitHub Releases](https://github.com/MagnusOpera/forge/releases/latest).
+
+Windows and Linux builds are distributed through [GitHub Releases](https://github.com/MagnusOpera/forge/releases/latest).
 
 ## Development
 
@@ -68,10 +72,10 @@ Build the GitHub Pages website artifact:
 make website-build
 ```
 
-Create an unsigned macOS arm64 package:
+Create release archives:
 
 ```sh
-make package-mac-arm64 version=X.Y.Z
+make package-release-archives version=X.Y.Z
 ```
 
 ## License

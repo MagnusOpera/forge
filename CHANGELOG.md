@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Updated the Forge website.
 - Moved token entry to a dedicated full-window screen with the key icon inline, a right-aligned settings link, and a neutral save icon button beside the token input.
 
 ## [0.0.20]

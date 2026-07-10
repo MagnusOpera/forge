@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Install Forge for macOS and configure the GitHub token."
+      content="Install Forge for macOS, Windows, and Linux and configure the GitHub token."
     />
     <title>Install Forge</title>
     <link rel="icon" href="assets/forge-icon.svg" type="image/svg+xml" />
@@ -19,7 +19,9 @@
         <span>Forge</span>
       </a>
       <nav aria-label="Primary navigation">
+        <a href="index.html">Home</a>
         <a href="install.html" aria-current="page">Install</a>
+        <a href="changelog.html">Changelog</a>
       </nav>
       <div class="header-actions">
         <a class="github-link" href="https://github.com/MagnusOpera/forge">
@@ -30,7 +32,7 @@
           </svg>
           <span>GitHub</span>
         </a>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme">
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to light theme">
           <svg
             class="theme-icon theme-icon-moon"
             aria-hidden="true"
@@ -72,47 +74,204 @@
         <p class="eyebrow">Install</p>
         <h1>Install Forge</h1>
         <p class="lead">
-          Forge is currently available for macOS. Install it with Homebrew or
-          download the latest signed release from GitHub.
+          Forge is available for macOS, Windows, and Linux. Use Homebrew on
+          macOS, or download a build directly from GitHub Releases.
         </p>
       </section>
 
       <section class="install-section" id="install">
         <div>
           <p class="eyebrow">Download</p>
-          <h2>macOS</h2>
-          <p>Choose the installation path that matches how you manage local tools.</p>
+          <h2>Choose a platform</h2>
+          <p>Download the build that matches your operating system and CPU architecture.</p>
         </div>
-        <div class="install-options">
-          <article class="install-option">
-            <div class="install-option-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="m7 8 4 4-4 4" />
-                <path d="M13 16h4" />
+        <div class="platform-tabs" data-platform-tabs>
+          <div class="platform-tablist" role="tablist" aria-label="Choose platform">
+            <button
+              class="platform-tab"
+              type="button"
+              id="platform-tab-macos"
+              role="tab"
+              aria-selected="true"
+              aria-controls="platform-panel-macos"
+              data-platform-tab="macos"
+            >
+              <svg aria-hidden="true" viewBox="0 0 128 128">
+                <path
+                  d="M97.905 67.885c.174 18.8 16.494 25.057 16.674 25.137-.138.44-2.607 8.916-8.597 17.669-5.178 7.568-10.553 15.108-19.018 15.266-8.318.152-10.993-4.934-20.504-4.934-9.508 0-12.479 4.776-20.354 5.086-8.172.31-14.395-8.185-19.616-15.724C15.822 94.961 7.669 66.8 18.616 47.791c5.438-9.44 15.158-15.417 25.707-15.571 8.024-.153 15.598 5.398 20.503 5.398 4.902 0 14.106-6.676 23.782-5.696 4.051.169 15.421 1.636 22.722 12.324-.587.365-13.566 7.921-13.425 23.639M82.272 21.719c4.338-5.251 7.258-12.563 6.462-19.836-6.254.251-13.816 4.167-18.301 9.416-4.02 4.647-7.54 12.087-6.591 19.216 6.971.54 14.091-3.542 18.43-8.796"
+                />
               </svg>
-            </div>
+              <span>macOS</span>
+            </button>
+            <button
+              class="platform-tab"
+              type="button"
+              id="platform-tab-windows"
+              role="tab"
+              aria-selected="false"
+              aria-controls="platform-panel-windows"
+              data-platform-tab="windows"
+              tabindex="-1"
+            >
+              <svg aria-hidden="true" viewBox="0 0 128 128">
+                <path d="M67.328 67.331h60.669V128H67.328zm-67.325 0h60.669V128H.003zM67.328 0h60.669v60.669H67.328zM.003 0h60.669v60.669H.003z" />
+              </svg>
+              <span>Windows</span>
+            </button>
+            <button
+              class="platform-tab"
+              type="button"
+              id="platform-tab-linux"
+              role="tab"
+              aria-selected="false"
+              aria-controls="platform-panel-linux"
+              data-platform-tab="linux"
+              tabindex="-1"
+            >
+              <svg class="platform-icon-linux" aria-hidden="true" viewBox="0 0 128 128">
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M113.823 104.595c-1.795-1.478-3.629-2.921-5.308-4.525-1.87-1.785-3.045-3.944-2.789-6.678.147-1.573-.216-2.926-2.113-3.452.446-1.154.864-1.928 1.033-2.753.188-.92.178-1.887.204-2.834.264-9.96-3.334-18.691-8.663-26.835-2.454-3.748-5.017-7.429-7.633-11.066-4.092-5.688-5.559-12.078-5.633-18.981a47.564 47.564 0 00-1.081-9.475C80.527 11.956 77.291 7.233 71.422 4.7c-4.497-1.942-9.152-2.327-13.901-1.084-6.901 1.805-11.074 6.934-10.996 14.088.074 6.885.417 13.779.922 20.648.288 3.893-.312 7.252-2.895 10.34-2.484 2.969-4.706 6.172-6.858 9.397-1.229 1.844-2.317 3.853-3.077 5.931-2.07 5.663-3.973 11.373-7.276 16.5-1.224 1.9-1.363 4.026-.494 6.199.225.563.363 1.429.089 1.882-2.354 3.907-5.011 7.345-10.066 8.095-3.976.591-4.172 1.314-4.051 5.413.1 3.337.061 6.705-.28 10.021-.363 3.555.008 4.521 3.442 5.373 7.924 1.968 15.913 3.647 23.492 6.854 3.227 1.365 6.465.891 9.064-1.763 2.713-2.771 6.141-3.855 9.844-3.859 6.285-.005 12.572.298 18.86.369 1.702.02 2.679.653 3.364 2.199.84 1.893 2.26 3.284 4.445 3.526 4.193.462 8.013-.16 11.19-3.359 3.918-3.948 8.436-7.066 13.615-9.227 1.482-.619 2.878-1.592 4.103-2.648 2.231-1.922 2.113-3.146-.135-5zM62.426 24.12c.758-2.601 2.537-4.289 5.243-4.801 2.276-.43 4.203.688 5.639 3.246 1.546 2.758 2.054 5.64.734 8.658-1.083 2.474-1.591 2.707-4.123 1.868-.474-.157-.937-.343-1.777-.652.708-.594 1.154-1.035 1.664-1.382 1.134-.772 1.452-1.858 1.346-3.148-.139-1.694-1.471-3.194-2.837-3.175-1.225.017-2.262 1.167-2.4 2.915-.086 1.089.095 2.199.173 3.589-3.446-1.023-4.711-3.525-3.662-7.118zm-12.75-2.251c1.274-1.928 3.197-2.314 5.101-1.024 2.029 1.376 3.547 5.256 2.763 7.576-.285.844-1.127 1.5-1.716 2.241l-.604-.374c-.23-1.253-.276-2.585-.757-3.733-.304-.728-1.257-1.184-1.919-1.762-.622.739-1.693 1.443-1.757 2.228-.088 1.084.477 2.28.969 3.331.311.661 1.001 1.145 1.713 1.916l-1.922 1.51c-3.018-2.7-3.915-8.82-1.871-11.909zM87.34 86.075c-.203 2.604-.5 2.713-3.118 3.098-1.859.272-2.359.756-2.453 2.964a101.744 101.744 0 00-.012 7.753c.061 1.77-.537 3.158-1.755 4.393-6.764 6.856-14.845 10.105-24.512 8.926-4.17-.509-6.896-3.047-9.097-6.639.98-.363 1.705-.607 2.412-.894 3.122-1.27 3.706-3.955 1.213-6.277-1.884-1.757-3.986-3.283-6.007-4.892-1.954-1.555-3.934-3.078-5.891-4.629-1.668-1.323-2.305-3.028-2.345-5.188-.094-5.182.972-10.03 3.138-14.747 1.932-4.209 3.429-8.617 5.239-12.885.935-2.202 1.906-4.455 3.278-6.388 1.319-1.854 2.134-3.669 1.988-5.94-.084-1.276-.016-2.562-.016-3.843l.707-.352c1.141.985 2.302 1.949 3.423 2.959 4.045 3.646 7.892 3.813 12.319.67 1.888-1.341 3.93-2.47 5.927-3.652.497-.294 1.092-.423 1.934-.738 2.151 5.066 4.262 10.033 6.375 15 1.072 2.524 1.932 5.167 3.264 7.547 2.671 4.775 4.092 9.813 4.07 15.272-.012 2.83.137 5.67-.081 8.482z"
+                />
+              </svg>
+              <span>Linux</span>
+            </button>
+            <button
+              class="platform-tab"
+              type="button"
+              id="platform-tab-github"
+              role="tab"
+              aria-selected="false"
+              aria-controls="platform-panel-github"
+              data-platform-tab="github"
+              tabindex="-1"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 2C6.48 2 2 6.58 2 12.24c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49v-1.9c-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.67.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.95c.85 0 1.69.12 2.48.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.56 5.07.36.32.68.95.68 1.91v2.83c0 .27.18.59.69.49A10.1 10.1 0 0 0 22 12.24C22 6.58 17.52 2 12 2Z"
+                />
+              </svg>
+              <span>GitHub</span>
+            </button>
+          </div>
+
+          <article
+            class="platform-panel"
+            id="platform-panel-macos"
+            role="tabpanel"
+            aria-labelledby="platform-tab-macos"
+            data-platform-panel="macos"
+          >
             <div>
-              <h3>Homebrew</h3>
+              <h3>macOS</h3>
               <p>
-                Install from the <code>magnusopera/tap</code> tap with the
-                <code>forge</code> formula.
+                Install the signed macOS build with Homebrew from the
+                <code>magnusopera/tap</code> tap, or download it from GitHub Releases.
               </p>
               <pre class="command"><code>brew tap magnusopera/tap
 brew install forge</code></pre>
+              <div class="artifact-links" aria-label="macOS download">
+                <a class="artifact-link" href="__FORGE_MAC_ARM64_ARTIFACT__">
+                  Download __FORGE_RELEASE_VERSION__ for Apple Silicon Mac (arm64)
+                </a>
+              </div>
+              <a class="changelog-entry-link" href="__FORGE_RELEASE_URL__">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 2C6.48 2 2 6.58 2 12.24c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49v-1.9c-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.67.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.95c.85 0 1.69.12 2.48.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.56 5.07.36.32.68.95.68 1.91v2.83c0 .27.18.59.69.49A10.1 10.1 0 0 0 22 12.24C22 6.58 17.52 2 12 2Z"
+                  />
+                </svg>
+                <span>GitHub release __FORGE_RELEASE_VERSION__</span>
+              </a>
             </div>
           </article>
-          <article class="install-option">
-            <div class="install-option-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M12 3v12" />
-                <path d="m7 10 5 5 5-5" />
-                <path d="M5 19h14" />
-              </svg>
-            </div>
+
+          <article
+            class="platform-panel"
+            id="platform-panel-windows"
+            role="tabpanel"
+            aria-labelledby="platform-tab-windows"
+            data-platform-panel="windows"
+            hidden
+          >
             <div>
-              <h3>GitHub Releases</h3>
-              <p>Download the latest signed macOS release directly from GitHub.</p>
-              <a class="inline-link" href="https://github.com/MagnusOpera/forge/releases/latest">Latest release</a>
+              <h3>Windows</h3>
+              <p>
+                Download Forge for Windows from GitHub Releases.
+              </p>
+              <div class="artifact-links" aria-label="Windows downloads">
+                <a class="artifact-link" href="__FORGE_WINDOWS_X64_ARTIFACT__">
+                  Download __FORGE_RELEASE_VERSION__ for Intel/AMD Windows (x64)
+                </a>
+                <a class="artifact-link" href="__FORGE_WINDOWS_ARM64_ARTIFACT__">
+                  Download __FORGE_RELEASE_VERSION__ for ARM Windows (arm64)
+                </a>
+              </div>
+              <a class="changelog-entry-link" href="__FORGE_RELEASE_URL__">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 2C6.48 2 2 6.58 2 12.24c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49v-1.9c-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.67.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.95c.85 0 1.69.12 2.48.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.56 5.07.36.32.68.95.68 1.91v2.83c0 .27.18.59.69.49A10.1 10.1 0 0 0 22 12.24C22 6.58 17.52 2 12 2Z"
+                  />
+                </svg>
+                <span>GitHub release __FORGE_RELEASE_VERSION__</span>
+              </a>
+            </div>
+          </article>
+
+          <article
+            class="platform-panel"
+            id="platform-panel-linux"
+            role="tabpanel"
+            aria-labelledby="platform-tab-linux"
+            data-platform-panel="linux"
+            hidden
+          >
+            <div>
+              <h3>Linux</h3>
+              <p>
+                Download Forge for Linux from GitHub Releases.
+              </p>
+              <div class="artifact-links" aria-label="Linux downloads">
+                <a class="artifact-link" href="__FORGE_LINUX_X64_ARTIFACT__">
+                  Download __FORGE_RELEASE_VERSION__ for Intel/AMD Linux (x64)
+                </a>
+                <a class="artifact-link" href="__FORGE_LINUX_ARM64_ARTIFACT__">
+                  Download __FORGE_RELEASE_VERSION__ for ARM Linux (arm64)
+                </a>
+              </div>
+              <a class="changelog-entry-link" href="__FORGE_RELEASE_URL__">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 2C6.48 2 2 6.58 2 12.24c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49v-1.9c-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.67.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.95c.85 0 1.69.12 2.48.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.56 5.07.36.32.68.95.68 1.91v2.83c0 .27.18.59.69.49A10.1 10.1 0 0 0 22 12.24C22 6.58 17.52 2 12 2Z"
+                  />
+                </svg>
+                <span>GitHub release __FORGE_RELEASE_VERSION__</span>
+              </a>
+            </div>
+          </article>
+
+          <article
+            class="platform-panel"
+            id="platform-panel-github"
+            role="tabpanel"
+            aria-labelledby="platform-tab-github"
+            data-platform-panel="github"
+            hidden
+          >
+            <div>
+              <h3>GitHub</h3>
+              <p>
+                Open the current Forge release, or browse all available releases.
+              </p>
+              <div class="artifact-links" aria-label="GitHub releases">
+                <a class="artifact-link" href="__FORGE_RELEASE_URL__">
+                  Open current release __FORGE_RELEASE_VERSION__
+                </a>
+                <a class="artifact-link" href="__FORGE_RELEASES_URL__">
+                  View available releases
+                </a>
+              </div>
             </div>
           </article>
         </div>

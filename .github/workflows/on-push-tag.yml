@@ -13,7 +13,8 @@ env:
   RELEASE_TAG: ${{ github.ref_name }}
 
 jobs:
-  build-and-release:
+  build-macos:
+    name: Build macOS arm64
     runs-on: macos-latest
 
     steps:
@@ -29,14 +30,95 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Resolve app version
-        shell: bash
-        run: |
-          APP_VERSION="${RELEASE_TAG#v}"
-          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
-
       - name: Build unsigned macOS arm64 artifact
-        run: make package-mac-arm64 version="${RELEASE_TAG}" app_version="${APP_VERSION}"
+        run: make package-mac-arm64 version="${RELEASE_TAG}"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-arm64
+          path: .out/forge-${{ env.RELEASE_TAG }}-mac-arm64-unsigned.zip
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer and Electron main
+        run: npm run build
+
+      - name: Build unsigned Windows x64 artifact
+        shell: bash
+        run: ./.github/scripts/package-electron-artifact.sh windows x64 "${RELEASE_TAG}"
+
+      - name: Build unsigned Windows arm64 artifact
+        shell: bash
+        run: ./.github/scripts/package-electron-artifact.sh windows arm64 "${RELEASE_TAG}"
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: .out/forge-${{ env.RELEASE_TAG }}-windows-*.zip
+          if-no-files-found: error
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer and Electron main
+        run: npm run build
+
+      - name: Build unsigned Linux x64 artifact
+        run: ./.github/scripts/package-electron-artifact.sh linux x64 "${RELEASE_TAG}"
+
+      - name: Build unsigned Linux arm64 artifact
+        run: ./.github/scripts/package-electron-artifact.sh linux arm64 "${RELEASE_TAG}"
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: .out/forge-${{ env.RELEASE_TAG }}-linux-*.tar.gz
+          if-no-files-found: error
+
+  create-draft-release:
+    name: Create draft GitHub release
+    needs:
+      - build-macos
+      - build-windows
+      - build-linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Extract version suffix
         shell: bash
@@ -51,6 +133,15 @@ jobs:
         shell: bash
         run: ./.github/scripts/extract-release-notes.sh "${RELEASE_TAG}" > "${RUNNER_TEMP}/release-notes.md"
 
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: .out/release
+          merge-multiple: true
+
+      - name: List release artifacts
+        run: find .out/release -maxdepth 1 -type f -print | sort
+
       - name: Create draft GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -58,5 +149,4 @@ jobs:
           draft: true
           prerelease: ${{ env.IS_PRERELEASE == 'true' }}
           body_path: ${{ runner.temp }}/release-notes.md
-          files: |
-            .out/forge-${{ env.RELEASE_TAG }}-mac-arm64-unsigned.zip
+          files: .out/release/*

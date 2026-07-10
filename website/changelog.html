@@ -5,23 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Forge is a simple desktop GitHub client for fast operating around active work."
+      content="Forge changelog."
     />
-    <title>Forge - fast GitHub operations</title>
+    <title>Forge Changelog</title>
     <link rel="icon" href="assets/forge-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/forge-icon.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="#top" aria-label="Forge home">
+      <a class="brand" href="index.html" aria-label="Forge home">
         <img src="assets/forge-icon.svg" alt="" />
         <span>Forge</span>
       </a>
       <nav aria-label="Primary navigation">
-        <a href="#top" aria-current="page">Home</a>
+        <a href="index.html">Home</a>
         <a href="install.html">Install</a>
-        <a href="changelog.html">Changelog</a>
+        <a href="changelog.html" aria-current="page">Changelog</a>
       </nav>
       <div class="header-actions">
         <a class="github-link" href="https://github.com/MagnusOpera/forge">
@@ -69,50 +69,19 @@
       </div>
     </header>
 
-    <main id="top">
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Desktop GitHub client</p>
-          <h1>Forge</h1>
-          <p class="lead">
-            A simple GitHub client for fast operating around pull requests, issues, workflows, and repositories.<br />
-            Forge is not a replacement for the GitHub website.<br />
-            It keeps day-to-day work close and sends configuration back to GitHub.
-          </p>
-        </div>
-
-        <figure class="preview" aria-labelledby="preview-title">
-          <div class="preview-bar">
-            <span id="preview-title">Forge in <strong data-preview-theme>light</strong> mode</span>
-            <span>Website theme switches the example preview</span>
-          </div>
-          <div class="preview-image-window">
-            <img
-              data-preview-image
-              src="screenshots/forge-light.png"
-              alt="Forge desktop app screenshot showing repositories, work lists, and repository details."
-            />
-          </div>
-        </figure>
+    <main class="subpage-main">
+      <section class="page-hero">
+        <p class="eyebrow">Changelog</p>
+        <h1>Changelog</h1>
+        <p class="lead">
+          Notable Forge changes.
+        </p>
       </section>
 
-      <section class="section-grid" id="focus">
-        <article>
-          <h2>Built for work, not configuration.</h2>
-          <p>
-            Forge keeps repositories, pull requests, workflow runs, checks, labels,
-            and review actions in a dense three-pane layout. The GitHub website stays
-            the source of truth for repository settings and advanced administration.
-          </p>
-        </article>
-        <article>
-          <h2>Fast paths stay close.</h2>
-          <p>
-            Search repositories, inspect current work, update pull request metadata,
-            submit reviews, run workflows, and jump back to GitHub when the website
-            is the right tool.
-          </p>
-        </article>
+      <section class="changelog-section">
+        <div class="changelog-list">
+          <!-- CHANGELOG_ENTRIES -->
+        </div>
       </section>
     </main>
 
