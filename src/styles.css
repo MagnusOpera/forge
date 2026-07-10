@@ -5,6 +5,8 @@
   --sidebar-appearance-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --theme-transition-duration: 320ms;
   --theme-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --textbox-focus-duration: 180ms;
+  --textbox-focus-easing: cubic-bezier(0.2, 0, 0.2, 1);
   --titlebar-icon-underline-width: 22px;
   --titlebar-icon-underline-half-width: 11px;
   --titlebar-icon-underline-height: 2px;
@@ -872,7 +874,7 @@ input {
   color: var(--text-muted-alt);
   transition:
     background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
-    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    border-color var(--textbox-focus-duration) var(--textbox-focus-easing),
     box-shadow var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
     color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
     backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
@@ -912,6 +914,13 @@ input {
     0 8px 22px rgb(0 0 0 / 0);
   backdrop-filter: blur(0px) saturate(1) brightness(1);
   -webkit-backdrop-filter: blur(0px) saturate(1) brightness(1);
+}
+
+.search-box:focus-within,
+.sidebar .search-box:focus-within,
+.app-shell[data-sidebar-appearance="normal"] .sidebar .search-box:focus-within,
+.palette-input:focus-within {
+  border-color: var(--accent);
 }
 
 .search-clear-button {
@@ -1539,6 +1548,11 @@ input {
   outline: 0;
   background: var(--control-bg);
   color: var(--title);
+  transition: border-color var(--textbox-focus-duration) var(--textbox-focus-easing);
+}
+
+.token-panel input:focus {
+  border-color: var(--accent);
 }
 
 .primary-button {
@@ -1980,6 +1994,11 @@ button.pr-label-chip:disabled {
   padding: 0 10px;
   border-bottom: 1px solid var(--border-soft);
   color: var(--icon);
+  transition: border-color var(--textbox-focus-duration) var(--textbox-focus-easing);
+}
+
+.label-picker-search:focus-within {
+  border-color: var(--accent);
 }
 
 .label-picker-search input {
@@ -2167,11 +2186,17 @@ button.pr-label-chip:disabled {
   padding: 0 8px;
   border: 1px solid var(--control-border);
   border-radius: 7px;
+  outline: 0;
   background: var(--input-bg);
   color: var(--title);
   font-size: 24px;
   font-weight: 700;
   line-height: 1.2;
+  transition: border-color var(--textbox-focus-duration) var(--textbox-focus-easing);
+}
+
+.pr-title-input:focus {
+  border-color: var(--accent);
 }
 
 .review-action-button {
@@ -2302,8 +2327,13 @@ button.pr-label-chip:disabled {
   transition:
     height 160ms ease,
     min-height 160ms ease,
-    border-color 120ms ease,
+    border-color var(--textbox-focus-duration) var(--textbox-focus-easing),
     box-shadow 120ms ease;
+}
+
+.comment-composer textarea:focus {
+  border-color: var(--accent);
+  outline: 0;
 }
 
 .comment-composer.expanded textarea {
