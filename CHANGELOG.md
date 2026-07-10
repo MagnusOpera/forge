@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Removed Windows and Linux release builds and downloads.
+
 ## [0.0.25]
 
 

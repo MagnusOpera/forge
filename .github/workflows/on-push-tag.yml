@@ -41,87 +41,10 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
 
-  build-windows:
-    name: Build Windows ${{ matrix.arch }}
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x64
-          - arm64
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build renderer and Electron main
-        run: npm run build
-
-      - name: Build unsigned Windows ${{ matrix.arch }} artifact
-        shell: bash
-        run: ./.github/scripts/package-electron-artifact.sh windows "${{ matrix.arch }}" "${RELEASE_TAG}"
-
-      - name: Upload Windows ${{ matrix.arch }} artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-windows-${{ matrix.arch }}
-          path: .out/forge-${{ env.RELEASE_TAG }}-windows-${{ matrix.arch }}.exe
-          if-no-files-found: error
-          include-hidden-files: true
-
-  build-linux:
-    name: Build Linux ${{ matrix.arch }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x64
-          - arm64
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build renderer and Electron main
-        run: npm run build
-
-      - name: Build unsigned Linux ${{ matrix.arch }} artifact
-        run: ./.github/scripts/package-electron-artifact.sh linux "${{ matrix.arch }}" "${RELEASE_TAG}"
-
-      - name: Upload Linux ${{ matrix.arch }} artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-linux-${{ matrix.arch }}
-          path: .out/forge-${{ env.RELEASE_TAG }}-linux-${{ matrix.arch }}.AppImage
-          if-no-files-found: error
-          include-hidden-files: true
-
   create-draft-release:
     name: Create draft GitHub release
     needs:
       - build-macos
-      - build-windows
-      - build-linux
     runs-on: ubuntu-latest
 
     steps:

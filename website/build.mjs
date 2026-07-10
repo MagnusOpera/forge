@@ -132,11 +132,7 @@ function applyReleaseReplacements(html) {
     __FORGE_RELEASE_VERSION__: `v${releaseTag}`,
     __FORGE_RELEASE_URL__: `https://github.com/MagnusOpera/forge/releases/tag/${encodeURIComponent(releaseTag)}`,
     __FORGE_RELEASES_URL__: "https://github.com/MagnusOpera/forge/releases",
-    __FORGE_MAC_ARM64_ARTIFACT__: releaseAssetUrl(`forge-${releaseTag}-mac-arm64.zip`),
-    __FORGE_WINDOWS_X64_ARTIFACT__: releaseAssetUrl(`forge-${releaseTag}-windows-x64.exe`),
-    __FORGE_WINDOWS_ARM64_ARTIFACT__: releaseAssetUrl(`forge-${releaseTag}-windows-arm64.exe`),
-    __FORGE_LINUX_X64_ARTIFACT__: releaseAssetUrl(`forge-${releaseTag}-linux-x64.AppImage`),
-    __FORGE_LINUX_ARM64_ARTIFACT__: releaseAssetUrl(`forge-${releaseTag}-linux-arm64.AppImage`)
+    __FORGE_MAC_ARM64_ARTIFACT__: releaseAssetUrl(`forge-${releaseTag}-mac-arm64.zip`)
   };
 
   let output = html;

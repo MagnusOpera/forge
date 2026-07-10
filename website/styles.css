@@ -474,11 +474,6 @@ h3 {
   fill: currentColor;
 }
 
-.platform-tab .platform-icon-linux {
-  width: 26px;
-  height: 26px;
-}
-
 .platform-panel[hidden] {
   display: none;
 }

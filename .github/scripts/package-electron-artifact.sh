@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
-  echo "Usage: $0 <mac|windows|linux> <x64|arm64> <version>"
+  echo "Usage: $0 <mac> <arm64> <version>"
   exit 2
 fi
 
@@ -12,35 +12,21 @@ version="$3"
 app_version="${version#v}"
 
 case "$arch" in
-  x64 | arm64) ;;
+  arm64) ;;
   *)
-    echo "ERROR: Unsupported architecture '${arch}'. Expected x64 or arm64."
+    echo "ERROR: Unsupported architecture '${arch}'. Expected arm64."
     exit 1
     ;;
 esac
 
 case "$platform" in
   mac)
-    if [[ "$arch" != "arm64" ]]; then
-      echo "ERROR: mac packaging is currently arm64-only."
-      exit 1
-    fi
     builder_args=(--mac zip)
     output_suffix="mac-${arch}-unsigned"
     artifact_glob="*.zip"
     ;;
-  windows)
-    builder_args=(--win portable)
-    output_suffix="windows-${arch}"
-    artifact_glob="*.exe"
-    ;;
-  linux)
-    builder_args=(--linux AppImage)
-    output_suffix="linux-${arch}"
-    artifact_glob="*.AppImage"
-    ;;
   *)
-    echo "ERROR: Unsupported platform '${platform}'. Expected mac, windows, or linux."
+    echo "ERROR: Unsupported platform '${platform}'. Expected mac."
     exit 1
     ;;
 esac

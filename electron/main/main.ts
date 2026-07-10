@@ -82,7 +82,7 @@ const defaultTtlMs = 5 * 60 * 1000;
 const appDefaultZoomFactor = 1.1;
 const glassWindowBackground = "#00000000";
 const normalWindowBackground = "#0c0e12";
-const supportsNativeGlassBackground = process.platform === "darwin" || process.platform === "win32";
+const supportsNativeGlassBackground = process.platform === "darwin";
 
 app.setName(appDisplayName);
 app.setAppUserModelId("com.magnusopera.forge");
@@ -97,16 +97,6 @@ let sidebarAppearanceMode: SidebarAppearanceMode = DEFAULT_SIDEBAR_APPEARANCE_MO
 
 function windowBackgroundColorForSidebarAppearance(mode: SidebarAppearanceMode): string {
   return supportsNativeGlassBackground && mode === "glass" ? glassWindowBackground : normalWindowBackground;
-}
-
-function windowsBackgroundMaterialForSidebarAppearance(
-  mode: SidebarAppearanceMode
-): "auto" | "none" | "mica" | "acrylic" | "tabbed" | undefined {
-  if (process.platform !== "win32") {
-    return undefined;
-  }
-
-  return mode === "glass" ? "acrylic" : "none";
 }
 
 function appIconPath(extension: "png" | "icns" = "png"): string {
@@ -2132,8 +2122,6 @@ function createWindow(): void {
     title: appDisplayName,
     icon: appIconPath("png"),
     backgroundColor: windowBackgroundColorForSidebarAppearance(sidebarAppearanceMode),
-    backgroundMaterial: windowsBackgroundMaterialForSidebarAppearance(sidebarAppearanceMode),
-    autoHideMenuBar: process.platform !== "darwin",
     transparent: process.platform === "darwin",
     vibrancy: process.platform === "darwin" ? "sidebar" : undefined,
     visualEffectState: process.platform === "darwin" ? "followWindow" : undefined,
@@ -2172,10 +2160,6 @@ function createWindow(): void {
 }
 
 function normalizeSidebarAppearanceMode(mode: unknown): SidebarAppearanceMode {
-  if (process.platform === "linux") {
-    return "normal";
-  }
-
   return mode === "normal" ? "normal" : DEFAULT_SIDEBAR_APPEARANCE_MODE;
 }
 
@@ -2192,12 +2176,6 @@ function setSidebarAppearanceMode(mode: SidebarAppearanceMode): void {
 
   if (process.platform === "darwin") {
     mainWindow.setVibrancy(mode === "glass" ? "sidebar" : null);
-    mainWindow.setBackgroundColor(windowBackgroundColorForSidebarAppearance(mode));
-    return;
-  }
-
-  if (process.platform === "win32") {
-    mainWindow.setBackgroundMaterial(windowsBackgroundMaterialForSidebarAppearance(mode) ?? "none");
     mainWindow.setBackgroundColor(windowBackgroundColorForSidebarAppearance(mode));
     return;
   }

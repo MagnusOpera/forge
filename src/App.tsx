@@ -1008,7 +1008,6 @@ export function App() {
   const systemTheme = useSystemTheme();
   const activeTheme: ThemeMode = themePreference === "system" ? systemTheme : themePreference;
   const nativeThemeSource: NativeThemeSource = themePreference === "system" ? "system" : activeTheme;
-  const supportsSidebarGlassAppearance = api.platform !== "linux";
   const legacySidebarAppearance = useMemo(() => readStoredSidebarAppearance("github-focus:sidebar-appearance"), []);
   const [darkSidebarAppearance, setDarkSidebarAppearance] = useStoredState<SidebarAppearanceMode>(
     "github-focus:sidebar-appearance:dark",
@@ -1018,10 +1017,9 @@ export function App() {
     "github-focus:sidebar-appearance:light",
     legacySidebarAppearance ?? DEFAULT_SIDEBAR_APPEARANCE_MODE
   );
-  const storedSidebarAppearance = normalizeSidebarAppearanceMode(
+  const sidebarAppearance = normalizeSidebarAppearanceMode(
     activeTheme === "dark" ? darkSidebarAppearance : lightSidebarAppearance
   );
-  const sidebarAppearance: SidebarAppearanceMode = supportsSidebarGlassAppearance ? storedSidebarAppearance : "normal";
   const legacyAccentColor = useMemo(() => readStoredAccentColor("github-focus:accent-color"), []);
   const [darkAccentColor, setDarkAccentColor] = useStoredState<string>(
     "github-focus:accent-color:dark",
@@ -2734,13 +2732,9 @@ export function App() {
     "--accent": selectedAccent
   };
   const toggleSidebarAppearance = useCallback(() => {
-    if (!supportsSidebarGlassAppearance) {
-      return;
-    }
-
     const setAppearance = activeTheme === "dark" ? setDarkSidebarAppearance : setLightSidebarAppearance;
     setAppearance((current) => (normalizeSidebarAppearanceMode(current) === "glass" ? "normal" : "glass"));
-  }, [activeTheme, setDarkSidebarAppearance, setLightSidebarAppearance, supportsSidebarGlassAppearance]);
+  }, [activeTheme, setDarkSidebarAppearance, setLightSidebarAppearance]);
 
   useEffect(() => {
     if (nativeSidebarAppearanceTimer.current) {
@@ -2893,7 +2887,6 @@ export function App() {
         themePreference={themePreference}
         systemTheme={systemTheme}
         sidebarAppearance={sidebarAppearance}
-        canToggleSidebarAppearance={supportsSidebarGlassAppearance}
         canNavigateBack={canNavigateBack}
         canNavigateForward={canNavigateForward}
         accentColor={selectedAccent}
@@ -3807,7 +3800,6 @@ function ContentPane(props: {
   themePreference: ThemePreference;
   systemTheme: ThemeMode;
   sidebarAppearance: SidebarAppearanceMode;
-  canToggleSidebarAppearance: boolean;
   workflowRuns: WorkflowRunSummary[];
   canNavigateBack: boolean;
   canNavigateForward: boolean;
@@ -4045,20 +4037,18 @@ function ContentPane(props: {
               <ThemePreferenceIcon preference={props.themePreference} />
             </button>
             <div className="accent-picker" role="group" aria-label="Theme appearance">
-              {props.canToggleSidebarAppearance && (
-                <button
-                  className={cx("accent-picker-glass-toggle", props.sidebarAppearance === "glass" && "active")}
-                  type="button"
-                  aria-label={`${props.sidebarAppearance === "glass" ? "Disable" : "Enable"} glass mode for ${props.theme} theme`}
-                  aria-pressed={props.sidebarAppearance === "glass"}
-                  onClick={(event) => {
-                    props.onToggleSidebarAppearance();
-                    event.currentTarget.blur();
-                  }}
-                >
-                  <SwatchBook size={16} />
-                </button>
-              )}
+              <button
+                className={cx("accent-picker-glass-toggle", props.sidebarAppearance === "glass" && "active")}
+                type="button"
+                aria-label={`${props.sidebarAppearance === "glass" ? "Disable" : "Enable"} glass mode for ${props.theme} theme`}
+                aria-pressed={props.sidebarAppearance === "glass"}
+                onClick={(event) => {
+                  props.onToggleSidebarAppearance();
+                  event.currentTarget.blur();
+                }}
+              >
+                <SwatchBook size={16} />
+              </button>
               <div className="accent-swatch-grid" role="radiogroup" aria-label="Accent color">
                 {accentColors.map((color, index) => (
                   <button
