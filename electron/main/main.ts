@@ -12,6 +12,7 @@ import {
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions
 } from "electron";
+import { autoUpdater, type UpdateDownloadedEvent } from "electron-updater";
 import { Octokit } from "@octokit/rest";
 import { graphql } from "@octokit/graphql";
 import crypto from "node:crypto";
@@ -78,6 +79,7 @@ const appCopyright = "Copyright (c) 2026 Magnus Opera SAS";
 const appReleasesUrl = "https://github.com/MagnusOpera/forge/releases";
 const legacyAppName = "github-focus";
 const isDev = !app.isPackaged;
+const supportsAutoUpdates = process.platform === "darwin" && app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
 const defaultTtlMs = 5 * 60 * 1000;
 const appDefaultZoomFactor = 1.1;
@@ -95,6 +97,10 @@ let graphqlClient: GraphqlClient | null = null;
 let activeTokenHash: string | null = null;
 const activeNotifications = new Set<Notification>();
 let sidebarAppearanceMode: SidebarAppearanceMode = DEFAULT_SIDEBAR_APPEARANCE_MODE;
+let autoUpdaterInitialized = false;
+let updateCheckInFlight = false;
+let latestUpdateCheckWasManual = false;
+let updateRestartDialogOpen = false;
 
 function windowBackgroundColorForSidebarAppearance(mode: SidebarAppearanceMode): string {
   return supportsNativeGlassBackground && mode === "glass" ? glassWindowBackground : normalWindowBackground;
@@ -146,6 +152,131 @@ async function migrateLegacyUserData(): Promise<void> {
     copyPathIfMissing(path.join(legacyUserDataDir, "cache"), path.join(currentUserDataDir, "cache")),
     copyPathIfMissing(path.join(legacyUserDataDir, "Local Storage"), path.join(currentUserDataDir, "Local Storage"))
   ]);
+}
+
+function initializeAutoUpdater(): void {
+  if (!supportsAutoUpdates || autoUpdaterInitialized) {
+    return;
+  }
+
+  autoUpdaterInitialized = true;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.allowPrerelease = app.getVersion().includes("-");
+  autoUpdater.setFeedURL({
+    provider: "github",
+    owner: "MagnusOpera",
+    repo: "forge",
+    private: false
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    if (!latestUpdateCheckWasManual) {
+      return;
+    }
+
+    void dialog.showMessageBox({
+      type: "info",
+      title: "Forge is up to date",
+      message: "Forge is up to date.",
+      detail: `Version ${app.getVersion()} is the latest available release.`
+    });
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    if (!latestUpdateCheckWasManual) {
+      return;
+    }
+
+    void dialog.showMessageBox({
+      type: "info",
+      title: "Update Available",
+      message: `Forge ${info.version} is available.`,
+      detail: "The update is downloading and Forge will ask before restarting to install it."
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (event: UpdateDownloadedEvent) => {
+    void promptToInstallUpdate(event.version);
+  });
+
+  autoUpdater.on("error", (error) => {
+    console.error("Forge auto-update check failed.", error);
+  });
+}
+
+async function promptToInstallUpdate(version: string): Promise<void> {
+  if (updateRestartDialogOpen) {
+    return;
+  }
+
+  updateRestartDialogOpen = true;
+  try {
+    const result = await dialog.showMessageBox({
+      type: "info",
+      buttons: ["Restart and Install", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Update Ready",
+      message: `Forge ${version} is ready to install.`,
+      detail: "Restart Forge to finish installing the update."
+    });
+
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall(false, true);
+    }
+  } finally {
+    updateRestartDialogOpen = false;
+  }
+}
+
+async function checkForUpdates(options: { manual: boolean }): Promise<void> {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  latestUpdateCheckWasManual = options.manual;
+
+  if (!app.isPackaged) {
+    if (options.manual) {
+      await dialog.showMessageBox({
+        type: "info",
+        title: "Updates Unavailable",
+        message: "Update checks are available in packaged Forge releases.",
+        detail: "Development builds do not use the GitHub Releases update feed."
+      });
+    }
+    return;
+  }
+
+  if (updateCheckInFlight) {
+    if (options.manual) {
+      await dialog.showMessageBox({
+        type: "info",
+        title: "Checking for Updates",
+        message: "Forge is already checking for updates."
+      });
+    }
+    return;
+  }
+
+  initializeAutoUpdater();
+  updateCheckInFlight = true;
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (error) {
+    console.error("Forge auto-update check failed.", error);
+    if (options.manual) {
+      await dialog.showMessageBox({
+        type: "error",
+        title: "Update Check Failed",
+        message: "Forge could not check for updates.",
+        detail: error instanceof Error ? error.message : String(error)
+      });
+    }
+  } finally {
+    updateCheckInFlight = false;
+  }
 }
 
 function configureAppPresentation(): void {
@@ -378,6 +509,7 @@ function createApplicationMenu(): void {
       label: appDisplayName,
       submenu: [
         { label: `About ${appDisplayName}`, click: () => showAboutWindow() },
+        { label: "Check for Updates...", click: () => void checkForUpdates({ manual: true }) },
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -2341,6 +2473,9 @@ app.whenReady().then(async () => {
   configureAppPresentation();
   createApplicationMenu();
   createWindow();
+  setTimeout(() => {
+    void checkForUpdates({ manual: false });
+  }, 30_000);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added automatic macOS update checks from GitHub Releases.
 - Added a GitHub releases link to the About window.
 
 ## [0.0.26]

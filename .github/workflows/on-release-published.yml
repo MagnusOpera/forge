@@ -140,12 +140,16 @@ jobs:
           rm -f ".out/release/forge-${RELEASE_TAG}-mac-arm64.zip"
           ditto -c -k --keepParent "${APP_PATH}" ".out/release/forge-${RELEASE_TAG}-mac-arm64.zip"
 
+      - name: Generate macOS update metadata
+        run: node .github/scripts/generate-latest-mac-update.mjs ".out/release/forge-${RELEASE_TAG}-mac-arm64.zip" "${RELEASE_TAG}"
+
       - name: Upload signed macOS artifact
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: |
             .out/release/forge-${{ env.RELEASE_TAG }}-mac-arm64.zip
+            .out/release/latest-mac.yml
 
       - name: Remove unsigned macOS artifact
         continue-on-error: true
