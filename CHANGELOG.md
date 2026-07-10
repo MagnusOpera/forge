@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.24]
+
+
 - Hid auto-merge actions for approved pull requests.
 - Matched the pull request action button hover state to the token save button.
 - Made the Forge website use the light theme by default.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.23...0.0.24
 
 ## [0.0.23]
 
