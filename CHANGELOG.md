@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Fixed macOS startup after adding automatic update checks.
+
 ## [0.0.27]
 
 

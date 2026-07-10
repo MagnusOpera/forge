@@ -12,7 +12,8 @@ import {
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions
 } from "electron";
-import { autoUpdater, type UpdateDownloadedEvent } from "electron-updater";
+import electronUpdater from "electron-updater";
+import type { UpdateDownloadedEvent } from "electron-updater";
 import { Octokit } from "@octokit/rest";
 import { graphql } from "@octokit/graphql";
 import crypto from "node:crypto";
@@ -86,6 +87,7 @@ const appDefaultZoomFactor = 1.1;
 const glassWindowBackground = "#00000000";
 const normalWindowBackground = "#0c0e12";
 const supportsNativeGlassBackground = process.platform === "darwin";
+const { autoUpdater } = electronUpdater;
 
 app.setName(appDisplayName);
 app.setAppUserModelId("com.magnusopera.forge");
