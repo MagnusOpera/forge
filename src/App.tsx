@@ -874,6 +874,74 @@ function GithubUrlActionButton(props: {
   );
 }
 
+function ClipboardTextButton(props: {
+  ariaLabel: string;
+  children: React.ReactNode;
+  className?: string;
+  value?: string | null;
+  onCopyText(value: string): Promise<boolean>;
+}) {
+  const { ariaLabel, children, className, onCopyText, value } = props;
+  const [copied, setCopied] = useState(false);
+  const copyFeedbackTimer = useRef<number | null>(null);
+  const copyFeedbackFrame = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyFeedbackTimer.current) {
+        window.clearTimeout(copyFeedbackTimer.current);
+      }
+      if (copyFeedbackFrame.current) {
+        window.cancelAnimationFrame(copyFeedbackFrame.current);
+      }
+    },
+    []
+  );
+
+  const showCopied = useCallback(() => {
+    if (copyFeedbackTimer.current) {
+      window.clearTimeout(copyFeedbackTimer.current);
+    }
+    if (copyFeedbackFrame.current) {
+      window.cancelAnimationFrame(copyFeedbackFrame.current);
+    }
+
+    setCopied(false);
+    copyFeedbackFrame.current = window.requestAnimationFrame(() => {
+      setCopied(true);
+      copyFeedbackFrame.current = null;
+      copyFeedbackTimer.current = window.setTimeout(() => {
+        setCopied(false);
+        copyFeedbackTimer.current = null;
+      }, 620);
+    });
+  }, []);
+
+  const handleClick = useCallback(() => {
+    if (!value) {
+      return;
+    }
+
+    void onCopyText(value).then((didCopy) => {
+      if (didCopy) {
+        showCopied();
+      }
+    });
+  }, [onCopyText, showCopied, value]);
+
+  return (
+    <button
+      type="button"
+      className={cx(className, copied && "copied")}
+      aria-label={ariaLabel}
+      onClick={handleClick}
+      disabled={!value}
+    >
+      {children}
+    </button>
+  );
+}
+
 function CommitActionButton(props: {
   sha?: string | null;
   url?: string | null;
@@ -5420,50 +5488,12 @@ function WorkflowRunContent(props: {
   onCopyText(value: string): Promise<boolean>;
   onTab(tab: string): void;
 }) {
-  const [copiedRunId, setCopiedRunId] = useState(false);
-  const copyFeedbackTimer = useRef<number | null>(null);
-  const copyFeedbackFrame = useRef<number | null>(null);
   const run = props.detail ?? props.fallback;
   const tabs = ["Jobs", "Artifacts"];
   const selectedTab = tabs.includes(props.tab) ? props.tab : "Jobs";
   const commitUrl = run.commitSha ? `https://github.com/${props.repo.owner}/${props.repo.name}/commit/${run.commitSha}` : null;
   const startedAt = formatAbsoluteDateTime(run.runStartedAt ?? run.createdAt);
-
-  useEffect(
-    () => () => {
-      if (copyFeedbackTimer.current) {
-        window.clearTimeout(copyFeedbackTimer.current);
-      }
-      if (copyFeedbackFrame.current) {
-        window.cancelAnimationFrame(copyFeedbackFrame.current);
-      }
-    },
-    []
-  );
-
-  const copyRunId = useCallback(async () => {
-    const copied = await props.onCopyText(String(run.id));
-    if (!copied) {
-      return;
-    }
-
-    if (copyFeedbackTimer.current) {
-      window.clearTimeout(copyFeedbackTimer.current);
-    }
-    if (copyFeedbackFrame.current) {
-      window.cancelAnimationFrame(copyFeedbackFrame.current);
-    }
-
-    setCopiedRunId(false);
-    copyFeedbackFrame.current = window.requestAnimationFrame(() => {
-      setCopiedRunId(true);
-      copyFeedbackFrame.current = null;
-      copyFeedbackTimer.current = window.setTimeout(() => {
-        setCopiedRunId(false);
-        copyFeedbackTimer.current = null;
-      }, 620);
-    });
-  }, [props.onCopyText, run.id]);
+  const duration = formatDuration(run.durationMs) || "running";
 
   return (
     <div className="content-detail-shell">
@@ -5471,18 +5501,20 @@ function WorkflowRunContent(props: {
         <div className="detail-heading">
           <div className="pr-title-stack">
             <div className="pr-eyebrow-row detail-eyebrow-row" aria-label="Workflow run metadata">
-              <button
-                type="button"
-                className={cx("detail-eyebrow-link id", copiedRunId && "copied")}
-                aria-label="Copy workflow run id"
-                onClick={copyRunId}
-              >
-                #{run.id}
-              </button>
-              <span className="eyebrow-separator">·</span>
               <span className="detail-eyebrow-value">{run.event ?? "unknown"}</span>
               <span className="eyebrow-separator">·</span>
-              <span className="detail-eyebrow-value branch">{run.branch ?? "unknown"}</span>
+              {run.branch ? (
+                <ClipboardTextButton
+                  className="detail-eyebrow-link branch"
+                  ariaLabel="Copy branch or tag"
+                  value={run.branch}
+                  onCopyText={props.onCopyText}
+                >
+                  {run.branch}
+                </ClipboardTextButton>
+              ) : (
+                <span className="detail-eyebrow-value branch">unknown</span>
+              )}
               <span className="eyebrow-separator">·</span>
               {commitUrl ? (
                 <CommitActionButton
@@ -5499,12 +5531,7 @@ function WorkflowRunContent(props: {
               <span>by</span>
               <span className="detail-eyebrow-value author">{run.actor?.login ?? "unknown"}</span>
             </div>
-            <div className="pr-eyebrow-row detail-eyebrow-row" aria-label="Workflow run timing">
-              <span className="detail-eyebrow-value">{startedAt || "unknown"}</span>
-              <span className="eyebrow-separator">·</span>
-              <span className="detail-eyebrow-value">{formatDuration(run.durationMs) || "running"}</span>
-            </div>
-            <h1>{run.displayTitle || run.name || `Run ${run.id}`}</h1>
+            <h1>{workflowRunDisplayName(run)}</h1>
           </div>
           <span className={cx("state-chip large-chip", statusTone(run.status, run.conclusion))}>
             {run.conclusion ?? run.status ?? "run"}
@@ -5513,10 +5540,16 @@ function WorkflowRunContent(props: {
         <TabBar tabs={tabs} selected={selectedTab} onSelect={props.onTab} />
       </div>
       <div className="detail-body-scroll">
-        {!props.detail ? (
+        {selectedTab === "Jobs" ? (
+          <WorkflowJobsTab
+            duration={duration}
+            focusedJobId={props.focusedJobId ?? null}
+            jobs={props.detail?.jobs ?? null}
+            repo={props.repo}
+            startedAt={startedAt || "unknown"}
+          />
+        ) : !props.detail ? (
           <Skeleton />
-        ) : selectedTab === "Jobs" ? (
-          <WorkflowJobsList focusedJobId={props.focusedJobId ?? null} jobs={props.detail.jobs} repo={props.repo} />
         ) : (
           <StackedList
             empty="No artifacts"
@@ -5531,6 +5564,31 @@ function WorkflowRunContent(props: {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function WorkflowJobsTab({
+  duration,
+  focusedJobId,
+  jobs,
+  repo,
+  startedAt
+}: {
+  duration: string;
+  focusedJobId?: number | null;
+  jobs: WorkflowRunDetail["jobs"] | null;
+  repo: RepoRef;
+  startedAt: string;
+}) {
+  return (
+    <div className="workflow-jobs-tab">
+      <div className="pr-eyebrow-row detail-eyebrow-row workflow-jobs-meta" aria-label="Workflow run timing">
+        <span className="detail-eyebrow-value">{startedAt}</span>
+        <span className="eyebrow-separator">·</span>
+        <span className="detail-eyebrow-value">{duration}</span>
+      </div>
+      {jobs ? <WorkflowJobsList focusedJobId={focusedJobId} jobs={jobs} repo={repo} /> : <Skeleton />}
     </div>
   );
 }

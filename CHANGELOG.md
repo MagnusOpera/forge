@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Made workflow run branch or tag names copyable from the run header.
+- Reduced workflow run header metadata and moved run timing into the Jobs tab.
+
 ## [0.0.28]
 
 

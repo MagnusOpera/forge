@@ -1824,6 +1824,7 @@ p {
 .detail-eyebrow-value.commit,
 .detail-eyebrow-value.path,
 .detail-eyebrow-value.ref,
+.detail-eyebrow-link.branch,
 .detail-eyebrow-link.id,
 .detail-eyebrow-link.path,
 .detail-eyebrow-link.commit {
@@ -2729,6 +2730,15 @@ button.pr-label-chip:disabled {
 .stacked-list {
   display: grid;
   gap: 10px;
+}
+
+.workflow-jobs-tab {
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-jobs-meta {
+  margin-bottom: 0;
 }
 
 .article-card {
