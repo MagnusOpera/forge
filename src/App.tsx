@@ -3848,11 +3848,18 @@ function ContentPane(props: {
   const githubUrl = openUrlForSelection(props.selection, props.repo);
   const prWorkflowState = reviewPr ? pullRequestWorkflowState(reviewPr) : null;
   const repositoryAllowsAutoMerge = props.repo ? repositoryAllowsPullRequestAutoMerge(props.repo) : false;
+  const pullRequestIsValidated = reviewPr?.reviewDecision === "APPROVED";
+  const canSelectPullRequestAutoMerge = repositoryAllowsAutoMerge && !pullRequestIsValidated;
+  const visiblePrWorkflowState =
+    pullRequestIsValidated && prWorkflowState === "auto-ready" ? "manual-ready" : prWorkflowState;
   const showPullRequestWorkflowActions = Boolean(
     showDraftAction && showPullRequestManagementActions && prWorkflowState
   );
   const showPullRequestAutoMergeActions = Boolean(
-    showPullRequestManagementActions && reviewPr && (repositoryAllowsAutoMerge || reviewPr.autoMergeEnabled)
+    showPullRequestManagementActions &&
+    reviewPr &&
+    !pullRequestIsValidated &&
+    (repositoryAllowsAutoMerge || reviewPr.autoMergeEnabled)
   );
   const setPullRequestReadiness = useCallback((draft: boolean) => {
     if (!reviewPr) {
@@ -3880,7 +3887,7 @@ function ContentPane(props: {
     if (enabled === reviewPr.autoMergeEnabled) {
       return;
     }
-    if (enabled && !repositoryAllowsAutoMerge) {
+    if (enabled && (!repositoryAllowsAutoMerge || pullRequestIsValidated)) {
       return;
     }
 
@@ -3902,6 +3909,7 @@ function ContentPane(props: {
     props.onEnablePullRequestAutoMerge,
     props.onDisablePullRequestAutoMerge,
     props.onUpdatePullRequestDraftState,
+    pullRequestIsValidated,
     repositoryAllowsAutoMerge,
     reviewPr
   ]);
@@ -3912,7 +3920,7 @@ function ContentPane(props: {
     if (state === pullRequestWorkflowState(reviewPr)) {
       return;
     }
-    if (state === "auto-ready" && !repositoryAllowsAutoMerge) {
+    if (state === "auto-ready" && (!repositoryAllowsAutoMerge || pullRequestIsValidated)) {
       return;
     }
 
@@ -3943,6 +3951,7 @@ function ContentPane(props: {
     props.onEnablePullRequestAutoMerge,
     props.onDisablePullRequestAutoMerge,
     props.onUpdatePullRequestDraftState,
+    pullRequestIsValidated,
     repositoryAllowsAutoMerge,
     reviewPr
   ]);
@@ -3979,11 +3988,11 @@ function ContentPane(props: {
               onOpenUrl={props.onOpenGithubUrl}
             />
             {showDraftAction && reviewPr && (
-              showPullRequestWorkflowActions && prWorkflowState ? (
+              showPullRequestWorkflowActions && visiblePrWorkflowState ? (
                 <PullRequestWorkflowToggle
-                  canEnableAutoMerge={repositoryAllowsAutoMerge}
+                  canEnableAutoMerge={canSelectPullRequestAutoMerge}
                   disabled={props.prActionSubmitting}
-                  state={prWorkflowState}
+                  state={visiblePrWorkflowState}
                   onChange={setPullRequestWorkflow}
                 />
               ) : (

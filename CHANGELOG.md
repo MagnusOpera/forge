@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Hid auto-merge actions for approved pull requests.
 - Matched the pull request action button hover state to the token save button.
 
 ## [0.0.23]
