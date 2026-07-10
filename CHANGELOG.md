@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.28]
+
+
 - Fixed macOS startup after adding automatic update checks.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.27...0.0.28
 
 ## [0.0.27]
 
