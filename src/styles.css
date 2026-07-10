@@ -7,6 +7,8 @@
   --theme-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --textbox-focus-duration: 180ms;
   --textbox-focus-easing: cubic-bezier(0.2, 0, 0.2, 1);
+  --titlebar-height: 44px;
+  --titlebar-content-offset-y: -1px;
   --titlebar-icon-underline-width: 22px;
   --titlebar-icon-underline-half-width: 11px;
   --titlebar-icon-underline-height: 2px;
@@ -361,7 +363,7 @@ input {
 }
 
 .sidebar::before {
-  top: 48px;
+  top: var(--titlebar-height);
   right: 0;
   bottom: 0;
   left: 0;
@@ -456,7 +458,8 @@ input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 48px;
+  flex: 0 0 var(--titlebar-height);
+  min-height: var(--titlebar-height);
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
@@ -472,7 +475,7 @@ input {
 .sidebar .pane-header {
   position: relative;
   overflow: hidden;
-  flex: 0 0 48px;
+  flex: 0 0 var(--titlebar-height);
   padding-left: 76px;
   background: transparent;
   border-bottom-color: var(--sidebar-border);
@@ -631,6 +634,14 @@ input {
   align-items: center;
   gap: 4px;
   -webkit-app-region: no-drag;
+}
+
+.pane-header > .brand-mark,
+.pane-header > .pane-title,
+.pane-header > .header-actions,
+.content-header > .content-header-left,
+.content-header > .header-actions {
+  transform: translateY(var(--titlebar-content-offset-y));
 }
 
 .icon-button {

@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Tightened the titlebar height and aligned its controls with the macOS traffic lights.
+
 ## [0.0.18]
 
 
