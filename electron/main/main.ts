@@ -2172,6 +2172,10 @@ function createWindow(): void {
 }
 
 function normalizeSidebarAppearanceMode(mode: unknown): SidebarAppearanceMode {
+  if (process.platform === "linux") {
+    return "normal";
+  }
+
   return mode === "normal" ? "normal" : DEFAULT_SIDEBAR_APPEARANCE_MODE;
 }
 
