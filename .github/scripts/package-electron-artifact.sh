@@ -53,7 +53,10 @@ npx electron-builder \
   --publish never \
   "-c.extraMetadata.version=${app_version}"
 
-mapfile -t artifacts < <(find .out/electron -maxdepth 1 -type f -name "${artifact_glob}" ! -name "*.blockmap" | sort)
+artifacts=()
+while IFS= read -r artifact; do
+  artifacts+=("${artifact}")
+done < <(find .out/electron -maxdepth 1 -type f -name "${artifact_glob}" ! -name "*.blockmap" | sort)
 if [[ "${#artifacts[@]}" -ne 1 ]]; then
   echo "ERROR: Expected exactly one ${artifact_glob} artifact for ${platform} ${arch}, found ${#artifacts[@]}."
   find .out/electron -maxdepth 2 -type f -print | sort

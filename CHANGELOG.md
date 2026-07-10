@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Fixed release artifact packaging on GitHub Actions.
+
 ## [0.0.21]
 
 

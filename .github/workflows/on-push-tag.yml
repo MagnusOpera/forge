@@ -39,6 +39,7 @@ jobs:
           name: release-macos-arm64
           path: .out/forge-${{ env.RELEASE_TAG }}-mac-arm64-unsigned.zip
           if-no-files-found: error
+          include-hidden-files: true
 
   build-windows:
     name: Build Windows
@@ -74,6 +75,7 @@ jobs:
           name: release-windows
           path: .out/forge-${{ env.RELEASE_TAG }}-windows-*.zip
           if-no-files-found: error
+          include-hidden-files: true
 
   build-linux:
     name: Build Linux
@@ -107,6 +109,7 @@ jobs:
           name: release-linux
           path: .out/forge-${{ env.RELEASE_TAG }}-linux-*.tar.gz
           if-no-files-found: error
+          include-hidden-files: true
 
   create-draft-release:
     name: Create draft GitHub release
