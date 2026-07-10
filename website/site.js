@@ -10,7 +10,7 @@ function preferredTheme() {
     return stored;
   }
 
-  return "dark";
+  return "light";
 }
 
 function applyTheme(theme) {

@@ -6,6 +6,7 @@ All notable changes to Forge are documented in this file.
 
 - Hid auto-merge actions for approved pull requests.
 - Matched the pull request action button hover state to the token save button.
+- Made the Forge website use the light theme by default.
 
 ## [0.0.23]
 
