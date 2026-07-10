@@ -655,6 +655,12 @@ input {
   transform: translateY(var(--titlebar-content-offset-y));
 }
 
+.content-header > .content-header-left,
+.content-header > .header-actions {
+  position: relative;
+  z-index: 45;
+}
+
 .icon-button {
   display: inline-grid;
   width: 30px;

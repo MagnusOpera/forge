@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Fixed the accent color picker appearing behind pull request action controls.
+
 ## [0.0.29]
 
 
