@@ -126,7 +126,7 @@
 .app-shell[data-theme="light"] {
   --color-scheme: light;
   --app-bg: #f4f5f7;
-  --sidebar-solid-bg: #f8f9fb;
+  --sidebar-solid-bg: #f0f2f5;
   --sidebar-bg: rgb(246 248 251 / 0.3);
   --sidebar-border: rgb(29 35 42 / 0.18);
   --sidebar-titlebar-bg: rgb(255 255 255 / 0.12);
@@ -573,6 +573,7 @@ input {
   .palette-input,
   .sidebar-tabs,
   .repo-group-toggle,
+  .repo-group-items,
   .repo-button-wrap {
     transition: none;
   }
@@ -1175,36 +1176,115 @@ input {
 }
 
 .repo-section,
-.repo-group,
 .org-list,
 .focus-section {
   margin-top: 8px;
 }
 
-.repo-group-toggle {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: 26px;
-  gap: 4px;
-  padding: 0 8px;
-  border-radius: 7px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  transition:
-    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
-    color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
+.repo-group {
+  margin-top: 8px;
 }
 
-.repo-group-toggle span {
+.section-title + .repo-group {
+  margin-top: 4px;
+}
+
+.repo-group-toggle {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--sidebar-control-border);
+  border-radius: 8px;
+  background-color: var(--sidebar-control-bg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.24),
+    0 8px 22px rgb(0 0 0 / 0.05);
+  color: var(--row-strong);
+  font-size: 12px;
+  font-weight: 620;
+  text-align: left;
+  backdrop-filter: var(--sidebar-control-filter);
+  -webkit-backdrop-filter: var(--sidebar-control-filter);
+  transition:
+    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    box-shadow var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    -webkit-backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
+}
+
+.repo-group:not(.collapsed) .repo-group-toggle {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.repo-group-toggle svg {
+  justify-self: center;
+  color: var(--text-muted-alt);
+}
+
+.repo-group-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.repo-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--chip-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .repo-group-toggle:hover {
   background-color: var(--sidebar-row-hover-bg);
+}
+
+.repo-group-items {
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--sidebar-control-border);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background-color: var(--sidebar-control-bg);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.05);
+  backdrop-filter: var(--sidebar-control-filter);
+  -webkit-backdrop-filter: var(--sidebar-control-filter);
+  transition:
+    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    border-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    box-shadow var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
+    -webkit-backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
+}
+
+.app-shell[data-sidebar-appearance="normal"] .repo-group-toggle,
+.app-shell[data-sidebar-appearance="normal"] .repo-group-items {
+  border-color: var(--card-border);
+  background-color: var(--card-bg);
+  box-shadow: none;
+  backdrop-filter: blur(0px) saturate(1) brightness(1);
+  -webkit-backdrop-filter: blur(0px) saturate(1) brightness(1);
+}
+
+.repo-group-items .repo-button-wrap {
+  border-radius: 6px;
 }
 
 .repo-button-wrap {
@@ -1319,8 +1399,9 @@ input {
   font-size: 12px;
 }
 
-.repo-short-name {
-  font-weight: 700;
+.repo-owner {
+  color: var(--text-muted);
+  font-weight: 520;
 }
 
 .repo-meta {

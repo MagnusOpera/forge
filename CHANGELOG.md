@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Darkened the non-glass light sidebar background slightly.
+- Made all repositories easier to scan by visually grouping repositories under each owner.
+
 ## [0.0.30]
 
 

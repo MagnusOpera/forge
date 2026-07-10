@@ -3177,22 +3177,32 @@ function RepoGroupList(props: {
         props.repoGroups.map(([owner, repos]) => {
           const isCollapsed = props.collapsedGroups[owner] ?? false;
           return (
-            <div key={owner} className="repo-group">
-              <button className="repo-group-toggle" onClick={() => props.onToggleGroup(owner)}>
+            <div key={owner} className={cx("repo-group", isCollapsed && "collapsed")}>
+              <button
+                className="repo-group-toggle"
+                type="button"
+                aria-expanded={!isCollapsed}
+                aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${owner} repositories`}
+                onClick={() => props.onToggleGroup(owner)}
+              >
                 {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                <span>{owner}</span>
+                <span className="repo-group-name">{owner}</span>
+                <span className="repo-group-count">{repos.length}</span>
               </button>
-              {!isCollapsed &&
-                repos.map((repo) => (
-                  <RepoButton
-                    key={repo.fullName}
-                    repo={repo}
-                    selected={props.selectedRepo ? repoKey(repo) === repoKey(props.selectedRepo) : false}
-                    favorite={props.favoriteKeys.includes(repoKey(repo))}
-                    onSelect={() => props.onSelectRepo(repo)}
-                    onToggleFavorite={() => props.onToggleFavorite(repo)}
-                  />
-                ))}
+              {!isCollapsed && (
+                <div className="repo-group-items">
+                  {repos.map((repo) => (
+                    <RepoButton
+                      key={repo.fullName}
+                      repo={repo}
+                      selected={props.selectedRepo ? repoKey(repo) === repoKey(props.selectedRepo) : false}
+                      favorite={props.favoriteKeys.includes(repoKey(repo))}
+                      onSelect={() => props.onSelectRepo(repo)}
+                      onToggleFavorite={() => props.onToggleFavorite(repo)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           );
         })
