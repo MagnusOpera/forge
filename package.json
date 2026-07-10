@@ -57,7 +57,7 @@
       "signExecutable": false,
       "target": [
         {
-          "target": "zip",
+          "target": "portable",
           "arch": [
             "x64",
             "arm64"
@@ -70,7 +70,7 @@
       "icon": "assets/forge-icon.png",
       "target": [
         {
-          "target": "tar.gz",
+          "target": "AppImage",
           "arch": [
             "x64",
             "arm64"

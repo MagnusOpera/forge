@@ -72,7 +72,7 @@ Build the GitHub Pages website artifact:
 make website-build
 ```
 
-Create release archives:
+Create release artifacts:
 
 ```sh
 make package-release-archives version=X.Y.Z

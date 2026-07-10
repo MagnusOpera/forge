@@ -75,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-windows-${{ matrix.arch }}
-          path: .out/forge-${{ env.RELEASE_TAG }}-windows-${{ matrix.arch }}.zip
+          path: .out/forge-${{ env.RELEASE_TAG }}-windows-${{ matrix.arch }}.exe
           if-no-files-found: error
           include-hidden-files: true
 
@@ -112,7 +112,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-linux-${{ matrix.arch }}
-          path: .out/forge-${{ env.RELEASE_TAG }}-linux-${{ matrix.arch }}.tar.gz
+          path: .out/forge-${{ env.RELEASE_TAG }}-linux-${{ matrix.arch }}.AppImage
           if-no-files-found: error
           include-hidden-files: true
 

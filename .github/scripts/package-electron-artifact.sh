@@ -30,14 +30,14 @@ case "$platform" in
     artifact_glob="*.zip"
     ;;
   windows)
-    builder_args=(--win zip)
+    builder_args=(--win portable)
     output_suffix="windows-${arch}"
-    artifact_glob="*.zip"
+    artifact_glob="*.exe"
     ;;
   linux)
-    builder_args=(--linux tar.gz)
+    builder_args=(--linux AppImage)
     output_suffix="linux-${arch}"
-    artifact_glob="*.tar.gz"
+    artifact_glob="*.AppImage"
     ;;
   *)
     echo "ERROR: Unsupported platform '${platform}'. Expected mac, windows, or linux."
@@ -64,9 +64,6 @@ if [[ "${#artifacts[@]}" -ne 1 ]]; then
 fi
 
 extension="${artifacts[0]##*.}"
-if [[ "$artifact_glob" == "*.tar.gz" ]]; then
-  extension="tar.gz"
-fi
 
 mkdir -p .out
 output_path=".out/forge-${version}-${output_suffix}.${extension}"
