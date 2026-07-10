@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.27]
+
+
 - Hid the website Home navigation link on mobile.
 - Added automatic macOS update checks from GitHub Releases.
 - Added a GitHub releases link to the About window.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.26...0.0.27
 
 ## [0.0.26]
 
