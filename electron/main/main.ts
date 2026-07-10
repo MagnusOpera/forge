@@ -75,6 +75,7 @@ interface CacheRecord<T> {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appDisplayName = "Forge";
 const appCopyright = "Copyright (c) 2026 Magnus Opera SAS";
+const appReleasesUrl = "https://github.com/MagnusOpera/forge/releases";
 const legacyAppName = "github-focus";
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
@@ -203,7 +204,7 @@ function showAboutWindow(): void {
 
   aboutWindow = new BrowserWindow({
     width: 440,
-    height: 270,
+    height: 300,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -223,6 +224,19 @@ function showAboutWindow(): void {
 
   aboutWindow.once("ready-to-show", () => {
     aboutWindow?.show();
+  });
+  aboutWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url === appReleasesUrl) {
+      void shell.openExternal(url);
+    }
+
+    return { action: "deny" };
+  });
+  aboutWindow.webContents.on("will-navigate", (event, url) => {
+    event.preventDefault();
+    if (url === appReleasesUrl) {
+      void shell.openExternal(url);
+    }
   });
   aboutWindow.on("closed", () => {
     aboutWindow = null;
@@ -257,7 +271,7 @@ function showAboutWindow(): void {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
       }
 
       img {
@@ -272,6 +286,34 @@ function showAboutWindow(): void {
         font-size: 26px;
         font-weight: 700;
         line-height: 1.2;
+      }
+
+      a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 6px;
+        color: #0969da;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.2;
+        text-decoration: none;
+        -webkit-app-region: no-drag;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      a:focus-visible {
+        outline: 2px solid #0969da;
+        outline-offset: 3px;
+      }
+
+      svg {
+        width: 15px;
+        height: 15px;
+        fill: currentColor;
       }
 
       p {
@@ -290,6 +332,12 @@ function showAboutWindow(): void {
     <main>
       <img src="${iconDataUrl}" alt="" />
       <h1>${appDisplayName}</h1>
+      <a href="${appReleasesUrl}" target="_blank" rel="noreferrer">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.58 2 12.24c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49v-1.9c-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.67.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.95c.85 0 1.69.12 2.48.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.56 5.07.36.32.68.95.68 1.91v2.83c0 .27.18.59.69.49A10.1 10.1 0 0 0 22 12.24C22 6.58 17.52 2 12 2Z" />
+        </svg>
+        <span>GitHub releases</span>
+      </a>
       <p>Version ${version} (${version})</p>
       <p class="copyright">${appCopyright}</p>
     </main>

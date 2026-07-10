@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added a GitHub releases link to the About window.
+
 ## [0.0.26]
 
 
