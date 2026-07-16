@@ -31,7 +31,7 @@
   --content-bg: #22272e;
   --matte-divider: #373e47;
   --matte-divider-hover: #444c56;
-  --splitter-hit-area: 9px;
+  --splitter-hit-area: 1px;
   --border: #373e47;
   --border-strong: #2d333b;
   --border-soft: #373e47;
@@ -436,12 +436,11 @@ input {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 50%;
+  left: 0;
   width: 1px;
   background-color: var(--matte-divider);
   content: "";
   pointer-events: none;
-  transform: translateX(-50%);
   transition: background-color 180ms ease;
 }
 
