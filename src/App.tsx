@@ -3054,56 +3054,34 @@ function Sidebar(props: SidebarProps) {
           <PanelLeftClose size={18} />
         </button>
       </div>
-      <div className="search-box">
-        <Search size={16} />
-        <input
-          ref={searchInputRef}
-          value={props.search}
-          onChange={(event) => props.onSearch(event.target.value)}
-          placeholder="Search"
-          aria-label="Search repositories"
-        />
-        {searchActive && (
-          <button
-            className="search-clear-button"
-            type="button"
-            aria-label="Clear search"
-            onClick={() => {
-              props.onSearch("");
-              searchInputRef.current?.focus();
-            }}
-          >
-            <X size={14} />
-          </button>
-        )}
+      <div ref={repoTabsUnderline.containerRef} className="sidebar-tabs" role="tablist" aria-label="Repository view">
+        <button
+          className={cx("sidebar-tab", repoTab === "favorites" && "active")}
+          data-active-tab={repoTab === "favorites" ? "true" : undefined}
+          role="tab"
+          aria-selected={repoTab === "favorites"}
+          onClick={() => {
+            setRepoTab("favorites");
+            props.onSearch("");
+          }}
+        >
+          <Star size={14} />
+          Favorites
+          <span>{props.favoriteRepos.length}</span>
+        </button>
+        <button
+          className={cx("sidebar-tab", repoTab === "all" && "active")}
+          data-active-tab={repoTab === "all" ? "true" : undefined}
+          role="tab"
+          aria-selected={repoTab === "all"}
+          onClick={() => setRepoTab("all")}
+        >
+          <Code2 size={14} />
+          All
+          <span>{allRepoCount}</span>
+        </button>
+        <span className="sliding-tab-underline" style={repoTabsUnderline.underlineStyle} aria-hidden="true" />
       </div>
-      {!searchActive && (
-        <div ref={repoTabsUnderline.containerRef} className="sidebar-tabs" role="tablist" aria-label="Repository view">
-          <button
-            className={cx("sidebar-tab", repoTab === "favorites" && "active")}
-            data-active-tab={repoTab === "favorites" ? "true" : undefined}
-            role="tab"
-            aria-selected={repoTab === "favorites"}
-            onClick={() => setRepoTab("favorites")}
-          >
-            <Star size={14} />
-            Favorites
-            <span>{props.favoriteRepos.length}</span>
-          </button>
-          <button
-            className={cx("sidebar-tab", repoTab === "all" && "active")}
-            data-active-tab={repoTab === "all" ? "true" : undefined}
-            role="tab"
-            aria-selected={repoTab === "all"}
-            onClick={() => setRepoTab("all")}
-          >
-            <Code2 size={14} />
-            All
-            <span>{allRepoCount}</span>
-          </button>
-          <span className="sliding-tab-underline" style={repoTabsUnderline.underlineStyle} aria-hidden="true" />
-        </div>
-      )}
       <nav className="sidebar-scroll">
         {!searchActive && repoTab === "favorites" ? (
           <RepoSection
@@ -3118,23 +3096,48 @@ function Sidebar(props: SidebarProps) {
             onReorderFavoriteRepo={props.onReorderFavoriteRepo}
           />
         ) : (
-          <RepoGroupList
-            title={searchActive ? "Results" : "Repositories"}
-            repoGroups={props.repoGroups}
-            collapsedGroups={collapsedGroups}
-            loading={props.loading}
-            emptyText={searchActive ? "No matching repositories." : "No repositories."}
-            selectedRepo={props.selectedRepo}
-            favoriteKeys={props.favoriteKeys}
-            onSelectRepo={props.onSelectRepo}
-            onToggleFavorite={props.onToggleFavorite}
-            onToggleGroup={(owner) =>
-              setCollapsedGroups((current) => ({
-                ...current,
-                [owner]: !(current[owner] ?? false)
-              }))
-            }
-          />
+          <>
+            <div className="search-box">
+              <Search size={16} />
+              <input
+                ref={searchInputRef}
+                value={props.search}
+                onChange={(event) => props.onSearch(event.target.value)}
+                placeholder="Search"
+                aria-label="Search repositories"
+              />
+              {searchActive && (
+                <button
+                  className="search-clear-button"
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    props.onSearch("");
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <RepoGroupList
+              title={searchActive ? "Results" : "Repositories"}
+              repoGroups={props.repoGroups}
+              collapsedGroups={collapsedGroups}
+              loading={props.loading}
+              emptyText={searchActive ? "No matching repositories." : "No repositories."}
+              selectedRepo={props.selectedRepo}
+              favoriteKeys={props.favoriteKeys}
+              onSelectRepo={props.onSelectRepo}
+              onToggleFavorite={props.onToggleFavorite}
+              onToggleGroup={(owner) =>
+                setCollapsedGroups((current) => ({
+                  ...current,
+                  [owner]: !(current[owner] ?? false)
+                }))
+              }
+            />
+          </>
         )}
       </nav>
       {!searchActive && repoTab === "favorites" && props.favoriteRepos.length > 0 && (

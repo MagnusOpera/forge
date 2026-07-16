@@ -9,6 +9,7 @@ All notable changes to Forge are documented in this file.
 - Unified vertical splitter rendering across glass and matte sidebar modes.
 - Reduced pane dividers to a true 1px line.
 - Kept the theme accent picker open more reliably while moving into its popup.
+- Moved repository search so it appears only in the All repositories view.
 
 ## [0.0.32]
 
