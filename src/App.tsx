@@ -3415,7 +3415,6 @@ function ProjectPane(props: {
               <PanelLeftOpen size={18} />
             </button>
           )}
-          <span>{props.repo?.name ?? "Project Focus"}</span>
           {props.loading && <Loader2 className="spin" size={14} />}
         </div>
         <div className="header-actions">

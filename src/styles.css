@@ -374,10 +374,7 @@ input {
 }
 
 .sidebar::before {
-  top: var(--titlebar-height);
-  right: 0;
-  bottom: 0;
-  left: 0;
+  inset: 0;
   background-color: var(--sidebar-bg);
   backdrop-filter: var(--sidebar-glass-filter);
   -webkit-backdrop-filter: var(--sidebar-glass-filter);
@@ -484,50 +481,14 @@ input {
 
 .sidebar .pane-header {
   position: relative;
-  overflow: hidden;
   flex: 0 0 var(--titlebar-height);
   padding-left: 76px;
   background: transparent;
 }
 
-.sidebar .pane-header::before,
-.sidebar .pane-header::after {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  content: "";
-  pointer-events: none;
-  transition:
-    opacity var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
-    background-color var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
-    backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing),
-    -webkit-backdrop-filter var(--sidebar-appearance-duration) var(--sidebar-appearance-easing);
-  will-change: opacity;
-}
-
-.sidebar .pane-header::before {
-  background-color: var(--sidebar-titlebar-bg);
-  backdrop-filter: var(--sidebar-titlebar-filter);
-  -webkit-backdrop-filter: var(--sidebar-titlebar-filter);
-  opacity: 1;
-}
-
-.sidebar .pane-header::after {
-  background-color: var(--sidebar-solid-bg);
-  opacity: 0;
-}
-
 .sidebar .pane-header > * {
   position: relative;
   z-index: 1;
-}
-
-.app-shell[data-sidebar-appearance="normal"] .sidebar .pane-header::before {
-  opacity: 0;
-}
-
-.app-shell[data-sidebar-appearance="normal"] .sidebar .pane-header::after {
-  opacity: 1;
 }
 
 .collapsed-project-header {
@@ -557,8 +518,6 @@ input {
   .sidebar,
   .sidebar::before,
   .sidebar::after,
-  .sidebar .pane-header::before,
-  .sidebar .pane-header::after,
   .resize-handle,
   .resize-handle::before,
   .search-box,

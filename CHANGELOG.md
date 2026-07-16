@@ -5,6 +5,7 @@ All notable changes to Forge are documented in this file.
 ## [Unreleased]
 
 - Bolded repository names in favorites and removed pane header divider lines.
+- Removed the repository name from the project titlebar and unified the sidebar surface across its titlebar.
 
 ## [0.0.32]
 
