@@ -193,6 +193,12 @@ type WorkflowDispatchDialogState = {
   submitting: boolean;
   error: string | null;
 };
+type ConfirmationDialogState = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm(): Promise<boolean>;
+};
 
 interface WorkflowCheckGroup {
   check: CheckSummary;
@@ -1141,6 +1147,8 @@ export function App() {
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [workflowDispatchDialog, setWorkflowDispatchDialog] = useState<WorkflowDispatchDialogState | null>(null);
+  const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialogState | null>(null);
+  const [confirmationSubmitting, setConfirmationSubmitting] = useState(false);
   const [navigation, setNavigation] = useState<NavigationState>({ entries: [], index: -1 });
   const [favoriteProjectMonitorStatus, setFavoriteProjectMonitorStatus] = useState<FavoriteProjectMonitorStatus>({
     checking: false,
@@ -1283,6 +1291,31 @@ export function App() {
     setToast(message);
     window.setTimeout(() => setToast(null), 2600);
   }, []);
+
+  const openConfirmation = useCallback((dialog: ConfirmationDialogState) => {
+    setConfirmationDialog(dialog);
+  }, []);
+
+  const closeConfirmation = useCallback(() => {
+    if (!confirmationSubmitting) {
+      setConfirmationDialog(null);
+    }
+  }, [confirmationSubmitting]);
+
+  const submitConfirmation = useCallback(async () => {
+    if (!confirmationDialog) {
+      return;
+    }
+
+    setConfirmationSubmitting(true);
+    try {
+      if (await confirmationDialog.onConfirm()) {
+        setConfirmationDialog(null);
+      }
+    } finally {
+      setConfirmationSubmitting(false);
+    }
+  }, [confirmationDialog]);
 
   const beginOptimisticMutation = useCallback((key: string): number => {
     const id = optimisticMutationSequence.current + 1;
@@ -1663,14 +1696,14 @@ export function App() {
         return;
       }
 
-      const confirmed = window.confirm(`Run "${workflow.name}" on ${selectedRepo.fullName}@${config.ref}?`);
-      if (!confirmed) {
-        return;
-      }
-
-      await dispatchWorkflowWithConfig(workflow, config, workflowDispatchDefaultInputs(config));
+      openConfirmation({
+        title: "Run workflow?",
+        message: `Run "${workflow.name}" on ${selectedRepo.fullName}@${config.ref}?`,
+        confirmLabel: "Run",
+        onConfirm: () => dispatchWorkflowWithConfig(workflow, config, workflowDispatchDefaultInputs(config))
+      });
     },
-    [dispatchWorkflowWithConfig, loadWorkflowDispatchConfig, openWorkflowDispatchDialog, selectedRepo]
+    [dispatchWorkflowWithConfig, loadWorkflowDispatchConfig, openConfirmation, openWorkflowDispatchDialog, selectedRepo]
   );
 
   const runWorkflowWithArguments = useCallback(
@@ -2928,26 +2961,36 @@ export function App() {
     }
   };
 
-  const clearStoredToken = async () => {
-    const confirmed = window.confirm("Remove the stored GitHub token?");
-    if (!confirmed) {
-      return;
+  const clearStoredToken = useCallback(async (): Promise<boolean> => {
+    try {
+      const nextAuth = await api.clearToken();
+      setAuth(nextAuth);
+      setRepositories([]);
+      setStarredRepos([]);
+      setRecentRepos([]);
+      setOrganizations([]);
+      setSelectedRepo(null);
+      setRepoLabels([]);
+      setPullRequests([]);
+      setIssues([]);
+      setWorkflows([]);
+      setWorkflowRuns([]);
+      setSelection({ kind: "repo" });
+      return true;
+    } catch (error) {
+      flash(userFacingError(error, "Unable to remove the stored token."));
+      return false;
     }
+  }, [flash]);
 
-    const nextAuth = await api.clearToken();
-    setAuth(nextAuth);
-    setRepositories([]);
-    setStarredRepos([]);
-    setRecentRepos([]);
-    setOrganizations([]);
-    setSelectedRepo(null);
-    setRepoLabels([]);
-    setPullRequests([]);
-    setIssues([]);
-    setWorkflows([]);
-    setWorkflowRuns([]);
-    setSelection({ kind: "repo" });
-  };
+  const requestClearStoredToken = useCallback(() => {
+    openConfirmation({
+      title: "Remove stored GitHub token?",
+      message: "You will need to enter a token again before using Forge.",
+      confirmLabel: "Remove",
+      onConfirm: clearStoredToken
+    });
+  }, [clearStoredToken, openConfirmation]);
 
   const startResize = (pane: "left" | "middle", startEvent: React.PointerEvent) => {
     startEvent.currentTarget.setPointerCapture(startEvent.pointerId);
@@ -3123,7 +3166,7 @@ export function App() {
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
       <ContentPane
         auth={auth}
-        onClearToken={clearStoredToken}
+        onClearToken={requestClearStoredToken}
         repo={selectedRepo}
         selection={selection}
         prDetail={prDetail}
@@ -3166,6 +3209,16 @@ export function App() {
         onRunWorkflowWithArguments={runWorkflowWithArguments}
         workflowRuns={workflowRuns}
       />
+      {confirmationDialog && (
+        <ConfirmationDialog
+          title={confirmationDialog.title}
+          message={confirmationDialog.message}
+          confirmLabel={confirmationDialog.confirmLabel}
+          submitting={confirmationSubmitting}
+          onClose={closeConfirmation}
+          onConfirm={() => void submitConfirmation()}
+        />
+      )}
       {workflowDispatchDialog && selectedRepo && (
         <WorkflowDispatchDialog
           repo={selectedRepo}
@@ -6118,6 +6171,59 @@ function EmptyPane({ icon, title }: { icon: React.ReactNode; title: string }) {
     <div className="empty-pane">
       {icon}
       <span>{title}</span>
+    </div>
+  );
+}
+
+function ConfirmationDialog(props: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  submitting: boolean;
+  onClose(): void;
+  onConfirm(): void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !props.submitting) {
+        event.preventDefault();
+        props.onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [props]);
+
+  const close = () => {
+    if (!props.submitting) {
+      props.onClose();
+    }
+  };
+
+  return (
+    <div className="palette-backdrop" onMouseDown={close}>
+      <div
+        className="confirmation-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirmation-dialog-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="confirmation-dialog-copy">
+          <h2 id="confirmation-dialog-title">{props.title}</h2>
+          <p>{props.message}</p>
+        </div>
+        <div className="workflow-dispatch-actions">
+          <button type="button" className="ghost-button" onClick={close} disabled={props.submitting} autoFocus>
+            Cancel
+          </button>
+          <button type="button" className="ghost-button confirmation-dialog-confirm" onClick={props.onConfirm} disabled={props.submitting}>
+            {props.submitting && <Loader2 className="spin" size={14} />}
+            <span>{props.confirmLabel}</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

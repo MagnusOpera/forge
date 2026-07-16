@@ -11,6 +11,7 @@ All notable changes to Forge are documented in this file.
 - Kept the theme accent picker open more reliably while moving into its popup.
 - Moved repository search so it appears only in the All repositories view.
 - Added workflow run controls for default dispatches and prompted arguments when workflows require inputs.
+- Darkened token and workflow confirmation screens to match other modal overlays.
 
 ## [0.0.32]
 

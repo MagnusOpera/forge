@@ -332,7 +332,7 @@ input {
 
 .app-shell.auth-screen {
   grid-template-columns: 1fr;
-  background-color: var(--app-bg);
+  background-color: var(--overlay-bg);
 }
 
 .app-drag {
@@ -2007,6 +2007,43 @@ p {
 .workflow-run-menu-item:focus {
   background: var(--hover-bg);
   color: var(--text-hover);
+}
+
+.confirmation-dialog {
+  display: grid;
+  width: min(420px, calc(100vw - 32px));
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--control-border);
+  border-radius: 12px;
+  background: var(--palette-bg);
+  box-shadow: 0 24px 80px var(--modal-shadow);
+}
+
+.confirmation-dialog-copy {
+  display: grid;
+  gap: 7px;
+}
+
+.confirmation-dialog-copy h2,
+.confirmation-dialog-copy p {
+  margin: 0;
+}
+
+.confirmation-dialog-copy h2 {
+  color: var(--title);
+  font-size: 18px;
+}
+
+.confirmation-dialog-copy p {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.confirmation-dialog-confirm {
+  gap: 8px;
+  color: var(--text-strong);
 }
 
 .workflow-dispatch-dialog {
