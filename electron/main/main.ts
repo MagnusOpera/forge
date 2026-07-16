@@ -51,6 +51,7 @@ import type {
   TimelineComment,
   UpdatePullRequestDraftStatePayload,
   UpdatePullRequestTitlePayload,
+  WorkflowDispatchConfig,
   WorkflowJobLogDetail,
   WorkflowJobSummary,
   WorkflowJobStepSummary,
@@ -59,6 +60,7 @@ import type {
   WorkflowSummary
 } from "../../shared/github.js";
 import { DEFAULT_SIDEBAR_APPEARANCE_MODE } from "../../shared/github.js";
+import { parseWorkflowDispatchConfig } from "../../shared/workflowDispatch.js";
 import {
   isClassicPersonalAccessToken,
   missingRequiredClassicTokenScopes,
@@ -1300,6 +1302,40 @@ async function getWorkflows(repoRef: RepoRef, options?: CacheRequestOptions): Pr
   }, defaultTtlMs, options);
 }
 
+async function getWorkflowDispatchConfig(
+  repoRef: RepoRef,
+  workflowId: number,
+  ref: string
+): Promise<WorkflowDispatchConfig> {
+  const repo = ensureRepo(repoRef);
+  const trimmedRef = ref.trim();
+  if (!trimmedRef) {
+    throw new Error("Workflow ref is required.");
+  }
+
+  const { octokit } = await getClients();
+  const workflow = await octokit.actions.getWorkflow({
+    owner: repo.owner,
+    repo: repo.name,
+    workflow_id: workflowId
+  });
+
+  const content = await octokit.repos.getContent({
+    owner: repo.owner,
+    repo: repo.name,
+    path: workflow.data.path,
+    ref: trimmedRef
+  });
+
+  if (Array.isArray(content.data) || content.data.type !== "file") {
+    throw new Error("Workflow file is unavailable.");
+  }
+
+  const encoding = content.data.encoding === "base64" ? "base64" : "utf-8";
+  const source = Buffer.from(content.data.content, encoding).toString("utf-8");
+  return parseWorkflowDispatchConfig(source, workflow.data.id, workflow.data.name, trimmedRef);
+}
+
 async function getWorkflowRuns(
   repoRef: RepoRef,
   options?: CacheRequestOptions
@@ -2407,6 +2443,9 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:get-workflows", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
     getWorkflows(repo, options)
+  );
+  ipcMain.handle("github:get-workflow-dispatch-config", (_event, repo: RepoRef, workflowId: number, ref: string) =>
+    getWorkflowDispatchConfig(repo, workflowId, ref)
   );
   ipcMain.handle("github:get-workflow-runs", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
     getWorkflowRuns(repo, options)

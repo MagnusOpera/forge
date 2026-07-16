@@ -66,6 +66,7 @@ import {
   isLiveStatus,
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
+  missingWorkflowDispatchInputs,
   openPullRequestNotificationKeys,
   pullRequestTabForState,
   pullRequestWorkflowState,
@@ -74,6 +75,8 @@ import {
   reviewDecisionForReviewEvent,
   shortSha,
   statusTone,
+  workflowDispatchDefaultInputs,
+  workflowDispatchRequiresPrompt,
   type FavoriteRepoSnapshots,
   type ProjectPullRequestTab,
   type PullRequestWorkflowState
@@ -100,6 +103,8 @@ import type {
   RepoRef,
   RepoSummary,
   SidebarAppearanceMode,
+  WorkflowDispatchConfig,
+  WorkflowDispatchInputSummary,
   WorkflowJobLogDetail,
   WorkflowRunDetail,
   WorkflowRunSummary,
@@ -179,6 +184,14 @@ type FavoriteProjectNotificationSnapshot = {
 type FavoriteProjectMonitorStatus = {
   checking: boolean;
   lastCheckedAt: string | null;
+};
+type WorkflowDispatchDialogState = {
+  workflow: WorkflowSummary;
+  config: WorkflowDispatchConfig | null;
+  values: Record<string, string>;
+  loading: boolean;
+  submitting: boolean;
+  error: string | null;
 };
 
 interface WorkflowCheckGroup {
@@ -297,6 +310,7 @@ const browserApi: GithubFocusApi = {
   getPullRequests: () => ipcUnavailable(),
   getIssues: () => ipcUnavailable(),
   getWorkflows: () => ipcUnavailable(),
+  getWorkflowDispatchConfig: () => ipcUnavailable(),
   getWorkflowRuns: () => ipcUnavailable(),
   getPullRequest: () => ipcUnavailable(),
   getWorkflowRun: () => ipcUnavailable(),
@@ -712,6 +726,28 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return tagName === "input" || tagName === "textarea" || target.isContentEditable;
 }
 
+function workflowDispatchInputValue(input: WorkflowDispatchInputSummary, values: Record<string, string>): string {
+  const current = values[input.key];
+  if (current !== undefined) {
+    return current;
+  }
+  return input.defaultValue ?? (input.type === "boolean" ? "false" : "");
+}
+
+function workflowDispatchPayloadValues(
+  config: WorkflowDispatchConfig,
+  values: Record<string, string>
+): Record<string, string> {
+  return config.inputs.reduce<Record<string, string>>((result, input) => {
+    const value = workflowDispatchInputValue(input, values);
+    const normalized = input.type === "boolean" ? value : value.trim();
+    if (normalized !== "") {
+      result[input.key] = normalized;
+    }
+    return result;
+  }, {});
+}
+
 function StatusIcon({ status, conclusion }: { status?: string | null; conclusion?: string | null }) {
   const tone = statusTone(status, conclusion);
   if (tone === "good") {
@@ -1104,6 +1140,7 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const [workflowDispatchDialog, setWorkflowDispatchDialog] = useState<WorkflowDispatchDialogState | null>(null);
   const [navigation, setNavigation] = useState<NavigationState>({ entries: [], index: -1 });
   const [favoriteProjectMonitorStatus, setFavoriteProjectMonitorStatus] = useState<FavoriteProjectMonitorStatus>({
     checking: false,
@@ -1507,32 +1544,186 @@ export function App() {
     [selectedRepo, setStarredWorkflowKeys]
   );
 
-  const runWorkflow = useCallback(
-    async (workflow: WorkflowSummary) => {
+  const dispatchWorkflowWithConfig = useCallback(
+    async (
+      workflow: WorkflowSummary,
+      config: WorkflowDispatchConfig,
+      values: Record<string, string>
+    ): Promise<boolean> => {
       if (!selectedRepo) {
-        return;
-      }
-
-      const ref = selectedRepo.defaultBranch ?? "main";
-      const confirmed = window.confirm(`Run "${workflow.name}" on ${selectedRepo.fullName}@${ref}?`);
-      if (!confirmed) {
-        return;
+        return false;
       }
 
       try {
         await api.dispatchWorkflow({
           repo: selectedRepo,
           workflowId: workflow.id,
-          ref
+          ref: config.ref,
+          inputs: workflowDispatchPayloadValues(config, values)
         });
         flash(`Started ${workflow.name}`);
         void loadProject(selectedRepo, false);
+        return true;
       } catch (error) {
         flash(error instanceof Error ? error.message : "Workflow dispatch failed.");
+        return false;
       }
     },
     [flash, loadProject, selectedRepo]
   );
+
+  const loadWorkflowDispatchConfig = useCallback(
+    async (workflow: WorkflowSummary): Promise<WorkflowDispatchConfig | null> => {
+      if (!selectedRepo) {
+        return null;
+      }
+
+      try {
+        return await api.getWorkflowDispatchConfig(selectedRepo, workflow.id, selectedRepo.defaultBranch ?? "main");
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "Unable to load workflow inputs.");
+        return null;
+      }
+    },
+    [flash, selectedRepo]
+  );
+
+  const openWorkflowDispatchDialog = useCallback(
+    async (workflow: WorkflowSummary, initialConfig?: WorkflowDispatchConfig) => {
+      if (!selectedRepo) {
+        return;
+      }
+
+      if (initialConfig) {
+        setWorkflowDispatchDialog({
+          workflow,
+          config: initialConfig,
+          values: workflowDispatchDefaultInputs(initialConfig),
+          loading: false,
+          submitting: false,
+          error: null
+        });
+        return;
+      }
+
+      setWorkflowDispatchDialog({
+        workflow,
+        config: null,
+        values: {},
+        loading: true,
+        submitting: false,
+        error: null
+      });
+
+      try {
+        const config = await api.getWorkflowDispatchConfig(selectedRepo, workflow.id, selectedRepo.defaultBranch ?? "main");
+        setWorkflowDispatchDialog((current) => {
+          if (!current || current.workflow.id !== workflow.id) {
+            return current;
+          }
+
+          return {
+            ...current,
+            config,
+            values: workflowDispatchDefaultInputs(config),
+            loading: false,
+            error: null
+          };
+        });
+      } catch (error) {
+        setWorkflowDispatchDialog((current) => {
+          if (!current || current.workflow.id !== workflow.id) {
+            return current;
+          }
+
+          return {
+            ...current,
+            loading: false,
+            error: error instanceof Error ? error.message : "Unable to load workflow inputs."
+          };
+        });
+      }
+    },
+    [selectedRepo]
+  );
+
+  const runWorkflow = useCallback(
+    async (workflow: WorkflowSummary) => {
+      if (!selectedRepo) {
+        return;
+      }
+
+      const config = await loadWorkflowDispatchConfig(workflow);
+      if (!config) {
+        return;
+      }
+
+      if (workflowDispatchRequiresPrompt(config)) {
+        await openWorkflowDispatchDialog(workflow, config);
+        return;
+      }
+
+      const confirmed = window.confirm(`Run "${workflow.name}" on ${selectedRepo.fullName}@${config.ref}?`);
+      if (!confirmed) {
+        return;
+      }
+
+      await dispatchWorkflowWithConfig(workflow, config, workflowDispatchDefaultInputs(config));
+    },
+    [dispatchWorkflowWithConfig, loadWorkflowDispatchConfig, openWorkflowDispatchDialog, selectedRepo]
+  );
+
+  const runWorkflowWithArguments = useCallback(
+    async (workflow: WorkflowSummary) => {
+      await openWorkflowDispatchDialog(workflow);
+    },
+    [openWorkflowDispatchDialog]
+  );
+
+  useEffect(() => {
+    setWorkflowDispatchDialog(null);
+  }, [selectedRepoKey]);
+
+  const closeWorkflowDispatchDialog = useCallback(() => {
+    setWorkflowDispatchDialog(null);
+  }, []);
+
+  const updateWorkflowDispatchDialogValue = useCallback((key: string, value: string) => {
+    setWorkflowDispatchDialog((current) => (current ? { ...current, values: { ...current.values, [key]: value } } : current));
+  }, []);
+
+  const submitWorkflowDispatchDialog = useCallback(async () => {
+    if (!workflowDispatchDialog?.config) {
+      return;
+    }
+
+    const missingInputs = missingWorkflowDispatchInputs(workflowDispatchDialog.config, workflowDispatchDialog.values);
+    if (missingInputs.length) {
+      setWorkflowDispatchDialog((current) =>
+        current
+          ? {
+              ...current,
+              error: `Required: ${missingInputs.map((input) => input.label).join(", ")}`
+            }
+          : current
+      );
+      return;
+    }
+
+    setWorkflowDispatchDialog((current) => (current ? { ...current, submitting: true, error: null } : current));
+    const started = await dispatchWorkflowWithConfig(
+      workflowDispatchDialog.workflow,
+      workflowDispatchDialog.config,
+      workflowDispatchDialog.values
+    );
+
+    if (started) {
+      closeWorkflowDispatchDialog();
+      return;
+    }
+
+    setWorkflowDispatchDialog((current) => (current ? { ...current, submitting: false } : current));
+  }, [closeWorkflowDispatchDialog, dispatchWorkflowWithConfig, workflowDispatchDialog]);
 
   const refreshPullRequest = useCallback(
     async (
@@ -2928,7 +3119,6 @@ export function App() {
         onSelectWorkflow={(workflow) => setSelection({ kind: "workflow", workflow })}
         onToggleWorkflowStar={toggleWorkflowStar}
         onReorderFavoriteWorkflow={reorderFavoriteWorkflows}
-        onRunWorkflow={runWorkflow}
       />
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
       <ContentPane
@@ -2973,8 +3163,18 @@ export function App() {
         onClosePullRequest={closePullRequest}
         onSelectRun={selectRun}
         onRunWorkflow={runWorkflow}
+        onRunWorkflowWithArguments={runWorkflowWithArguments}
         workflowRuns={workflowRuns}
       />
+      {workflowDispatchDialog && selectedRepo && (
+        <WorkflowDispatchDialog
+          repo={selectedRepo}
+          state={workflowDispatchDialog}
+          onClose={closeWorkflowDispatchDialog}
+          onChangeValue={updateWorkflowDispatchDialogValue}
+          onSubmit={() => void submitWorkflowDispatchDialog()}
+        />
+      )}
       {paletteOpen && (
         <CommandPalette
           query={paletteQuery}
@@ -3367,7 +3567,6 @@ function ProjectPane(props: {
   onSelectWorkflow(workflow: WorkflowSummary): void;
   onToggleWorkflowStar(workflow: WorkflowSummary): void;
   onReorderFavoriteWorkflow(sourceId: number, targetId: number): void;
-  onRunWorkflow(workflow: WorkflowSummary): void;
 }) {
   const [syncInvoked, setSyncInvoked] = useState(false);
   const syncFeedbackTimer = useRef<number | null>(null);
@@ -3482,7 +3681,6 @@ function ProjectPane(props: {
               onSelect={props.onSelectWorkflow}
               onToggleStar={props.onToggleWorkflowStar}
               onReorderFavoriteWorkflow={props.onReorderFavoriteWorkflow}
-              onRun={props.onRunWorkflow}
             />
           ) : (
             <PullRequestFocusSection
@@ -3717,7 +3915,6 @@ function WorkflowFocusSection(props: {
   onSelect(workflow: WorkflowSummary): void;
   onToggleStar(workflow: WorkflowSummary): void;
   onReorderFavoriteWorkflow(sourceId: number, targetId: number): void;
-  onRun(workflow: WorkflowSummary): void;
 }) {
   const visibleWorkflows = props.tab === "favorites" ? props.favoriteWorkflows : props.allWorkflows;
   const workflowTabsUnderline = useSlidingUnderline(
@@ -3761,7 +3958,6 @@ function WorkflowFocusSection(props: {
         onToggleStar={props.onToggleStar}
         reorderable={props.tab === "favorites"}
         onReorder={props.onReorderFavoriteWorkflow}
-        onRun={props.onRun}
         empty={props.tab === "favorites" ? "No favorite workflows" : "No workflows"}
       />
     </div>
@@ -3779,7 +3975,6 @@ function WorkflowSection(props: {
   onSelect(workflow: WorkflowSummary): void;
   onToggleStar(workflow: WorkflowSummary): void;
   onReorder?(sourceId: number, targetId: number): void;
-  onRun(workflow: WorkflowSummary): void;
 }) {
   const [draggingWorkflowId, setDraggingWorkflowId] = useState<number | null>(null);
   const [dragOverWorkflowId, setDragOverWorkflowId] = useState<number | null>(null);
@@ -3844,9 +4039,6 @@ function WorkflowSection(props: {
                 <span className="focus-meta">{workflow.state}</span>
               </span>
             </button>
-            <button className="icon-button small" aria-label="Run workflow" onClick={() => props.onRun(workflow)}>
-              <Play size={14} />
-            </button>
             <button className="icon-button small" aria-label="Star workflow" onClick={() => props.onToggleStar(workflow)}>
               {props.starredIds.includes(workflow.id) ? <Star size={14} fill="currentColor" /> : <StarOff size={14} />}
             </button>
@@ -3855,6 +4047,58 @@ function WorkflowSection(props: {
       ) : (
         <div className="empty-row">{props.empty}</div>
       )}
+    </div>
+  );
+}
+
+function WorkflowRunSplitButton(props: {
+  workflowName: string;
+  onRun(): void;
+  onRunWithArguments(): void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const handleBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const nextFocused = event.relatedTarget;
+    if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+      return;
+    }
+
+    setOpen(false);
+  }, []);
+
+  const runWithArguments = useCallback(() => {
+    setOpen(false);
+    props.onRunWithArguments();
+  }, [props]);
+
+  return (
+    <div className={cx("workflow-run-split", open && "open")} onBlur={handleBlur}>
+      <button
+        type="button"
+        className="primary-button workflow-run-button workflow-run-primary"
+        aria-label={`Run ${props.workflowName} with defaults`}
+        onClick={props.onRun}
+      >
+        <Play size={15} />
+        <span>Run</span>
+      </button>
+      <button
+        type="button"
+        className="primary-button workflow-run-button workflow-run-secondary"
+        aria-label={`More run options for ${props.workflowName}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <ChevronDown size={15} />
+      </button>
+      <div className={cx("workflow-run-menu", open && "open")} role="menu" aria-hidden={!open}>
+        <button type="button" className="workflow-run-menu-item" role="menuitem" onClick={runWithArguments}>
+          <Play size={14} />
+          <span>Run with arguments</span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -3902,6 +4146,7 @@ function ContentPane(props: {
   onClosePullRequest(pr: PullRequestSummary): Promise<boolean>;
   onSelectRun(run: WorkflowRunSummary): void;
   onRunWorkflow(workflow: WorkflowSummary): void;
+  onRunWorkflowWithArguments(workflow: WorkflowSummary): void;
 }) {
   const reviewPr = props.selection.kind === "pr" ? props.prDetail ?? props.selection.pr : null;
   const showTitleAction =
@@ -4199,6 +4444,7 @@ function ContentPane(props: {
           onSelectRun={props.onSelectRun}
           onCopyText={props.onCopyText}
           onRun={props.onRunWorkflow}
+          onRunWithArguments={props.onRunWorkflowWithArguments}
         />
       )}
     </main>
@@ -5386,6 +5632,7 @@ function WorkflowContent(props: {
   onSelectRun(run: WorkflowRunSummary): void;
   onCopyText(value: string): Promise<boolean>;
   onRun(workflow: WorkflowSummary): void;
+  onRunWithArguments(workflow: WorkflowSummary): void;
 }) {
   const [copiedPath, setCopiedPath] = useState(false);
   const copyFeedbackTimer = useRef<number | null>(null);
@@ -5453,13 +5700,11 @@ function WorkflowContent(props: {
             </div>
             <h1>{props.workflow.name}</h1>
           </div>
-          <button
-            className="primary-button workflow-run-button"
-            aria-label={`Run ${props.workflow.name}`}
-            onClick={() => props.onRun(props.workflow)}
-          >
-            <Play size={15} />
-          </button>
+          <WorkflowRunSplitButton
+            workflowName={props.workflow.name}
+            onRun={() => props.onRun(props.workflow)}
+            onRunWithArguments={() => props.onRunWithArguments(props.workflow)}
+          />
         </div>
       </div>
       <div className="detail-body-scroll">
@@ -5873,6 +6118,147 @@ function EmptyPane({ icon, title }: { icon: React.ReactNode; title: string }) {
     <div className="empty-pane">
       {icon}
       <span>{title}</span>
+    </div>
+  );
+}
+
+function WorkflowDispatchDialog(props: {
+  repo: RepoSummary;
+  state: WorkflowDispatchDialogState;
+  onClose(): void;
+  onChangeValue(key: string, value: string): void;
+  onSubmit(): void;
+}) {
+  const firstFieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+  const setFirstFieldRef = useCallback((element: HTMLInputElement | HTMLSelectElement | null) => {
+    firstFieldRef.current = element;
+  }, []);
+
+  useEffect(() => {
+    if (props.state.loading) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => firstFieldRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [props.state.loading]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        props.onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [props]);
+
+  const config = props.state.config;
+  const inputs = config?.inputs ?? [];
+
+  return (
+    <div className="palette-backdrop" onMouseDown={props.onClose}>
+      <div className="workflow-dispatch-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="workflow-dispatch-header">
+          <div>
+            <span className="eyebrow">Run Workflow</span>
+            <h2>{props.state.workflow.name}</h2>
+            <p className="workflow-dispatch-meta">
+              {props.repo.fullName}@{config?.ref ?? props.repo.defaultBranch ?? "main"}
+            </p>
+          </div>
+          <button type="button" className="icon-button" aria-label="Close run workflow dialog" onClick={props.onClose}>
+            <X size={16} />
+          </button>
+        </div>
+        {props.state.loading ? (
+          <div className="workflow-dispatch-loading">
+            <Loader2 className="spin" size={16} />
+            <span>Loading workflow inputs…</span>
+          </div>
+        ) : (
+          <>
+            {props.state.error && (
+              <div className="inline-error">
+                <AlertCircle size={15} />
+                <span>{props.state.error}</span>
+              </div>
+            )}
+            <div className="workflow-dispatch-fields">
+              {inputs.length ? (
+                inputs.map((input, index) => {
+                  const value = workflowDispatchInputValue(input, props.state.values);
+                  const commonProps = {
+                    ref: index === 0 ? setFirstFieldRef : undefined,
+                    disabled: props.state.submitting,
+                    value
+                  };
+
+                  return (
+                    <label className="workflow-dispatch-field" key={input.key}>
+                      <span className="workflow-dispatch-field-header">
+                        <strong>{input.label}</strong>
+                        {input.required && <span className="workflow-dispatch-required">Required</span>}
+                      </span>
+                      {input.description &&
+                        (input.type === "choice" || input.type === "environment" || input.type === "boolean") && (
+                          <span className="workflow-dispatch-description">{input.description}</span>
+                        )}
+                      {input.type === "choice" || input.type === "environment" ? (
+                        <select
+                          {...commonProps}
+                          onChange={(event) => props.onChangeValue(input.key, event.target.value)}
+                        >
+                          {!input.required && <option value="">Default</option>}
+                          {input.options.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : input.type === "boolean" ? (
+                        <button
+                          type="button"
+                          className={cx("workflow-dispatch-boolean", value === "true" && "active")}
+                          onClick={() => props.onChangeValue(input.key, value === "true" ? "false" : "true")}
+                          disabled={props.state.submitting}
+                        >
+                          <span>{value === "true" ? "Enabled" : "Disabled"}</span>
+                        </button>
+                      ) : (
+                        <input
+                          {...commonProps}
+                          type={input.type === "number" ? "number" : "text"}
+                          placeholder={input.description ?? input.defaultValue ?? ""}
+                          onChange={(event) => props.onChangeValue(input.key, event.target.value)}
+                        />
+                      )}
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="empty-content">This workflow does not declare any dispatch inputs.</div>
+              )}
+            </div>
+            <div className="workflow-dispatch-actions">
+              <button type="button" className="ghost-button" onClick={props.onClose} disabled={props.state.submitting}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ghost-button workflow-dispatch-run"
+                onClick={props.onSubmit}
+                disabled={props.state.submitting}
+              >
+                {props.state.submitting ? <Loader2 className="spin" size={14} /> : <Play size={14} />}
+                <span>Run</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

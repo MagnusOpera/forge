@@ -4,6 +4,7 @@ import type {
   PullRequestReviewEvent,
   PullRequestSummary,
   RepoSummary,
+  WorkflowDispatchConfig,
   WorkflowRunSummary
 } from "../shared/github";
 
@@ -230,6 +231,34 @@ export function reviewDecisionForReviewEvent(event: PullRequestReviewEvent): "AP
     return "APPROVED";
   }
   return "CHANGES_REQUESTED";
+}
+
+export function workflowDispatchDefaultInputs(config: WorkflowDispatchConfig): Record<string, string> {
+  return config.inputs.reduce<Record<string, string>>((result, input) => {
+    if (input.defaultValue !== null && input.defaultValue !== undefined) {
+      result[input.key] = input.defaultValue;
+    }
+    return result;
+  }, {});
+}
+
+export function workflowDispatchRequiresPrompt(config: WorkflowDispatchConfig): boolean {
+  return config.inputs.some(
+    (input) => input.required && (input.defaultValue === null || input.defaultValue === undefined || input.defaultValue === "")
+  );
+}
+
+export function missingWorkflowDispatchInputs(
+  config: WorkflowDispatchConfig,
+  values: Record<string, string>
+): WorkflowDispatchConfig["inputs"] {
+  return config.inputs.filter((input) => {
+    if (!input.required) {
+      return false;
+    }
+    const value = values[input.key];
+    return value === undefined || value.trim() === "";
+  });
 }
 
 function reviewEventForState(state?: string | null): PullRequestReviewEvent | null {

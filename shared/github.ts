@@ -126,6 +126,25 @@ export interface WorkflowSummary {
   badgeUrl?: string | null;
 }
 
+export type WorkflowDispatchInputType = "string" | "boolean" | "choice" | "number" | "environment";
+
+export interface WorkflowDispatchInputSummary {
+  key: string;
+  label: string;
+  description?: string | null;
+  required: boolean;
+  defaultValue?: string | null;
+  type: WorkflowDispatchInputType;
+  options: string[];
+}
+
+export interface WorkflowDispatchConfig {
+  workflowId: number;
+  workflowName: string;
+  ref: string;
+  inputs: WorkflowDispatchInputSummary[];
+}
+
 export interface WorkflowRunSummary {
   id: number;
   workflowId: number;
@@ -341,6 +360,7 @@ export interface GithubFocusApi {
   getPullRequests(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<PullRequestSummary[]>>;
   getIssues(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<IssueSummary[]>>;
   getWorkflows(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowSummary[]>>;
+  getWorkflowDispatchConfig(repo: RepoRef, workflowId: number, ref: string): Promise<WorkflowDispatchConfig>;
   getWorkflowRuns(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowRunSummary[]>>;
   getPullRequest(repo: RepoRef, number: number, options?: CacheRequestOptions): Promise<CacheEnvelope<PullRequestDetail>>;
   getWorkflowRun(repo: RepoRef, runId: number, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowRunDetail>>;

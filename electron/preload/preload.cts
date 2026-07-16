@@ -54,6 +54,8 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:get-issues", repo, options),
   getWorkflows: (repo: RepoRef, options?: CacheRequestOptions) =>
     ipcRenderer.invoke("github:get-workflows", repo, options),
+  getWorkflowDispatchConfig: (repo: RepoRef, workflowId: number, ref: string) =>
+    ipcRenderer.invoke("github:get-workflow-dispatch-config", repo, workflowId, ref),
   getWorkflowRuns: (repo: RepoRef, options?: CacheRequestOptions) =>
     ipcRenderer.invoke("github:get-workflow-runs", repo, options),
   getPullRequest: (repo: RepoRef, number: number, options?: CacheRequestOptions) =>

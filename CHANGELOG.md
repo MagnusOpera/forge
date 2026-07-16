@@ -10,6 +10,7 @@ All notable changes to Forge are documented in this file.
 - Reduced pane dividers to a true 1px line.
 - Kept the theme accent picker open more reliably while moving into its popup.
 - Moved repository search so it appears only in the All repositories view.
+- Added workflow run controls for default dispatches and prompted arguments when workflows require inputs.
 
 ## [0.0.32]
 

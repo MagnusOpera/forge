@@ -4,6 +4,7 @@ import type {
   PullRequestReview,
   PullRequestSummary,
   RepoSummary,
+  WorkflowDispatchConfig,
   WorkflowRunSummary
 } from "../shared/github";
 import {
@@ -25,6 +26,7 @@ import {
   isLiveStatus,
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
+  missingWorkflowDispatchInputs,
   openPullRequestNotificationKeys,
   pullRequestTabForState,
   pullRequestWorkflowState,
@@ -32,7 +34,9 @@ import {
   removePullRequestLabelOptimistically,
   reviewDecisionForReviewEvent,
   shortSha,
-  statusTone
+  statusTone,
+  workflowDispatchDefaultInputs,
+  workflowDispatchRequiresPrompt
 } from "./appLogic";
 
 describe("appLogic", () => {
@@ -136,6 +140,23 @@ describe("appLogic", () => {
   it("maps review events to pull request review decisions", () => {
     expect(reviewDecisionForReviewEvent("APPROVE")).toBe("APPROVED");
     expect(reviewDecisionForReviewEvent("REQUEST_CHANGES")).toBe("CHANGES_REQUESTED");
+  });
+
+  it("derives workflow dispatch defaults and prompt requirements", () => {
+    const config = {
+      workflowId: 1,
+      workflowName: "Deploy",
+      ref: "main",
+      inputs: [
+        { key: "environment", label: "environment", required: true, defaultValue: null, type: "choice", options: ["prod"] },
+        { key: "dry_run", label: "dry_run", required: false, defaultValue: "true", type: "boolean", options: [] }
+      ]
+    } satisfies WorkflowDispatchConfig;
+
+    expect(workflowDispatchDefaultInputs(config)).toEqual({ dry_run: "true" });
+    expect(workflowDispatchRequiresPrompt(config)).toBe(true);
+    expect(missingWorkflowDispatchInputs(config, { dry_run: "true" })).toEqual([config.inputs[0]]);
+    expect(missingWorkflowDispatchInputs(config, { environment: "prod", dry_run: "true" })).toEqual([]);
   });
 
   it("allows pull request label edits for triage and write users", () => {

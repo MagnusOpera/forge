@@ -1435,7 +1435,7 @@ input {
 }
 
 .workflow-row {
-  grid-template-columns: minmax(0, 1fr) 28px 28px;
+  grid-template-columns: minmax(0, 1fr) 28px;
   gap: 4px;
   padding: 4px;
 }
@@ -1912,17 +1912,247 @@ p {
 }
 
 .workflow-run-button {
-  width: 38px;
-  height: 38px;
-  padding: 0;
   border: 1px solid var(--control-border);
   background: transparent;
   color: var(--icon);
+  transition: border-color var(--textbox-focus-duration) var(--textbox-focus-easing);
 }
 
 .workflow-run-button:hover:not(:disabled) {
-  border-color: var(--accent);
   background: transparent;
+}
+
+.workflow-run-split {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  justify-self: end;
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+.workflow-run-primary,
+.workflow-run-secondary {
+  position: relative;
+}
+
+.workflow-run-primary {
+  padding: 0 14px;
+  border-radius: 8px 0 0 8px;
+  color: var(--text-strong);
+}
+
+.workflow-run-secondary {
+  width: 34px;
+  margin-left: -1px;
+  padding: 0;
+  border-radius: 0 8px 8px 0;
+}
+
+.workflow-run-primary:hover,
+.workflow-run-primary:focus-visible {
+  z-index: 1;
+  border-color: var(--accent);
+}
+
+.workflow-run-secondary:hover,
+.workflow-run-secondary:focus-visible,
+.workflow-run-split.open .workflow-run-secondary {
+  z-index: 1;
+  border-color: var(--accent);
+}
+
+.workflow-run-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 35;
+  display: grid;
+  min-width: 184px;
+  padding: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: 0 12px 40px var(--toast-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 120ms ease,
+    transform 140ms ease;
+}
+
+.workflow-run-menu.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.workflow-run-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 31px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.workflow-run-menu-item:hover:not(:disabled),
+.workflow-run-menu-item:focus {
+  background: var(--hover-bg);
+  color: var(--text-hover);
+}
+
+.workflow-dispatch-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 48px));
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--control-border);
+  border-radius: 12px;
+  background: var(--palette-bg);
+  box-shadow: 0 24px 80px var(--modal-shadow);
+}
+
+.workflow-dispatch-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.workflow-dispatch-header h2 {
+  margin: 0;
+  color: var(--title);
+  font-size: 20px;
+}
+
+.workflow-dispatch-meta {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.workflow-dispatch-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workflow-dispatch-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.workflow-dispatch-field {
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-dispatch-field-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.workflow-dispatch-required {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--bad-border);
+  border-radius: 999px;
+  color: var(--bad-text);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workflow-dispatch-description {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.workflow-dispatch-field input,
+.workflow-dispatch-field select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 13px;
+  transition: border-color var(--textbox-focus-duration) var(--textbox-focus-easing);
+}
+
+.workflow-dispatch-field input:focus,
+.workflow-dispatch-field select:focus {
+  border-color: var(--accent);
+}
+
+.workflow-dispatch-boolean {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-dispatch-boolean.active {
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+.workflow-dispatch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+.workflow-dispatch-run {
+  gap: 8px;
+  color: var(--text-strong);
 }
 
 .label-row {
