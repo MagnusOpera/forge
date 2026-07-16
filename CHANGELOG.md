@@ -8,6 +8,7 @@ All notable changes to Forge are documented in this file.
 - Removed the repository name from the project titlebar and unified the sidebar surface across its titlebar.
 - Unified vertical splitter rendering across glass and matte sidebar modes.
 - Reduced pane dividers to a true 1px line.
+- Kept the theme accent picker open more reliably while moving into its popup.
 
 ## [0.0.32]
 

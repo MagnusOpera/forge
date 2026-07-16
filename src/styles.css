@@ -720,17 +720,22 @@ input {
 
 .theme-accent-control {
   position: relative;
+  z-index: 200;
   display: grid;
   place-items: center;
+  padding-bottom: 9px;
+  margin-bottom: -9px;
   -webkit-app-region: no-drag;
 }
 
 .accent-picker {
   position: absolute;
-  top: 30px;
+  top: 100%;
   right: 0;
   z-index: 40;
+  min-width: 40px;
   display: grid;
+  justify-items: center;
   gap: 7px;
   padding: 7px;
   border: 1px solid var(--card-border);
@@ -751,6 +756,7 @@ input {
 
 .accent-swatch-grid {
   display: grid;
+  justify-items: center;
   gap: 7px;
 }
 
