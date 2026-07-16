@@ -29,8 +29,8 @@
   --sidebar-control-filter: blur(30px) saturate(0.95) brightness(0.82);
   --project-bg: #22272e;
   --content-bg: #22272e;
-  --splitter-color: rgb(255 255 255 / 0.12);
-  --splitter-hover-color: rgb(255 255 255 / 0.24);
+  --matte-divider: #373e47;
+  --matte-divider-hover: #444c56;
   --splitter-hit-area: 9px;
   --border: #373e47;
   --border-strong: #2d333b;
@@ -140,8 +140,8 @@
   --sidebar-control-filter: blur(30px) saturate(1.6);
   --project-bg: #ffffff;
   --content-bg: #fbfcfd;
-  --splitter-color: rgb(29 35 42 / 0.12);
-  --splitter-hover-color: rgb(29 35 42 / 0.24);
+  --matte-divider: #d8dce2;
+  --matte-divider-hover: #c8ced6;
   --border: #d8dce2;
   --border-strong: #c8ced6;
   --border-soft: #d4d8df;
@@ -438,7 +438,7 @@ input {
   bottom: 0;
   left: 50%;
   width: 1px;
-  background-color: var(--splitter-color);
+  background-color: var(--matte-divider);
   content: "";
   pointer-events: none;
   transform: translateX(-50%);
@@ -447,7 +447,7 @@ input {
 
 .resize-handle:hover::before,
 .resize-handle:active::before {
-  background-color: var(--splitter-hover-color);
+  background-color: var(--matte-divider-hover);
 }
 
 .left-resize-handle.collapsed {
