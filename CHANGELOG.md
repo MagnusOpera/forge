@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.33]
+
+
 - Bolded repository names in favorites and removed pane header divider lines.
 - Removed the repository name from the project titlebar and unified the sidebar surface across its titlebar.
 - Unified vertical splitter rendering across glass and matte sidebar modes.
@@ -12,6 +15,8 @@ All notable changes to Forge are documented in this file.
 - Moved repository search so it appears only in the All repositories view.
 - Added workflow run controls for default dispatches and prompted arguments when workflows require inputs.
 - Darkened token and workflow confirmation screens to match other modal overlays.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.32...0.0.33
 
 ## [0.0.32]
 
