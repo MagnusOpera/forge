@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Bolded repository names in favorites and removed pane header divider lines.
+
 ## [0.0.32]
 
 

@@ -3321,7 +3321,7 @@ function RepoButton(props: {
       onDragEnd={props.onDragEnd}
     >
       <button className="repo-button" onClick={props.onSelect}>
-        <span className="repo-name">{repoLabel}</span>
+        <span className={cx("repo-name", props.showOwner && "repo-name-with-owner")}>{repoLabel}</span>
         <span className="repo-meta">{formatRelative(props.repo.updatedAt)}</span>
       </button>
       <button
