@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0]
+
+
 - Refreshed the website homepage and added Magnus Opera branding to its footer.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.0.33...0.1.0
 
 ## [0.0.33]
 
