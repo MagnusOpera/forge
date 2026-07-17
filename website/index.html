@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Forge is a simple desktop GitHub client for fast operating around active work."
+      content="Forge is a focused native GitHub client for moving quickly through pull requests, issues, workflows, and repositories."
     />
-    <title>Forge - fast GitHub operations</title>
+    <title>Forge — GitHub, focused</title>
     <link rel="icon" href="assets/forge-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/forge-icon.png" />
     <link rel="stylesheet" href="styles.css" />
@@ -72,19 +72,31 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Desktop GitHub client</p>
-          <h1>Forge</h1>
+          <p class="eyebrow hero-eyebrow"><span></span>Native GitHub client for macOS</p>
+          <h1>Move through GitHub<br /><em>at full speed.</em></h1>
           <p class="lead">
-            A simple GitHub client for fast operating around pull requests, issues, workflows, and repositories.<br />
-            Forge is not a replacement for the GitHub website.<br />
-            It keeps day-to-day work close and sends configuration back to GitHub.
+            Pull requests, issues, workflows, and repositories in one focused desktop app.
+            No tab maze. No context switching. Just the work that matters.
           </p>
+          <div class="actions hero-actions">
+            <a class="primary-action" href="install.html">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16.7 12.9c0-3.2 2.7-4.8 2.8-4.9a6 6 0 0 0-4.7-2.5c-2-.2-3.9 1.2-4.9 1.2-1 0-2.5-1.2-4.2-1.1a6.2 6.2 0 0 0-5.2 3.2c-2.2 3.9-.6 9.6 1.6 12.7 1.1 1.5 2.3 3.2 4 3.1 1.6-.1 2.2-1 4.1-1s2.5 1 4.2 1c1.7 0 2.8-1.5 3.8-3 1.2-1.8 1.7-3.5 1.8-3.6-.1 0-3.3-1.3-3.3-5.1ZM13.5 3.4A5.4 5.4 0 0 0 14.8-.5a5.5 5.5 0 0 0-3.6 1.9A5.1 5.1 0 0 0 9.9 5c1.4.1 2.7-.6 3.6-1.6Z" />
+              </svg>
+              <span>Get Forge for macOS</span>
+            </a>
+            <a class="secondary-action" href="https://github.com/MagnusOpera/forge">
+              <span>View on GitHub</span><span aria-hidden="true">↗</span>
+            </a>
+          </div>
+          <p class="hero-note">Apple Silicon · Local-only · Open source</p>
         </div>
 
         <figure class="preview" aria-labelledby="preview-title">
           <div class="preview-bar">
-            <span id="preview-title">Forge in <strong data-preview-theme>dark</strong> mode</span>
-            <span>Website theme switches the example preview</span>
+            <div class="window-controls" aria-hidden="true"><span></span><span></span><span></span></div>
+            <span id="preview-title">Forge · <strong data-preview-theme>dark</strong> mode</span>
+            <span class="preview-caption">Your GitHub work, in focus</span>
           </div>
           <div class="preview-image-window">
             <img
@@ -98,26 +110,40 @@
 
       <section class="section-grid" id="focus">
         <article>
-          <h2>Built for work, not configuration.</h2>
+          <span class="feature-number">01</span>
+          <h2>See the whole picture.</h2>
           <p>
-            Forge keeps repositories, pull requests, workflow runs, checks, labels,
-            and review actions in a dense three-pane layout. The GitHub website stays
-            the source of truth for repository settings and advanced administration.
+            Repositories, pull requests, issues, checks, and workflows stay connected
+            in a permanent three-pane workspace built for flow.
           </p>
         </article>
         <article>
-          <h2>Fast paths stay close.</h2>
+          <span class="feature-number">02</span>
+          <h2>Act without the detour.</h2>
           <p>
-            Search repositories, inspect current work, update pull request metadata,
-            submit reviews, run workflows, and jump back to GitHub when the website
-            is the right tool.
+            Review code, update metadata, trigger workflows, and move between active
+            work with keyboard-first speed.
           </p>
         </article>
+        <article>
+          <span class="feature-number">03</span>
+          <h2>Your machine. Your token.</h2>
+          <p>
+            Forge is local-only. Your GitHub token stays protected by macOS secure
+            storage, with no Forge account or backend in between.
+          </p>
+        </article>
+      </section>
+
+      <section class="closing-cta" aria-labelledby="closing-title">
+        <p class="eyebrow">Ready when you are</p>
+        <h2 id="closing-title">Less browser.<br />More momentum.</h2>
+        <a class="primary-action" href="install.html">Download Forge <span aria-hidden="true">→</span></a>
       </section>
     </main>
 
     <footer>
-      <span>Copyright (c) 2026 Magnus Opera SAS</span>
+      <span class="footer-brand">© 2026 <a href="https://magnusopera.io"><img src="assets/magnus-opera-logo.svg" alt="" /> Magnus Opera SAS</a></span>
       <a href="LICENSE.txt">MIT License</a>
     </footer>
 

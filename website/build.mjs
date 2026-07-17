@@ -11,6 +11,7 @@ const outDir = path.join(rootDir, ".out/site");
 const passthroughFiles = [
   ["styles.css", "styles.css"],
   ["site.js", "site.js"],
+  ["assets/magnus-opera-logo.svg", "assets/magnus-opera-logo.svg"],
   ["screenshots/forge-light.png", "screenshots/forge-light.png"],
   ["screenshots/forge-dark.png", "screenshots/forge-dark.png"]
 ];
