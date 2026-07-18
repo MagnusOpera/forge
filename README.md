@@ -70,6 +70,8 @@ Build the GitHub Pages website artifact:
 make website-build
 ```
 
+Deploy the website independently from releases by running the Publish Website workflow from `main`.
+
 Create release artifacts:
 
 ```sh

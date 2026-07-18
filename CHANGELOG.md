@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Enabled independent website deployments from the main branch.
+
 ## [0.1.0]
 
 
