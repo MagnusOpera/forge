@@ -1447,6 +1447,11 @@ input {
   background: var(--row-active-bg);
 }
 
+.app-shell.middle-keyboard-navigating .focus-row:hover:not(.active),
+.app-shell.middle-keyboard-navigating .workflow-row:hover:not(.active) {
+  background: transparent;
+}
+
 .focus-row.active,
 .workflow-row.active {
   color: var(--active-text);

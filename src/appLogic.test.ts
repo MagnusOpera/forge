@@ -9,6 +9,9 @@ import type {
 } from "../shared/github";
 import {
   addPullRequestLabelOptimistically,
+  adjacentFavoriteRepositoryKey,
+  adjacentProjectFocusView,
+  appKeyboardShortcut,
   canManagePullRequest,
   canSubmitPullRequestReview,
   canSubmitPullRequestReviewForPullRequest,
@@ -24,12 +27,15 @@ import {
   isFailedWorkflowRun,
   isPullRequestAuthor,
   isLiveStatus,
+  isTabNavigation,
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
+  middlePaneSelectionDelta,
   missingWorkflowDispatchInputs,
   openPullRequestNotificationKeys,
   pullRequestTabForState,
   pullRequestWorkflowState,
+  projectViewNavigationDirection,
   repositoryAllowsPullRequestAutoMerge,
   removePullRequestLabelOptimistically,
   reviewDecisionForReviewEvent,
@@ -40,6 +46,94 @@ import {
 } from "./appLogic";
 
 describe("appLogic", () => {
+  it("maps repository keyboard shortcuts only for the intended modifiers", () => {
+    const event = (key: string, overrides: Partial<KeyboardEvent> = {}) => ({
+      altKey: false,
+      code: key === " " ? "Space" : `Key${key.toUpperCase()}`,
+      ctrlKey: false,
+      key,
+      metaKey: true,
+      shiftKey: false,
+      ...overrides
+    }) as KeyboardEvent;
+
+    expect(appKeyboardShortcut(event("r"))).toBe("refresh-repository");
+    expect(appKeyboardShortcut(event("ArrowUp"))).toBe("previous-favorite-repository");
+    expect(appKeyboardShortcut(event("ArrowDown"))).toBe("next-favorite-repository");
+    expect(appKeyboardShortcut(event("ArrowLeft"))).toBeNull();
+    expect(appKeyboardShortcut(event("ArrowRight"))).toBeNull();
+    expect(appKeyboardShortcut(event(" "))).toBeNull();
+    expect(appKeyboardShortcut(event(" ", { shiftKey: true }))).toBeNull();
+    expect(appKeyboardShortcut(event("p", { shiftKey: true }))).toBe("open-pull-requests");
+    expect(appKeyboardShortcut(event("r", { shiftKey: true }))).toBe("workflow-runs");
+    expect(appKeyboardShortcut(event("i", { shiftKey: true }))).toBe("issues");
+    expect(appKeyboardShortcut(event("w", { shiftKey: true }))).toBe("workflows");
+    expect(appKeyboardShortcut(event("p"))).toBeNull();
+    expect(appKeyboardShortcut(event("p", { altKey: true, shiftKey: true }))).toBeNull();
+    expect(appKeyboardShortcut(event("p", { metaKey: false, shiftKey: true }))).toBeNull();
+    expect(appKeyboardShortcut(event("p", { ctrlKey: true, shiftKey: true }))).toBeNull();
+  });
+
+  it("cycles favorite repositories in both directions and wraps", () => {
+    const favorites = ["octo/one", "octo/two", "octo/three"];
+
+    expect(adjacentFavoriteRepositoryKey(favorites, "octo/one", 1)).toBe("octo/two");
+    expect(adjacentFavoriteRepositoryKey(favorites, "octo/one", -1)).toBe("octo/three");
+    expect(adjacentFavoriteRepositoryKey(favorites, "octo/three", 1)).toBe("octo/one");
+    expect(adjacentFavoriteRepositoryKey(favorites, "octo/other", 1)).toBe("octo/one");
+    expect(adjacentFavoriteRepositoryKey(favorites, "octo/other", -1)).toBe("octo/three");
+    expect(adjacentFavoriteRepositoryKey([], "octo/one", 1)).toBeNull();
+  });
+
+  it("cycles project views in both directions and wraps", () => {
+    expect(adjacentProjectFocusView("pull-requests", 1)).toBe("workflows");
+    expect(adjacentProjectFocusView("workflows", 1)).toBe("issues");
+    expect(adjacentProjectFocusView("issues", 1)).toBe("workflow-runs");
+    expect(adjacentProjectFocusView("workflow-runs", 1)).toBe("pull-requests");
+    expect(adjacentProjectFocusView("pull-requests", -1)).toBe("workflow-runs");
+  });
+
+  it("maps unmodified horizontal arrows to project-view cycling", () => {
+    const event = (key: string, overrides: Partial<KeyboardEvent> = {}) => ({
+      altKey: false,
+      ctrlKey: false,
+      key,
+      metaKey: false,
+      shiftKey: false,
+      ...overrides
+    }) as KeyboardEvent;
+
+    expect(projectViewNavigationDirection(event("ArrowLeft"))).toBe(1);
+    expect(projectViewNavigationDirection(event("ArrowRight"))).toBe(-1);
+    expect(projectViewNavigationDirection(event("ArrowLeft", { metaKey: true }))).toBeNull();
+    expect(projectViewNavigationDirection(event("ArrowRight", { shiftKey: true }))).toBeNull();
+    expect(projectViewNavigationDirection(event("ArrowUp"))).toBeNull();
+  });
+
+  it("maps unmodified arrows and vim keys to middle-pane selection movement", () => {
+    const event = (key: string, overrides: Partial<KeyboardEvent> = {}) => ({
+      altKey: false,
+      ctrlKey: false,
+      key,
+      metaKey: false,
+      shiftKey: false,
+      ...overrides
+    }) as KeyboardEvent;
+
+    expect(middlePaneSelectionDelta(event("ArrowUp"))).toBe(-1);
+    expect(middlePaneSelectionDelta(event("k"))).toBe(-1);
+    expect(middlePaneSelectionDelta(event("ArrowDown"))).toBe(1);
+    expect(middlePaneSelectionDelta(event("j"))).toBe(1);
+    expect(middlePaneSelectionDelta(event("ArrowDown", { metaKey: true }))).toBeNull();
+    expect(middlePaneSelectionDelta(event("ArrowUp", { shiftKey: true }))).toBeNull();
+    expect(middlePaneSelectionDelta(event("Enter"))).toBeNull();
+  });
+
+  it("identifies tab focus navigation for complete suppression", () => {
+    expect(isTabNavigation({ key: "Tab" })).toBe(true);
+    expect(isTabNavigation({ key: "Enter" })).toBe(false);
+  });
+
   it("groups repositories alphabetically by owner and repository name", () => {
     const repos = [
       { owner: "zeta", name: "selected", fullName: "zeta/selected", updatedAt: "2026-01-01T00:00:00Z" },

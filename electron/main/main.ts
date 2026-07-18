@@ -495,8 +495,14 @@ function createApplicationMenu(): void {
   const viewMenu: MenuItemConstructorOptions[] = [
     ...(isDev
       ? ([
-          { role: "reload" },
-          { role: "forceReload" },
+          {
+            label: "Reload Window",
+            click: () => (BrowserWindow.getFocusedWindow() ?? mainWindow)?.webContents.reload()
+          },
+          {
+            label: "Force Reload Window",
+            click: () => (BrowserWindow.getFocusedWindow() ?? mainWindow)?.webContents.reloadIgnoringCache()
+          },
           { role: "toggleDevTools" },
           { type: "separator" }
         ] satisfies MenuItemConstructorOptions[])

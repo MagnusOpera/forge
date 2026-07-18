@@ -150,10 +150,12 @@ await mkdir(path.join(outDir, "screenshots"), { recursive: true });
 const changelog = await readFile(path.join(rootDir, "CHANGELOG.md"), "utf8");
 const indexHtml = await readFile(path.join(__dirname, "index.html"), "utf8");
 const installHtml = await readFile(path.join(__dirname, "install.html"), "utf8");
+const documentationHtml = await readFile(path.join(__dirname, "documentation.html"), "utf8");
 const changelogHtml = await readFile(path.join(__dirname, "changelog.html"), "utf8");
 
 await writeFile(path.join(outDir, "index.html"), indexHtml);
 await writeFile(path.join(outDir, "install.html"), applyReleaseReplacements(installHtml));
+await writeFile(path.join(outDir, "documentation.html"), documentationHtml);
 await writeFile(
   path.join(outDir, "changelog.html"),
   changelogHtml.replace("<!-- CHANGELOG_ENTRIES -->", renderChangelogEntries(changelog))

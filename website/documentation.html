@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Forge changelog."
+      content="Forge documentation and keyboard shortcuts."
     />
-    <title>Forge Changelog</title>
+    <title>Forge Documentation</title>
     <link rel="icon" href="assets/forge-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/forge-icon.png" />
     <link rel="stylesheet" href="styles.css" />
@@ -21,8 +21,8 @@
       <nav aria-label="Primary navigation">
         <a class="nav-home-link" href="index.html">Home</a>
         <a href="install.html">Install</a>
-        <a href="documentation.html">Docs</a>
-        <a href="changelog.html" aria-current="page">Changelog</a>
+        <a href="documentation.html" aria-current="page">Docs</a>
+        <a href="changelog.html">Changelog</a>
       </nav>
       <div class="header-actions">
         <a class="github-link" href="https://github.com/MagnusOpera/forge">
@@ -72,16 +72,49 @@
 
     <main class="subpage-main">
       <section class="page-hero">
-        <p class="eyebrow">Changelog</p>
-        <h1>Changelog</h1>
+        <p class="eyebrow">Documentation</p>
+        <h1>Documentation</h1>
         <p class="lead">
-          Notable Forge changes.
+          Learn the keyboard commands that keep Forge fast and focused.
         </p>
       </section>
 
-      <section class="changelog-section">
-        <div class="changelog-list">
-          <!-- CHANGELOG_ENTRIES -->
+      <section class="keyboard-section" id="shortcuts" aria-labelledby="shortcuts-title">
+        <div class="keyboard-copy">
+          <p class="eyebrow">Keyboard shortcuts</p>
+          <h2 id="shortcuts-title">Stay in flow.</h2>
+          <p>
+            Refresh, move between favorite repositories, and change project views
+            without reaching for the pointer.
+          </p>
+        </div>
+        <div class="shortcut-groups">
+          <article class="shortcut-group">
+            <h3>Repository</h3>
+            <dl class="shortcut-list">
+              <div><dt>Refresh repository</dt><dd><kbd>⌘</kbd><kbd>R</kbd></dd></div>
+              <div><dt>Previous favorite</dt><dd><kbd>⌘</kbd><kbd>↑</kbd></dd></div>
+              <div><dt>Next favorite</dt><dd><kbd>⌘</kbd><kbd>↓</kbd></dd></div>
+            </dl>
+          </article>
+          <article class="shortcut-group">
+            <h3>Project view</h3>
+            <dl class="shortcut-list">
+              <div><dt>Next view</dt><dd><kbd>←</kbd></dd></div>
+              <div><dt>Previous view</dt><dd><kbd>→</kbd></dd></div>
+              <div><dt>Open pull requests</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>P</kbd></dd></div>
+              <div><dt>Workflow runs</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>R</kbd></dd></div>
+              <div><dt>Issues</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>I</kbd></dd></div>
+              <div><dt>Workflows</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>W</kbd></dd></div>
+            </dl>
+          </article>
+          <article class="shortcut-group">
+            <h3>Selection</h3>
+            <dl class="shortcut-list">
+              <div><dt>Previous item</dt><dd><kbd>↑</kbd></dd></div>
+              <div><dt>Next item</dt><dd><kbd>↓</kbd></dd></div>
+            </dl>
+          </article>
         </div>
       </section>
     </main>

@@ -52,6 +52,9 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import {
   addPullRequestLabelOptimistically,
+  adjacentFavoriteRepositoryKey,
+  adjacentProjectFocusView,
+  appKeyboardShortcut,
   canManagePullRequest,
   canSubmitPullRequestReviewForPullRequest,
   canUpdatePullRequestDraftState,
@@ -64,12 +67,15 @@ import {
   githubUrlClickActionForDetail,
   groupRepositoriesByOwner,
   isLiveStatus,
+  isTabNavigation,
   latestViewerPullRequestReviewEvent,
   mergeFavoriteRepoSnapshots,
+  middlePaneSelectionDelta,
   missingWorkflowDispatchInputs,
   openPullRequestNotificationKeys,
   pullRequestTabForState,
   pullRequestWorkflowState,
+  projectViewNavigationDirection,
   repositoryAllowsPullRequestAutoMerge,
   removePullRequestLabelOptimistically,
   reviewDecisionForReviewEvent,
@@ -78,6 +84,7 @@ import {
   workflowDispatchDefaultInputs,
   workflowDispatchRequiresPrompt,
   type FavoriteRepoSnapshots,
+  type ProjectFocusView,
   type ProjectPullRequestTab,
   type PullRequestWorkflowState
 } from "./appLogic";
@@ -148,7 +155,6 @@ interface PaletteItem {
 type ThemeMode = "dark" | "light";
 type ThemePreference = ThemeMode | "system";
 type SidebarRepoTab = "favorites" | "all";
-type ProjectFocusView = "pull-requests" | "workflow-runs" | "issues" | "workflows";
 type StoredProjectFocusView = ProjectFocusView | "starred-actions";
 type ProjectWorkflowTab = "favorites" | "all";
 type PatchDiffOptions = NonNullable<PatchDiffProps<unknown>["options"]>;
@@ -1155,6 +1161,7 @@ export function App() {
     lastCheckedAt: null
   });
   const [layoutAnimating, setLayoutAnimating] = useState(false);
+  const [middleKeyboardNavigating, setMiddleKeyboardNavigating] = useState(false);
   const lastGPress = useRef(0);
   const layoutAnimationTimer = useRef<number | null>(null);
   const nativeSidebarAppearanceTimer = useRef<number | null>(null);
@@ -2867,6 +2874,43 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isTabNavigation(event)) {
+        event.preventDefault();
+        return;
+      }
+
+      const shortcut = appKeyboardShortcut(event);
+      if (shortcut) {
+        event.preventDefault();
+
+        if (shortcut === "refresh-repository") {
+          void refreshActivePane();
+          return;
+        }
+
+        if (shortcut === "previous-favorite-repository" || shortcut === "next-favorite-repository") {
+          const favoriteKey = adjacentFavoriteRepositoryKey(
+            favoriteKeys,
+            selectedRepoKey,
+            shortcut === "previous-favorite-repository" ? -1 : 1
+          );
+          const repo = favoriteKey ? reposByKey.get(favoriteKey) : null;
+          if (repo) {
+            selectRepo(repo);
+          }
+          return;
+        }
+
+        if (shortcut === "open-pull-requests") {
+          setStoredProjectFocusView("pull-requests");
+          setProjectPullRequestTab("open");
+          return;
+        }
+
+        setStoredProjectFocusView(shortcut);
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setPaletteOpen(true);
@@ -2892,18 +2936,6 @@ export function App() {
         return;
       }
 
-      if ((event.metaKey || event.ctrlKey) && ["1", "2", "3"].includes(event.key)) {
-        event.preventDefault();
-        if (event.key === "1" && sidebarCollapsed) {
-          setSidebarCollapsedWithAnimation(false);
-          return;
-        }
-
-        const selector = event.key === "1" ? ".sidebar" : event.key === "2" ? ".project-pane" : ".content-pane";
-        (document.querySelector(selector) as HTMLElement | null)?.focus();
-        return;
-      }
-
       if (paletteOpen || isTypingTarget(event.target)) {
         return;
       }
@@ -2913,15 +2945,22 @@ export function App() {
         return;
       }
 
-      if (event.key === "j") {
+      const selectionDelta = middlePaneSelectionDelta(event);
+      if (selectionDelta !== null) {
         event.preventDefault();
-        moveMiddleSelection(1);
+        setMiddleKeyboardNavigating(true);
+        moveMiddleSelection(selectionDelta);
         return;
       }
 
-      if (event.key === "k") {
+      const viewDirection = projectViewNavigationDirection(event);
+      if (viewDirection !== null) {
         event.preventDefault();
-        moveMiddleSelection(-1);
+        const nextView = adjacentProjectFocusView(projectFocusView, viewDirection);
+        setStoredProjectFocusView(nextView);
+        if (nextView === "pull-requests") {
+          setProjectPullRequestTab("open");
+        }
         return;
       }
 
@@ -2937,15 +2976,23 @@ export function App() {
       }
     };
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [
+    favoriteKeys,
     moveMiddleSelection,
     navigateHistory,
     openGithub,
     paletteOpen,
+    projectFocusView,
+    refreshActivePane,
+    reposByKey,
+    selectRepo,
     selection.kind,
+    selectedRepoKey,
+    setProjectPullRequestTab,
     setSidebarCollapsedWithAnimation,
+    setStoredProjectFocusView,
     sidebarCollapsed
   ]);
 
@@ -3099,10 +3146,18 @@ export function App() {
 
   return (
     <div
-      className={cx("app-shell", layoutAnimating && "layout-animating")}
+      className={cx(
+        "app-shell",
+        layoutAnimating && "layout-animating",
+        middleKeyboardNavigating && "middle-keyboard-navigating"
+      )}
       data-theme={activeTheme}
       data-sidebar-appearance={sidebarAppearance}
-      onMouseDownCapture={preventTitlebarPointerControlFocus}
+      onMouseDownCapture={(event) => {
+        setMiddleKeyboardNavigating(false);
+        preventTitlebarPointerControlFocus(event);
+      }}
+      onPointerMove={() => setMiddleKeyboardNavigating(false)}
       onClickCapture={clearPointerActivatedControlFocus}
       style={appStyle}
     >
@@ -3687,7 +3742,8 @@ function ProjectPane(props: {
           <span className="toolbar-divider" />
           <button
             className={cx("icon-button underline-action", syncInvoked && "invoked")}
-            aria-label="Refresh"
+            aria-label="Refresh repository"
+            title="Refresh repository (⌘R)"
             onClick={refreshProject}
             disabled={!props.repo}
           >
@@ -3760,11 +3816,11 @@ function ProjectFocusToolbar(props: {
   const toolbarUnderline = useSlidingUnderline(
     `${props.view}:${props.disabled}:${props.counts["pull-requests"]}:${props.counts["workflow-runs"]}:${props.counts.issues}:${props.counts.workflows}`
   );
-  const items: Array<{ view: ProjectFocusView; label: string; icon: React.ReactNode }> = [
-    { view: "pull-requests", label: "Pull Requests", icon: <GitPullRequest size={15} /> },
-    { view: "workflow-runs", label: "Workflow Runs", icon: <Activity size={15} /> },
-    { view: "issues", label: "Issues", icon: <Inbox size={15} /> },
-    { view: "workflows", label: "Workflows", icon: <Workflow size={15} /> }
+  const items: Array<{ view: ProjectFocusView; label: string; shortcut: string; icon: React.ReactNode }> = [
+    { view: "pull-requests", label: "Pull Requests", shortcut: "⌘⇧P", icon: <GitPullRequest size={15} /> },
+    { view: "workflow-runs", label: "Workflow Runs", shortcut: "⌘⇧R", icon: <Activity size={15} /> },
+    { view: "issues", label: "Issues", shortcut: "⌘⇧I", icon: <Inbox size={15} /> },
+    { view: "workflows", label: "Workflows", shortcut: "⌘⇧W", icon: <Workflow size={15} /> }
   ];
 
   return (
@@ -3776,6 +3832,7 @@ function ProjectFocusToolbar(props: {
           className={cx("icon-button project-view-button", props.view === item.view && "active")}
           data-active-tab={props.view === item.view ? "true" : undefined}
           aria-label={`${item.label} (${props.counts[item.view]})`}
+          title={`${item.label} (${item.shortcut})`}
           aria-pressed={props.view === item.view}
           disabled={props.disabled}
           onClick={() => props.onView(item.view)}

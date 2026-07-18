@@ -463,16 +463,101 @@ h3 {
 
 .section-grid h2 {
   max-width: 300px;
-  margin-top: 46px;
+  margin-top: 0;
   font-size: clamp(27px, 2.6vw, 38px);
   letter-spacing: -0.035em;
 }
 
-.feature-number {
-  color: var(--accent);
+.keyboard-section {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.7fr);
+  gap: clamp(32px, 6vw, 88px);
+  align-items: start;
+  padding: clamp(34px, 5vw, 64px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.keyboard-copy h2 {
+  margin-bottom: 16px;
+  font-size: clamp(34px, 4vw, 52px);
+  letter-spacing: -0.045em;
+}
+
+.keyboard-copy p:last-child {
+  max-width: 430px;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.shortcut-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 42px;
+}
+
+.shortcut-group h3 {
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.shortcut-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcut-list > div:last-child {
+  border-bottom: 0;
+}
+
+.shortcut-list dt {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.shortcut-list dd {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  margin: 0;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 27px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--surface-alt);
+  color: var(--strong);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
   font-weight: 750;
+  line-height: 1;
 }
 
 .closing-cta {
@@ -778,6 +863,7 @@ footer a {
 
   .hero,
   .section-grid,
+  .keyboard-section,
   .changelog-section,
   .install-section,
   .platform-tabs,
@@ -797,6 +883,10 @@ footer a {
 
   .section-grid article:last-child {
     border-bottom: 0;
+  }
+
+  .shortcut-groups {
+    gap: 28px;
   }
 
   h1 {
@@ -864,17 +954,35 @@ footer a {
     padding: 30px;
   }
 
-  .section-grid h2 {
-    margin-top: 30px;
+  .keyboard-section {
+    padding: 30px;
+  }
+
+  .shortcut-groups {
+    grid-template-columns: 1fr;
   }
 
   .site-header {
-    gap: 12px;
-    padding: 0 16px;
+    gap: 8px;
+    padding: 0 12px;
   }
 
   .nav-home-link {
     display: none;
+  }
+
+  .site-header .brand span,
+  .site-header .github-link span {
+    display: none;
+  }
+
+  .site-header nav {
+    gap: 10px;
+    font-size: 12px;
+  }
+
+  .site-header .github-link {
+    padding: 0 4px;
   }
 
   .platform-tab {

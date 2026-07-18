@@ -9,9 +9,100 @@ import type {
 } from "../shared/github";
 
 export type ProjectPullRequestTab = "open" | "closed";
+export type ProjectFocusView = "pull-requests" | "workflow-runs" | "issues" | "workflows";
 export type PullRequestWorkflowState = "auto-ready" | "manual-ready" | "draft";
 export type FavoriteRepoSnapshots = Record<string, RepoSummary>;
 export type GithubUrlClickAction = "copy" | "open";
+export type AppKeyboardShortcut =
+  | "refresh-repository"
+  | "previous-favorite-repository"
+  | "next-favorite-repository"
+  | "open-pull-requests"
+  | "workflow-runs"
+  | "issues"
+  | "workflows";
+
+type KeyboardShortcutEvent = Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "metaKey" | "shiftKey">;
+
+export function isTabNavigation(event: Pick<KeyboardEvent, "key">): boolean {
+  return event.key === "Tab";
+}
+
+export function middlePaneSelectionDelta(event: KeyboardShortcutEvent): -1 | 1 | null {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return null;
+  }
+
+  if (event.key === "ArrowUp" || event.key === "k") {
+    return -1;
+  }
+  if (event.key === "ArrowDown" || event.key === "j") {
+    return 1;
+  }
+  return null;
+}
+
+export function projectViewNavigationDirection(event: KeyboardShortcutEvent): -1 | 1 | null {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return null;
+  }
+
+  if (event.key === "ArrowLeft") {
+    return 1;
+  }
+  if (event.key === "ArrowRight") {
+    return -1;
+  }
+  return null;
+}
+
+export function appKeyboardShortcut(event: KeyboardShortcutEvent): AppKeyboardShortcut | null {
+  if (event.metaKey === event.ctrlKey || event.altKey) {
+    return null;
+  }
+
+  const key = event.key.toLowerCase();
+  if (!event.shiftKey && key === "r") {
+    return "refresh-repository";
+  }
+  if (!event.shiftKey && event.key === "ArrowUp") {
+    return "previous-favorite-repository";
+  }
+  if (!event.shiftKey && event.key === "ArrowDown") {
+    return "next-favorite-repository";
+  }
+  const viewShortcuts: Partial<Record<string, AppKeyboardShortcut>> = {
+    p: "open-pull-requests",
+    r: "workflow-runs",
+    i: "issues",
+    w: "workflows"
+  };
+  return event.shiftKey ? viewShortcuts[key] ?? null : null;
+}
+
+const projectFocusViewOrder: ProjectFocusView[] = ["pull-requests", "workflows", "issues", "workflow-runs"];
+
+export function adjacentProjectFocusView(current: ProjectFocusView, direction: -1 | 1): ProjectFocusView {
+  const currentIndex = projectFocusViewOrder.indexOf(current);
+  return projectFocusViewOrder[(currentIndex + direction + projectFocusViewOrder.length) % projectFocusViewOrder.length];
+}
+
+export function adjacentFavoriteRepositoryKey(
+  favoriteKeys: string[],
+  currentKey: string,
+  direction: -1 | 1
+): string | null {
+  if (!favoriteKeys.length) {
+    return null;
+  }
+
+  const currentIndex = favoriteKeys.indexOf(currentKey);
+  if (currentIndex === -1) {
+    return direction === 1 ? favoriteKeys[0] : favoriteKeys[favoriteKeys.length - 1];
+  }
+
+  return favoriteKeys[(currentIndex + direction + favoriteKeys.length) % favoriteKeys.length];
+}
 
 function repoSnapshotKey(repo: Pick<RepoSummary, "owner" | "name">): string {
   return `${repo.owner}/${repo.name}`;

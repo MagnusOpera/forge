@@ -4,6 +4,11 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added keyboard shortcuts to refresh repositories, cycle favorites, switch or cycle project views, and move the middle-pane selection.
+- Prevented mouse hover from resembling a second selection during middle-pane keyboard navigation.
+- Disabled Tab and Shift-Tab focus traversal throughout the app.
+- Added a dedicated website documentation page for Forge's keyboard shortcuts.
+- Simplified the homepage feature cards by removing their numeric labels.
 - Enabled independent website deployments from the main branch.
 
 ## [0.1.0]
