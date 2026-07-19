@@ -52,6 +52,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import {
   addPullRequestLabelOptimistically,
+  activeProjectPollingIntervalMs,
   adjacentFavoriteRepositoryKey,
   adjacentProjectFocusView,
   appKeyboardShortcut,
@@ -60,9 +61,11 @@ import {
   canUpdatePullRequestDraftState,
   canUpdatePullRequestLabels,
   canUpdatePullRequestTitle,
+  canPollGithub,
   failedWorkflowRunNotificationKeys,
   findNewFailedWorkflowRuns,
   findNewOpenPullRequests,
+  favoriteProjectPollingIntervalMs,
   formatDuration,
   githubUrlClickActionForDetail,
   groupRepositoriesByOwner,
@@ -73,6 +76,8 @@ import {
   middlePaneSelectionDelta,
   missingWorkflowDispatchInputs,
   openPullRequestNotificationKeys,
+  pollingBackoffMs,
+  pollingIntervalMs,
   pullRequestTabForState,
   pullRequestWorkflowState,
   projectViewNavigationDirection,
@@ -228,7 +233,6 @@ const accentColors = [
   "#ffa198",
   "#f2cc60"
 ] as const;
-const favoriteProjectRefreshIntervalMs = 5 * 60 * 1000;
 const sidebarAppearanceTransitionMs = 360;
 const themeTransitionMs = 320;
 const themeTransitionClass = "theme-transitioning";
@@ -250,6 +254,87 @@ type ViewTransitionHandle = { finished: Promise<void> };
 type DocumentWithViewTransition = Document & {
   startViewTransition?: (updateCallback: () => void) => ViewTransitionHandle;
 };
+
+function useAdaptivePolling(
+  callback: () => Promise<void>,
+  intervalMs: number,
+  enabled: boolean,
+  options: { immediately?: boolean } = {}
+): void {
+  const callbackRef = useRef(callback);
+  const immediately = Boolean(options.immediately);
+
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let consecutiveFailures = 0;
+    let running = false;
+    let timer: number | null = null;
+
+    function schedule(delayMs: number): void {
+      if (cancelled) {
+        return;
+      }
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(run, delayMs);
+    }
+
+    async function run(): Promise<void> {
+      timer = null;
+      if (cancelled) {
+        return;
+      }
+      if (running) {
+        return;
+      }
+
+      if (!canPollGithub(document.visibilityState, navigator.onLine !== false)) {
+        schedule(intervalMs);
+        return;
+      }
+
+      running = true;
+      try {
+        await callbackRef.current();
+        consecutiveFailures = 0;
+      } catch (error) {
+        consecutiveFailures += 1;
+        console.warn("GitHub background refresh failed", error);
+      } finally {
+        running = false;
+      }
+      schedule(pollingBackoffMs(intervalMs, consecutiveFailures));
+    }
+
+    function resume(): void {
+      if (!running && canPollGithub(document.visibilityState, navigator.onLine !== false)) {
+        schedule(0);
+      }
+    }
+
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("online", resume);
+    schedule(immediately ? 0 : intervalMs);
+
+    return () => {
+      cancelled = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("online", resume);
+    };
+  }, [enabled, immediately, intervalMs]);
+}
 
 function clearPointerActivatedControlFocus(event: React.MouseEvent<HTMLElement>): void {
   if (event.detail === 0) {
@@ -1172,7 +1257,9 @@ export function App() {
   const restoringNavigation = useRef(false);
   const authConfiguredRef = useRef(false);
   const favoriteReposRef = useRef<RepoSummary[]>([]);
+  const selectedRepoRef = useRef<RepoSummary | null>(null);
   const selectedRepoKeyRef = useRef("");
+  const activeProjectLastFullRefreshAt = useRef(0);
   const favoriteProjectNotificationSnapshots = useRef(new Map<string, FavoriteProjectNotificationSnapshot>());
   const favoriteProjectRefreshInFlight = useRef(false);
   const nativeNotificationPermission = useRef<NativeNotificationPermission | null>(null);
@@ -1207,6 +1294,10 @@ export function App() {
   const selectedRepoKey = selectedRepo ? repoKey(selectedRepo) : "";
   const selectedPullRequestNumber = selection.kind === "pr" ? selection.pr.number : null;
   const selectedWorkflowRunId = selection.kind === "run" ? selection.run.id : null;
+  const hasLiveWorkflow = useMemo(
+    () => workflowRuns.some((run) => isLiveStatus(run.status)) || isLiveStatus(runDetail?.status),
+    [runDetail?.status, workflowRuns]
+  );
   const selectedWorkflowStars = useMemo(
     () => (selectedRepoKey ? starredWorkflowKeys[selectedRepoKey] ?? [] : []),
     [selectedRepoKey, starredWorkflowKeys]
@@ -1241,8 +1332,10 @@ export function App() {
   }, [auth]);
 
   useEffect(() => {
+    selectedRepoRef.current = selectedRepo;
     selectedRepoKeyRef.current = selectedRepoKey;
-  }, [selectedRepoKey]);
+    activeProjectLastFullRefreshAt.current = 0;
+  }, [selectedRepo, selectedRepoKey]);
 
   useEffect(() => {
     favoriteReposRef.current = favoriteRepos;
@@ -2442,6 +2535,7 @@ export function App() {
 
     favoriteProjectRefreshInFlight.current = true;
     setFavoriteProjectMonitorStatus((current) => ({ ...current, checking: true }));
+    let firstError: unknown = null;
     try {
       for (const repo of favoriteReposToRefresh) {
         const key = repoKey(repo);
@@ -2484,6 +2578,7 @@ export function App() {
             });
           }
         } catch (error) {
+          firstError ??= error;
           console.warn(`Unable to background refresh ${key}`, error);
         }
       }
@@ -2494,7 +2589,91 @@ export function App() {
         lastCheckedAt: new Date().toISOString()
       });
     }
+    if (firstError) {
+      throw firstError;
+    }
   }, [showFavoriteProjectNotification]);
+
+  const refreshSelectedProjectForPolling = useCallback(async (): Promise<void> => {
+    const repo = selectedRepoRef.current;
+    if (!repo) {
+      return;
+    }
+
+    const key = repoKey(repo);
+    const now = Date.now();
+    const shouldRefreshFullProject =
+      !hasLiveWorkflow || now - activeProjectLastFullRefreshAt.current >= activeProjectPollingIntervalMs;
+    const pullRequestsPromise = shouldRefreshFullProject
+      ? api.getPullRequests(repo, { force: true })
+      : Promise.resolve(null);
+    const issuesPromise = shouldRefreshFullProject
+      ? api.getIssues(repo, { force: true })
+      : Promise.resolve(null);
+    const pullRequestDetailPromise = shouldRefreshFullProject && selectedPullRequestNumber !== null
+      ? api.getPullRequest(repo, selectedPullRequestNumber, { force: true })
+      : Promise.resolve(null);
+    const workflowRunDetailPromise = selectedWorkflowRunId !== null
+      ? api.getWorkflowRun(repo, selectedWorkflowRunId, { force: true })
+      : Promise.resolve(null);
+
+    const [prs, repoIssues, runs, pullRequestDetail, workflowRunDetail] = await Promise.all([
+      pullRequestsPromise,
+      issuesPromise,
+      api.getWorkflowRuns(repo, { force: true }),
+      pullRequestDetailPromise,
+      workflowRunDetailPromise
+    ]);
+
+    if (selectedRepoKeyRef.current !== key) {
+      return;
+    }
+
+    if (shouldRefreshFullProject) {
+      activeProjectLastFullRefreshAt.current = now;
+    }
+    if (prs) {
+      setPullRequests(prs.data);
+    }
+    if (repoIssues) {
+      setIssues(repoIssues.data);
+    }
+    setWorkflowRuns(runs.data);
+    if (pullRequestDetail) {
+      setPrDetail(pullRequestDetail.data);
+    }
+    if (workflowRunDetail) {
+      setRunDetail(workflowRunDetail.data);
+    }
+    setSelection((current) => {
+      if (current.kind === "pr" && prs) {
+        const refreshed = prs.data.find((pr) => pr.number === current.pr.number);
+        return refreshed ? { kind: "pr", pr: refreshed } : current;
+      }
+      if (current.kind === "issue" && repoIssues) {
+        const refreshed = repoIssues.data.find((issue) => issue.number === current.issue.number);
+        return refreshed ? { kind: "issue", issue: refreshed } : current;
+      }
+      if (current.kind === "run") {
+        const refreshed = runs.data.find((run) => run.id === current.run.id);
+        return refreshed ? { ...current, run: refreshed } : current;
+      }
+      return current;
+    });
+  }, [hasLiveWorkflow, selectedPullRequestNumber, selectedWorkflowRunId]);
+
+  useAdaptivePolling(
+    refreshSelectedProjectForPolling,
+    pollingIntervalMs(hasLiveWorkflow),
+    Boolean(auth?.configured && selectedRepoKey)
+  );
+
+  useAdaptivePolling(
+    refreshFavoriteProjectsForNotifications,
+    favoriteProjectPollingIntervalMs,
+    Boolean(auth?.configured && favoriteProjectRefreshKey),
+    { immediately: true }
+  );
 
   const openGithub = useCallback(() => {
     if (currentGithubUrl) {
@@ -2853,18 +3032,6 @@ export function App() {
   }, [loadInitial, loadProject, selectedRepo]);
 
   useEffect(() => api.onNativeNotificationClicked(focusNotificationSource), [focusNotificationSource]);
-
-  useEffect(() => {
-    if (!auth?.configured || !favoriteProjectRefreshKey) {
-      return undefined;
-    }
-
-    void refreshFavoriteProjectsForNotifications();
-    const interval = window.setInterval(() => {
-      void refreshFavoriteProjectsForNotifications();
-    }, favoriteProjectRefreshIntervalMs);
-    return () => window.clearInterval(interval);
-  }, [auth?.configured, favoriteProjectRefreshKey, refreshFavoriteProjectsForNotifications]);
 
   useEffect(() => {
     if (paletteIndex >= filteredPaletteItems.length) {
@@ -6034,6 +6201,9 @@ function WorkflowJobsList({
 
   useEffect(() => {
     const interval = window.setInterval(() => {
+      if (!canPollGithub(document.visibilityState, navigator.onLine !== false)) {
+        return;
+      }
       for (const job of jobs) {
         const key = String(job.id);
         const hasExpandedStep = Object.keys(expandedSteps).some((stepKey) => stepKey.startsWith(`${key}:`) && expandedSteps[stepKey]);

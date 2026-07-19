@@ -12,6 +12,7 @@ import {
   adjacentFavoriteRepositoryKey,
   adjacentProjectFocusView,
   appKeyboardShortcut,
+  canPollGithub,
   canManagePullRequest,
   canSubmitPullRequestReview,
   canSubmitPullRequestReviewForPullRequest,
@@ -33,6 +34,8 @@ import {
   middlePaneSelectionDelta,
   missingWorkflowDispatchInputs,
   openPullRequestNotificationKeys,
+  pollingBackoffMs,
+  pollingIntervalMs,
   pullRequestTabForState,
   pullRequestWorkflowState,
   projectViewNavigationDirection,
@@ -391,6 +394,24 @@ describe("appLogic", () => {
     expect(isLiveStatus("in_progress")).toBe(true);
     expect(isLiveStatus("QUEUED")).toBe(true);
     expect(isLiveStatus("success")).toBe(false);
+  });
+
+  it("uses a faster polling interval while workflows are live", () => {
+    expect(pollingIntervalMs(false)).toBe(30_000);
+    expect(pollingIntervalMs(true)).toBe(8_000);
+  });
+
+  it("backs off failed polling up to five minutes", () => {
+    expect(pollingBackoffMs(30_000, 0)).toBe(30_000);
+    expect(pollingBackoffMs(30_000, 1)).toBe(60_000);
+    expect(pollingBackoffMs(30_000, 4)).toBe(300_000);
+    expect(pollingBackoffMs(30_000, 20)).toBe(300_000);
+  });
+
+  it("polls GitHub only while the app is visible and online", () => {
+    expect(canPollGithub("visible", true)).toBe(true);
+    expect(canPollGithub("hidden", true)).toBe(false);
+    expect(canPollGithub("visible", false)).toBe(false);
   });
 
   it("maps GitHub URL clicks to copy first and open on double-click", () => {

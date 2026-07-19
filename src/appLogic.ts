@@ -421,6 +421,24 @@ export function isLiveStatus(status?: string | null): boolean {
   return ["queued", "waiting", "pending", "requested", "in_progress"].includes((status ?? "").toLowerCase());
 }
 
+export const activeProjectPollingIntervalMs = 30_000;
+export const liveWorkflowPollingIntervalMs = 8_000;
+export const favoriteProjectPollingIntervalMs = 60_000;
+export const maximumPollingBackoffMs = 5 * 60_000;
+
+export function pollingIntervalMs(hasLiveWorkflow: boolean): number {
+  return hasLiveWorkflow ? liveWorkflowPollingIntervalMs : activeProjectPollingIntervalMs;
+}
+
+export function pollingBackoffMs(baseIntervalMs: number, consecutiveFailures: number): number {
+  const exponent = Math.max(0, Math.min(6, consecutiveFailures));
+  return Math.min(maximumPollingBackoffMs, baseIntervalMs * (2 ** exponent));
+}
+
+export function canPollGithub(visibilityState: DocumentVisibilityState, online: boolean): boolean {
+  return visibilityState === "visible" && online;
+}
+
 export function githubUrlClickActionForDetail(detail: number): GithubUrlClickAction {
   return detail >= 2 ? "open" : "copy";
 }

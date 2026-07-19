@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Made repository updates near real time with adaptive polling for visible projects and live workflows.
+
 ## [0.2.0]
 
 
