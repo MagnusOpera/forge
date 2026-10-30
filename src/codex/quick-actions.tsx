@@ -5,6 +5,7 @@ import {
   FileDiff,
   FolderOpen,
   GitCommitHorizontal,
+  GitMerge,
   GitPullRequestArrow,
   Upload,
   X,
@@ -52,6 +53,11 @@ export function CodexQuickActions({
     label: string;
     icon: React.ReactNode;
   }[] = [
+    {
+      action: "sync",
+      label: "Merge default branch",
+      icon: <GitMerge size={16} />,
+    },
     {
       action: "commit",
       label: "Commit",

@@ -622,7 +622,7 @@ describe("thread lifecycle", () => {
       false,
     );
   });
-  it.each(["commit", "push", "create-pr"] as CodexQuickAction[])(
+  it.each(["sync", "commit", "push", "create-pr"] as CodexQuickAction[])(
     "sends %s as a normal Codex message without losing drafts",
     async (action) => {
       const { manager, thread, client } = await setup();

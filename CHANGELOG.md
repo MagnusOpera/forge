@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added a chat toolbar action to discover and merge the repository default branch into the current worktree with Codex.
+
 - Removed the duplicate bottom separator in global and project configuration.
 
 - Matched Active and Archived thread tabs to pull request tabs, with icons, counts, and a sliding underline.

@@ -199,6 +199,27 @@ describe("Codex IPC origin boundary", () => {
 });
 
 describe("Codex Git quick actions", () => {
+  it("discovers the remote default branch before merging without publishing changes", () => {
+    const prompt = codexQuickActionPrompt("sync");
+    expect(prompt).toContain(
+      "merge the fetched origin/<default-branch> into the current worktree branch without switching branches",
+    );
+    expect(prompt).toContain(
+      "uncommitted changes or an existing merge/rebase in progress",
+    );
+    expect(prompt).toContain(
+      "do not automatically stash, commit, discard changes",
+    );
+    expect(prompt).toContain(
+      "Do not rebase, reset, force-push, push, or create a pull request",
+    );
+    expect(prompt).toContain("git ls-remote --symref origin HEAD");
+    expect(prompt).toContain(
+      "Do not assume the branch is named main or master",
+    );
+    expect(prompt).toContain("stop and report the blocker instead of guessing");
+    expect(prompt).not.toContain("origin/main");
+  });
   it("provides separate ordinary prompts for commit, push and PR creation", () => {
     expect(codexQuickActionPrompt("commit")).toContain(
       "Do not amend existing commits, push",

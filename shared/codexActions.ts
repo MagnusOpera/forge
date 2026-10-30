@@ -1,5 +1,5 @@
 import { codexIsActive, type CodexThreadSummary } from "./codex.js";
-export type CodexQuickAction = "commit" | "push" | "create-pr";
+export type CodexQuickAction = "sync" | "commit" | "push" | "create-pr";
 export function codexQuickActionUnavailable(
   thread?: CodexThreadSummary,
 ): string | undefined {
@@ -13,6 +13,8 @@ export function codexQuickActionUnavailable(
 }
 export function codexQuickActionPrompt(action: CodexQuickAction): string {
   switch (action) {
+    case "sync":
+      return "Merge the repository's current default branch into this thread's current worktree branch. Inspect the worktree, current branch, origin remote, and repository instructions first. Determine the default branch from the origin remote's advertised HEAD using git ls-remote --symref origin HEAD, or authoritative GitHub repository metadata for that same remote. Do not assume the branch is named main or master, and do not use a stale local origin/HEAD without verifying it. If the remote or its default branch cannot be determined unambiguously, stop and report the blocker instead of guessing. Fetch origin, then merge the fetched origin/<default-branch> into the current worktree branch without switching branches. Preserve existing commits and files. If there are uncommitted changes or an existing merge/rebase in progress, stop and explain the blocker; do not automatically stash, commit, discard changes, or abort another operation. Do not rebase, reset, force-push, push, or create a pull request. A merge commit is allowed when required by the merge, but do not create unrelated commits. If merge conflicts occur, report the conflicting files and ask how to proceed before resolving or aborting the merge. Run relevant checks after a successful merge and report the resolved default branch and result.";
     case "commit":
       return "Commit the pending changes in this thread's worktree on its current branch. Inspect the changes, follow the repository's AGENTS.md and changelog requirements, and run the relevant checks. Stage only the changes belonging to this task and use a concise, descriptive commit message. If there is nothing to commit, say so. Do not amend existing commits, push, create a pull request, or change branches. Report the commit and verification results.";
     case "push":

@@ -302,6 +302,7 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         });
       if (method === "quickAction") {
         if (
+          input.action !== "sync" &&
           input.action !== "commit" &&
           input.action !== "push" &&
           input.action !== "create-pr"
