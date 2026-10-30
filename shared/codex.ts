@@ -111,6 +111,14 @@ export type CodexThreadSummary = {
   worktree: string;
   branch: string;
   baseCommit: string;
+  checkout?: "worktree" | "default";
+  worktreeGeneration?: number;
+  mergedInto?: {
+    branch: string;
+    sourceCommit: string;
+    targetPath: string;
+    commit: string;
+  };
   sourceHome?: string;
   historyWarning?: string;
 };
@@ -209,6 +217,7 @@ export type CodexCommands = {
     ThreadInput & { action: import("./codexActions.js").CodexQuickAction },
     void
   >;
+  checkout: Command<ThreadInput & { action: "merge" | "worktree" }, void>;
   stop: Command<ThreadInput, void>;
   answer: Command<
     ThreadInput & {

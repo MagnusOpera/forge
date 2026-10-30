@@ -7,7 +7,9 @@ import {
   FolderOpen,
   GitCommitHorizontal,
   GitMerge,
+  GitBranchPlus,
   GitPullRequestArrow,
+  GitPullRequestClosed,
   Upload,
   X,
 } from "lucide-react";
@@ -22,9 +24,11 @@ import { CodexDiffDialog } from "./diff-dialog";
 export function CodexQuickActions({
   thread,
   theme,
+  defaultBranch,
 }: {
   thread?: CodexThreadSummary;
   theme: "light" | "dark";
+  defaultBranch?: string | null;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -56,7 +60,7 @@ export function CodexQuickActions({
   }[] = [
     {
       action: "sync",
-      label: "Merge default branch",
+      label: defaultBranch ? `Merge ${defaultBranch}` : "Merge default branch",
       icon: <GitMerge size={16} />,
     },
     {
@@ -78,9 +82,17 @@ export function CodexQuickActions({
         role="group"
         aria-label="Worktree quick actions"
       >
+        {thread?.worktree && (
+          <span
+            className="codex-checkout-label"
+            title={`${thread.branch} · ${thread.worktree}`}
+          >
+            {thread.checkout === "default" ? thread.branch : "Worktree"}
+          </span>
+        )}
         <button
           className={`icon-button underline-action ${copied ? "invoked" : ""}`}
-          aria-label="Copy worktree location. Double-click to open in Finder"
+          aria-label="Copy checkout location. Double-click to open in Finder"
           title={
             thread?.worktree
               ? `${thread.worktree}\nClick to copy · Double-click to open in Finder`
@@ -112,8 +124,8 @@ export function CodexQuickActions({
         </button>
         <button
           className="icon-button"
-          aria-label="Open worktree in text editor"
-          title="Open worktree in text editor"
+          aria-label="Open checkout in text editor"
+          title="Open checkout in text editor"
           disabled={!thread?.worktree || busy}
           onClick={() => {
             if (thread)
@@ -129,35 +141,73 @@ export function CodexQuickActions({
         </button>
         <button
           className="icon-button"
-          aria-label="Diff worktree changes"
-          title="Diff worktree changes"
+          aria-label="Diff checkout changes"
+          title="Diff checkout changes"
           disabled={!thread?.worktree}
           onClick={() => setDiff(true)}
         >
           <FileDiff size={16} />
         </button>
         <span className="toolbar-divider" />
-        {actions.map((action) => (
+        {thread && !thread.sourceHome && (
           <button
-            key={action.action}
             className="icon-button"
-            aria-label={`${action.label} with Codex`}
-            title={unavailable || `${action.label} with Codex`}
+            aria-label={
+              thread.checkout === "default"
+                ? "Start worktree"
+                : `Merge into ${defaultBranch || "default branch"}`
+            }
+            title={
+              unavailable ||
+              (thread.checkout === "default"
+                ? "Start worktree"
+                : `Merge into ${defaultBranch || "default branch"}`)
+            }
             disabled={busy || Boolean(unavailable)}
-            onClick={() => {
-              if (thread)
-                void execute(async () => {
-                  await codexApi().request("quickAction", {
-                    repositoryId: thread.repositoryId,
-                    id: thread.id,
-                    action: action.action,
-                  });
+            onClick={() =>
+              void execute(async () => {
+                await codexApi().request("checkout", {
+                  repositoryId: thread.repositoryId,
+                  id: thread.id,
+                  action: thread.checkout === "default" ? "worktree" : "merge",
                 });
-            }}
+              })
+            }
           >
-            {action.icon}
+            {thread.checkout === "default" ? (
+              <GitBranchPlus size={16} />
+            ) : (
+              <GitPullRequestClosed size={16} />
+            )}
           </button>
-        ))}
+        )}
+        {actions
+          .filter(
+            (action) =>
+              thread?.checkout !== "default" ||
+              !["sync", "create-pr"].includes(action.action),
+          )
+          .map((action) => (
+            <button
+              key={action.action}
+              className="icon-button"
+              aria-label={action.label}
+              title={unavailable || action.label}
+              disabled={busy || Boolean(unavailable)}
+              onClick={() => {
+                if (thread)
+                  void execute(async () => {
+                    await codexApi().request("quickAction", {
+                      repositoryId: thread.repositoryId,
+                      id: thread.id,
+                      action: action.action,
+                    });
+                  });
+              }}
+            >
+              {action.icon}
+            </button>
+          ))}
         {error && (
           <div className="codex-action-error" role="alert">
             <span>{error}</span>

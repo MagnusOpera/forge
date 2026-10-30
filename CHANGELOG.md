@@ -4,6 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Keep back and forward navigation aligned with the content toolbar title.
+
+- Match Codex chat scrollbars to the slim, theme-aware scrollbars in PR descriptions.
+
+- Keep the same chat while merging into the default branch and starting fresh worktrees, with confirmation and matching Finder/editor locations.
+
+- Show the default branch name in the merge action and shorten the Git action tooltips.
+
 - Clear the Codex input after sending without restoring the previous message when the editor becomes available again.
 
 - Show message timestamps and copy controls on hover, with editing limited to your latest prompt and regenerating its response.

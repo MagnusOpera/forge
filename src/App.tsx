@@ -3385,6 +3385,7 @@ export function App() {
             key={`${selectedRepo?.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
             thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
             theme={activeTheme}
+            defaultBranch={selectedRepo?.defaultBranch}
           />
         ) : undefined}
         codexContent={projectFocusView === "codex" && selectedRepo ? (

@@ -66,6 +66,9 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
     worktree,
     branch,
     baseCommit,
+    checkout,
+    worktreeGeneration,
+    mergedInto,
     sourceHome,
     historyWarning,
   } = thread;
@@ -82,6 +85,9 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
     worktree,
     branch,
     baseCommit,
+    checkout,
+    worktreeGeneration,
+    mergedInto,
     sourceHome,
     historyWarning,
   };

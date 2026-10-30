@@ -31,7 +31,11 @@ vi.mock("electron", () => ({
     openPath: vi.fn(),
     showItemInFolder: vi.fn(),
   },
-  dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
+  dialog: {
+    showOpenDialog: vi.fn(),
+    showSaveDialog: vi.fn(),
+    showMessageBox: vi.fn(),
+  },
 }));
 import { shell, dialog } from "electron";
 import * as editorLauncher from "../../electron/main/codex/editor";
@@ -40,6 +44,7 @@ import { git } from "../../electron/main/codex/git";
 import { randomUUID } from "node:crypto";
 import type { CodexThread } from "../../shared/codex";
 import { CodexClient } from "../../electron/main/codex/client";
+import { ThreadManager } from "../../electron/main/codex/threads";
 import { registerCodexIpc } from "../../electron/main/codex/ipc";
 let frame: { url: string };
 let contents: { mainFrame: { url: string }; send: ReturnType<typeof vi.fn> };
@@ -379,4 +384,75 @@ describe("Codex attachment and output IPC", () => {
       request("attach", { ...args, paths: [source] }),
     ).rejects.toThrow("Restore");
   });
+});
+
+it("requires a native, cancel-by-default confirmation for both checkout directions", async () => {
+  const store = new CodexStore(path.join(mock.root, "codex"));
+  const thread: CodexThread = {
+    id: randomUUID(),
+    repositoryId: "R_123",
+    title: "Checkout",
+    archived: false,
+    createdAt: "",
+    updatedAt: "",
+    settings: defaultCodexPreferences,
+    state: "idle",
+    worktree: "/owned",
+    branch: "main",
+    baseCommit: "base",
+    serverId: "server",
+    repositoryPath: "/repo",
+    items: [],
+    requests: [],
+    queue: [],
+    queuePaused: false,
+    draft: "",
+    draftAttachments: [],
+  };
+  store.saveThread(thread);
+  const decisions: boolean[] = [];
+  vi.spyOn(ThreadManager.prototype, "checkout").mockImplementation(
+    async (_thread, _action, confirm) => {
+      decisions.push(await confirm("Move checkout?", "Review destination"));
+    },
+  );
+  for (const action of ["merge", "worktree"] as const) {
+    vi.mocked(dialog.showMessageBox).mockResolvedValueOnce({
+      response: 0,
+      checkboxChecked: false,
+    });
+    await request("checkout", {
+      repositoryId: thread.repositoryId,
+      id: thread.id,
+      action,
+    });
+    expect(dialog.showMessageBox).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        defaultId: 0,
+        cancelId: 0,
+        buttons: [
+          "Cancel",
+          action === "merge" ? "Merge and continue" : "Start worktree",
+        ],
+      }),
+    );
+    vi.mocked(dialog.showMessageBox).mockResolvedValueOnce({
+      response: 1,
+      checkboxChecked: false,
+    });
+    await request("checkout", {
+      repositoryId: thread.repositoryId,
+      id: thread.id,
+      action,
+    });
+  }
+  expect(decisions).toEqual([false, true, false, true]);
+  await expect(
+    request("checkout", {
+      repositoryId: "OTHER",
+      id: thread.id,
+      action: "merge",
+    }),
+  ).rejects.toThrow("does not belong");
 });

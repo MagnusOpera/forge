@@ -346,6 +346,28 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           throw new Error("Unsupported Codex Git action.");
         return manager.quickAction(thread, input.action);
       }
+      if (method === "checkout") {
+        if (input.action !== "merge" && input.action !== "worktree")
+          throw new Error("Invalid checkout action.");
+        return manager.checkout(thread, input.action, async (title, detail) => {
+          const result = await dialog.showMessageBox(target, {
+            type: "question",
+            title,
+            message: title,
+            detail,
+            buttons: [
+              "Cancel",
+              input.action === "merge"
+                ? "Merge and continue"
+                : "Start worktree",
+            ],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          });
+          return result.response === 1;
+        });
+      }
       if (method === "stop") return manager.stop(thread);
       if (method === "answer") {
         if (
