@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0]
+
+
 - Unify configuration, access, and workflow dropdowns with a shared styled combobox and keyboard navigation.
 
 - Configure Enter or Command/Ctrl+Enter to send messages globally, with reliable shortcuts in the Markdown input.
@@ -25,6 +28,8 @@ All notable changes to Forge are documented in this file.
 - Fade the Codex input accent border smoothly on hover and focus.
 
 - Move Codex checkout and Git actions above the message input to free space in the top toolbar.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.4.0...0.5.0
 
 ## [0.4.0]
 
