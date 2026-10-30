@@ -52,6 +52,21 @@ export type CodexItem = {
   kind: string;
   text: string;
   status?: string;
+  turnId?: string;
+  phase?: "commentary" | "final_answer";
+  createdAt?: number;
+};
+export function latestCodexUserMessage(
+  items: CodexItem[],
+): CodexItem | undefined {
+  for (let index = items.length - 1; index >= 0; index--)
+    if (items[index].kind === "userMessage") return items[index];
+  return undefined;
+}
+export type CodexTurnTiming = {
+  startedAt?: number;
+  completedAt?: number;
+  durationMs?: number;
 };
 export type CodexQuestion = {
   id: string;
@@ -101,6 +116,15 @@ export type CodexThreadSummary = {
 };
 export type CodexThread = CodexThreadSummary & {
   activeSettings?: CodexPreferences;
+  turns?: Record<string, CodexTurnTiming>;
+  replacement?: {
+    itemId: string;
+    turnId: string;
+    previousTurnId: string | null;
+    stage: "reverting" | "reverted" | "sending";
+    message?: CodexMessage;
+  };
+  historyRevision?: number;
   serverId: string;
   repositoryPath: string;
   turnId?: string;
@@ -171,6 +195,14 @@ export type CodexCommands = {
   >;
   send: Command<
     ThreadInput & { text: string; attachments: CodexAttachment[] },
+    void
+  >;
+  replaceMessage: Command<
+    ThreadInput & {
+      messageId: string;
+      text: string;
+      attachments: CodexAttachment[];
+    },
     void
   >;
   quickAction: Command<

@@ -1,5 +1,33 @@
 import type { CodexThread, JsonObject } from "../../../shared/codex.js";
 import { array, object, text, type RpcEvent } from "./client.js";
+function recordTurn(
+  thread: CodexThread,
+  turn: JsonObject,
+  live?: "started" | "completed",
+): void {
+  const id = text(turn.id);
+  if (!id) return;
+  const timing = (thread.turns ??= {})[id] ?? {};
+  const valid = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
+  if (valid(turn.startedAt)) timing.startedAt = turn.startedAt * 1000;
+  else if (live === "started") timing.startedAt ??= Date.now();
+  if (valid(turn.completedAt)) timing.completedAt = turn.completedAt * 1000;
+  else if (live === "completed" && timing.startedAt !== undefined)
+    timing.completedAt ??= Date.now();
+  if (valid(turn.durationMs)) timing.durationMs = turn.durationMs;
+  else if (timing.startedAt !== undefined && timing.completedAt !== undefined)
+    timing.durationMs = Math.max(0, timing.completedAt - timing.startedAt);
+  thread.turns[id] = timing;
+}
+export function hydrateCodexTurn(thread: CodexThread, turn: JsonObject): void {
+  recordTurn(thread, turn);
+  for (const item of array(turn.items))
+    reduceCodexEvent(thread, {
+      method: "item/completed",
+      params: { item, turnId: turn.id, historical: true },
+    });
+}
 export function reduceCodexEvent(thread: CodexThread, event: RpcEvent): void {
   const { method, params, requestId } = event;
   if (requestId !== undefined) {
@@ -37,14 +65,15 @@ export function reduceCodexEvent(thread: CodexThread, event: RpcEvent): void {
     return;
   }
   if (method === "turn/started") {
+    recordTurn(thread, object(params.turn), "started");
     thread.turnId = text(object(params.turn).id);
     thread.state = "running";
     return;
   }
   if (method === "turn/completed") {
     const turn = object(params.turn);
-    for (const item of array(turn.items))
-      reduceCodexEvent(thread, { method: "item/completed", params: { item } });
+    recordTurn(thread, turn, "completed");
+    hydrateCodexTurn(thread, turn);
     thread.state =
       turn.status === "completed"
         ? "idle"
@@ -75,7 +104,13 @@ export function reduceCodexEvent(thread: CodexThread, event: RpcEvent): void {
       .join("\n");
     const existing = thread.items.find((item) => item.id === id);
     if (existing) existing.text = content;
-    else thread.items.push({ id, kind: "plan", text: content });
+    else
+      thread.items.push({
+        id,
+        kind: "plan",
+        text: content,
+        turnId: text(params.turnId) || thread.turnId,
+      });
     return;
   }
   const item = object(params.item),
@@ -89,11 +124,14 @@ export function reduceCodexEvent(thread: CodexThread, event: RpcEvent): void {
       ? "agentMessage"
       : method === "item/commandExecution/outputDelta"
         ? "commandExecution"
-        : method === "item/plan/delta"
-          ? "plan"
-          : "");
+        : method === "item/reasoning/summaryTextDelta"
+          ? "reasoning"
+          : method === "item/plan/delta"
+            ? "plan"
+            : "");
   if (
     ![
+      "reasoning",
       "agentMessage",
       "userMessage",
       "plan",
@@ -106,6 +144,18 @@ export function reduceCodexEvent(thread: CodexThread, event: RpcEvent): void {
   )
     return;
   let content = text(item.text);
+  if (kind === "reasoning") {
+    // Only expose the summaries provided for display, never raw reasoning content.
+    if (
+      typeof params.delta === "string" &&
+      method !== "item/reasoning/summaryTextDelta"
+    )
+      return;
+    content = array(item.summary)
+      .filter((part): part is string => typeof part === "string")
+      .join("\n\n");
+    if (!content && typeof params.delta !== "string" && !existing) return;
+  }
   if (kind === "userMessage")
     content = array(item.content)
       .map(object)
@@ -137,11 +187,19 @@ export function reduceCodexEvent(thread: CodexThread, event: RpcEvent): void {
     content = JSON.stringify(item, null, 2);
   if (typeof params.delta === "string")
     content = (existing?.text ?? "") + params.delta;
-  const next = {
+  const next: import("../../../shared/codex.js").CodexItem = {
     id,
     kind,
     text: content || existing?.text || "",
     status: text(item.status) || existing?.status,
+    turnId: text(params.turnId) || existing?.turnId || thread.turnId,
+    createdAt:
+      existing?.createdAt ??
+      (params.historical === true ? undefined : Date.now()),
+    phase:
+      item.phase === "commentary" || item.phase === "final_answer"
+        ? item.phase
+        : existing?.phase,
   };
   if (existing) Object.assign(existing, next);
   else thread.items.push(next);

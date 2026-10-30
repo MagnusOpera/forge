@@ -10,7 +10,7 @@ import {
 } from "../../../shared/codex.js";
 import { array, object, text } from "./client.js";
 import { git } from "./git.js";
-import { reduceCodexEvent } from "./events.js";
+import { hydrateCodexTurn } from "./events.js";
 import { threadSummary } from "./store.js";
 import type { ThreadManager } from "./threads.js";
 
@@ -226,11 +226,7 @@ export class ExistingThreads {
         }),
       );
       for (const turn of array(history.data).reverse().map(object))
-        for (const item of array(turn.items))
-          reduceCodexEvent(thread, {
-            method: "item/completed",
-            params: { item },
-          });
+        hydrateCodexTurn(thread, turn);
       if (history.nextCursor)
         thread.historyWarning =
           "Showing the most recent 50 turns. Codex retains the earlier conversation context.";

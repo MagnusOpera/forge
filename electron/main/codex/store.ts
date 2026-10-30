@@ -124,8 +124,9 @@ export class CodexStore {
             truncateSync(history, Buffer.byteLength(complete));
           const items = new Map(thread.items.map((item) => [item.id, item]));
           for (const line of complete.split("\n").filter(Boolean)) {
-            const item = JSON.parse(line) as CodexItem;
-            items.set(item.id, item);
+            const item = JSON.parse(line) as CodexItem & { deleted?: boolean };
+            if (item.deleted) items.delete(item.id);
+            else items.set(item.id, item);
           }
           thread.items = [...items.values()];
           this.savedItems.set(
@@ -151,10 +152,15 @@ export class CodexStore {
         !previous ||
         previous.kind !== item.kind ||
         previous.text !== item.text ||
-        previous.status !== item.status
+        previous.status !== item.status ||
+        previous.turnId !== item.turnId ||
+        previous.phase !== item.phase ||
+        previous.createdAt !== item.createdAt
       );
     });
-    if (changes.length) {
+    const currentIds = new Set(thread.items.map((item) => item.id));
+    const removed = [...saved.keys()].filter((id) => !currentIds.has(id));
+    if (changes.length || removed.length) {
       const fd = openSync(
         path.join(directory, `${thread.id}.items.jsonl`),
         "a",
@@ -164,7 +170,10 @@ export class CodexStore {
       try {
         writeFileSync(
           fd,
-          changes.map((item) => JSON.stringify(item)).join("\n") + "\n",
+          [
+            ...removed.map((id) => JSON.stringify({ id, deleted: true })),
+            ...changes.map((item) => JSON.stringify(item)),
+          ].join("\n") + "\n",
         );
         fsyncSync(fd);
       } catch (error) {
@@ -178,10 +187,11 @@ export class CodexStore {
       } finally {
         closeSync(fd);
       }
+      for (const id of removed) saved.delete(id);
       for (const item of changes) saved.set(item.id, { ...item });
       this.savedItems.set(thread.id, saved);
     }
-    // The transcript is append-only, so streaming does not rewrite all older messages.
+    // Streaming appends changes; deletion records retain edits across restart.
     atomicWrite(path.join(directory, `${thread.id}.json`), {
       ...thread,
       items: [],

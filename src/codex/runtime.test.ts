@@ -17,6 +17,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   CodexClient,
+  CodexRpcError,
   type CodexTransport,
   type RpcEvent,
 } from "../../electron/main/codex/client";
@@ -28,7 +29,10 @@ import {
   gitInfo,
 } from "../../electron/main/codex/git";
 import { ThreadManager } from "../../electron/main/codex/threads";
-import { reduceCodexEvent } from "../../electron/main/codex/events";
+import {
+  hydrateCodexTurn,
+  reduceCodexEvent,
+} from "../../electron/main/codex/events";
 import {
   defaultCodexPreferences,
   type CodexMessage,
@@ -102,12 +106,15 @@ class FakeTransport implements CodexTransport {
   failSteer = false;
   turn = 0;
   nextThread = 0;
+  reply?: (method: string, params: JsonObject) => unknown;
   hook?: (method: string, params: JsonObject) => Promise<void>;
   async start() {}
   stop() {}
   async request(method: string, params: JsonObject): Promise<unknown> {
     this.calls.push({ method, params });
     await this.hook?.(method, params);
+    const response = await this.reply?.(method, params);
+    if (response !== undefined) return response;
     if (method === "account/read")
       return { account: { email: "test@example.invalid" } };
     if (method === "thread/start")
@@ -190,7 +197,345 @@ describe("Codex document input", () => {
     ).toEqual(start.params.input);
   });
 });
+async function editingScenario() {
+  const context = await setup();
+  const { manager, thread, client, store } = context;
+  await manager.send(thread, message("Original"));
+  const oldTurn = {
+    id: "turn-1",
+    status: "completed",
+    items: [
+      {
+        id: "last-user",
+        type: "userMessage",
+        content: [{ type: "text", text: "Original" }],
+      },
+      {
+        id: "old-answer",
+        type: "agentMessage",
+        text: "Old answer",
+        phase: "final_answer",
+      },
+    ],
+  };
+  const previous = { id: "previous", status: "completed", items: [] };
+  reduceCodexEvent(thread, {
+    method: "turn/completed",
+    params: { turn: oldTurn },
+  });
+  thread.items.unshift({
+    id: "previous-answer",
+    kind: "agentMessage",
+    text: "Retained answer",
+    turnId: "previous",
+    phase: "final_answer",
+  });
+  store.saveThread(thread);
+  let reverted = false;
+  client.reply = (method) => {
+    if (method === "thread/resume")
+      return { thread: { id: thread.serverId, turns: [] } };
+    if (method === "thread/turns/list")
+      return { data: reverted ? [previous] : [oldTurn, previous] };
+    if (method === "thread/revert") {
+      reverted = true;
+      return { thread: { id: thread.serverId } };
+    }
+    return undefined;
+  };
+  return {
+    ...context,
+    oldTurn,
+    previous,
+    setReverted: () => {
+      reverted = true;
+    },
+  };
+}
+describe("Replace the latest Codex message", () => {
+  it("reverts the last turn before sending a revision and persists removal of the old reply", async () => {
+    const { manager, thread, client, store } = await editingScenario();
+    await manager.replaceMessage(thread, "last-user", message("Revised"));
+    const methods = client.calls.map((call) => call.method);
+    expect(methods.indexOf("thread/revert")).toBeLessThan(
+      methods.lastIndexOf("turn/start"),
+    );
+    expect(
+      client.calls.find((call) => call.method === "thread/revert")?.params,
+    ).toEqual({ threadId: thread.serverId, beforeTurnId: "turn-1" });
+    expect(thread.items.map((item) => item.id)).toEqual(["previous-answer"]);
+    expect(thread.historyRevision).toBe(1);
+    expect(thread.replacement).toBeUndefined();
+    const restored = new CodexStore(store.root).get(
+      thread.repositoryId,
+      thread.id,
+    );
+    expect(restored.items.map((item) => item.id)).toEqual(["previous-answer"]);
+    expect(restored.historyRevision).toBe(1);
+  });
+  it("rejects old messages, active turns and queued messages before changing history", async () => {
+    const { manager, thread, client } = await editingScenario();
+    await expect(
+      manager.replaceMessage(thread, "previous-answer", message("No")),
+    ).rejects.toThrow("latest message");
+    thread.state = "running";
+    await expect(
+      manager.replaceMessage(thread, "last-user", message("No")),
+    ).rejects.toThrow("Finish");
+    thread.state = "idle";
+    thread.queue.push(message("Queued"));
+    await expect(
+      manager.replaceMessage(thread, "last-user", message("No")),
+    ).rejects.toThrow("queued");
+    expect(client.calls.some((call) => call.method === "thread/revert")).toBe(
+      false,
+    );
+  });
+  it("retains the old response if Codex rejects reverting history", async () => {
+    const { manager, thread, client } = await editingScenario();
+    const reply = client.reply!;
+    client.reply = (method, params) => {
+      if (method === "thread/revert")
+        throw new CodexRpcError("History cannot be reverted");
+      return reply(method, params);
+    };
+    await expect(
+      manager.replaceMessage(thread, "last-user", message("Revised")),
+    ).rejects.toThrow("cannot be reverted");
+    expect(thread.items.some((item) => item.id === "old-answer")).toBe(true);
+    expect(thread.replacement).toBeUndefined();
+  });
+  it("reconciles an uncertain revert on retry without reverting an earlier turn", async () => {
+    const { manager, thread, client, setReverted } = await editingScenario();
+    const reply = client.reply!;
+    client.reply = (method, params) => {
+      if (method === "thread/revert") {
+        setReverted();
+        throw new Error("Timed out");
+      }
+      return reply(method, params);
+    };
+    await expect(
+      manager.replaceMessage(thread, "last-user", message("Revised")),
+    ).rejects.toThrow("Timed out");
+    expect(thread.items.some((item) => item.id === "old-answer")).toBe(true);
+    expect(thread.replacement?.stage).toBe("reverting");
+    client.reply = reply;
+    await manager.replaceMessage(thread, "last-user", message("Revised"));
+    expect(
+      client.calls.filter((call) => call.method === "thread/revert"),
+    ).toHaveLength(1);
+    expect(thread.items.map((item) => item.id)).toEqual(["previous-answer"]);
+  });
+  it("keeps a revision draft after a send failure and retries without another history revert", async () => {
+    const { manager, thread, client } = await editingScenario();
+    const reply = client.reply!;
+    client.reply = (method, params) => {
+      if (method === "turn/start") throw new Error("Transport failed");
+      return reply(method, params);
+    };
+    await expect(
+      manager.replaceMessage(thread, "last-user", message("Revised")),
+    ).rejects.toThrow("Transport failed");
+    expect(thread.draft).toBe("Revised");
+    client.reply = reply;
+    await manager.replaceMessage(thread, "last-user", message("Revised"));
+    expect(
+      client.calls.filter((call) => call.method === "thread/revert"),
+    ).toHaveLength(1);
+  });
+  it("recognizes an accepted replacement after a transport failure without submitting it twice", async () => {
+    const { manager, thread, client, previous } = await editingScenario();
+    const reply = client.reply!;
+    let accepted = false;
+    const newTurn = {
+      id: "new-turn",
+      status: "completed",
+      items: [
+        {
+          id: "new-user",
+          type: "userMessage",
+          content: [{ type: "text", text: "Revised" }],
+        },
+        {
+          id: "new-answer",
+          type: "agentMessage",
+          text: "Revised answer",
+          phase: "final_answer",
+        },
+      ],
+    };
+    client.reply = (method, params) => {
+      if (method === "turn/start") {
+        accepted = true;
+        throw new Error("Response lost");
+      }
+      if (accepted && method === "thread/turns/list")
+        return { data: [newTurn, previous] };
+      return reply(method, params);
+    };
+    await expect(
+      manager.replaceMessage(thread, "last-user", message("Revised")),
+    ).rejects.toThrow("Response lost");
+    await manager.replaceMessage(thread, "last-user", message("Revised"));
+    expect(
+      client.calls.filter((call) => call.method === "turn/start"),
+    ).toHaveLength(2);
+    expect(thread.replacement).toBeUndefined();
+    expect(thread.items.map((item) => item.id)).toEqual([
+      "previous-answer",
+      "new-user",
+      "new-answer",
+    ]);
+  });
+});
 describe("Codex events and persistence", () => {
+  it("backfills historical message timing once without adding unseen conversation items", async () => {
+    const { manager, thread, client, oldTurn, previous } =
+      await editingScenario();
+    const user = thread.items.find((item) => item.id === "last-user")!;
+    user.turnId = undefined;
+    client.reply = (method) =>
+      method === "thread/turns/list"
+        ? {
+            data: [
+              {
+                ...oldTurn,
+                startedAt: 100,
+                completedAt: 168,
+                durationMs: 68_000,
+                items: [
+                  ...oldTurn.items,
+                  { id: "unseen", type: "agentMessage", text: "Do not append" },
+                ],
+              },
+              previous,
+            ],
+          }
+        : undefined;
+    await manager.refreshMessageMetadata(thread);
+    await manager.refreshMessageMetadata(thread);
+    expect(user.turnId).toBe("turn-1");
+    expect(thread.turns?.["turn-1"]).toMatchObject({
+      startedAt: 100_000,
+      completedAt: 168_000,
+      durationMs: 68_000,
+    });
+    expect(thread.items.some((item) => item.id === "unseen")).toBe(false);
+    expect(
+      client.calls.filter((call) => call.method === "thread/turns/list"),
+    ).toHaveLength(1);
+  });
+
+  it("retains turn timing and message phases across restart, including metadata-only updates", () => {
+    const thread = makeThread(),
+      store = new CodexStore(directory());
+    reduceCodexEvent(thread, {
+      method: "turn/started",
+      params: { turn: { id: "turn", startedAt: 100 } },
+    });
+    reduceCodexEvent(thread, {
+      method: "item/agentMessage/delta",
+      params: { turnId: "turn", itemId: "answer", delta: "Answer" },
+    });
+    store.saveThread(thread);
+    reduceCodexEvent(thread, {
+      method: "turn/completed",
+      params: {
+        turn: {
+          id: "turn",
+          status: "completed",
+          startedAt: 100,
+          completedAt: 168,
+          durationMs: 68_000,
+          items: [
+            {
+              id: "answer",
+              type: "agentMessage",
+              text: "Answer",
+              phase: "final_answer",
+            },
+          ],
+        },
+      },
+    });
+    store.saveThread(thread);
+    const restored = new CodexStore(store.root).get(
+      thread.repositoryId,
+      thread.id,
+    );
+    expect(restored.turns?.turn).toEqual({
+      startedAt: 100_000,
+      completedAt: 168_000,
+      durationMs: 68_000,
+    });
+    expect(restored.items[0]).toMatchObject({
+      turnId: "turn",
+      phase: "final_answer",
+      text: "Answer",
+      createdAt: expect.any(Number),
+    });
+  });
+  it("hydrates historical turns without changing runtime state or inventing timing", () => {
+    const thread = makeThread();
+    hydrateCodexTurn(thread, {
+      id: "legacy",
+      items: [
+        {
+          id: "old",
+          type: "agentMessage",
+          text: "Old reply",
+          phase: "commentary",
+        },
+      ],
+    });
+    expect(thread.state).toBe("idle");
+    expect(thread.turns?.legacy).toEqual({});
+    expect(thread.items[0].createdAt).toBeUndefined();
+    expect(thread.items[0]).toMatchObject({
+      turnId: "legacy",
+      phase: "commentary",
+    });
+  });
+  it("retains displayable thinking summaries but ignores raw reasoning", () => {
+    const thread = makeThread();
+    reduceCodexEvent(thread, {
+      method: "item/started",
+      params: {
+        turnId: "turn",
+        item: {
+          id: "reason",
+          type: "reasoning",
+          summary: [],
+          content: ["raw secret"],
+        },
+      },
+    });
+    reduceCodexEvent(thread, {
+      method: "item/reasoning/summaryTextDelta",
+      params: { turnId: "turn", itemId: "reason", delta: "Checking the tests" },
+    });
+    reduceCodexEvent(thread, {
+      method: "item/reasoning/textDelta",
+      params: { turnId: "turn", itemId: "reason", delta: "raw secret" },
+    });
+    expect(thread.items[0].text).toBe("Checking the tests");
+    reduceCodexEvent(thread, {
+      method: "item/completed",
+      params: {
+        turnId: "turn",
+        item: {
+          id: "reason",
+          type: "reasoning",
+          summary: ["Checked the tests"],
+          content: ["raw secret"],
+        },
+      },
+    });
+    expect(JSON.stringify(thread.items)).not.toContain("raw secret");
+    expect(thread.items[0].text).toBe("Checked the tests");
+  });
+
   it("keeps the full transcript, reconciles streamed completion and paginates", () => {
     const thread = makeThread();
     for (let index = 0; index < 250; index++)

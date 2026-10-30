@@ -1,7 +1,7 @@
 import codexLogo from "../../assets/codex-colored.svg";
 import { useEffect, useRef, useState } from "react";
-import { Copy, ImagePlus, Loader2, Send, Square, X } from "lucide-react";
-import { CodexMarkdown, DownloadMessage } from "./markdown";
+import { ImagePlus, Loader2, Send, Square, X } from "lucide-react";
+import { TranscriptView } from "./transcript-view";
 import { ComposerEditor } from "./composer-editor";
 import {
   codexIsActive,
@@ -11,7 +11,8 @@ import {
   type CodexThreadPage,
 } from "../../shared/codex";
 import { codexApi, errorMessage } from "./api";
-import { PreferencesEditor, useCodexModels } from "./preferences";
+import { ModelPicker } from "./model-picker";
+import { useCodexModels } from "./preferences";
 
 function RequestCard({
   request,
@@ -167,6 +168,11 @@ export function CodexConversation({
   const [draft, setDraft] = useState(""),
     [attachments, setAttachments] = useState<CodexAttachment[]>([]);
   const [busy, setBusy] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<{
+    id: string;
+    previous: { text: string; attachments: CodexAttachment[] };
+  } | null>(null);
+  const composer = useRef<HTMLDivElement>(null);
   const [editingQueue, setEditingQueue] = useState<string | null>(null),
     [queueText, setQueueText] = useState("");
   const { models } = useCodexModels(repositoryId, id);
@@ -180,13 +186,6 @@ export function CodexConversation({
   const scroll = useRef<HTMLDivElement>(null),
     follow = useRef(true);
   const thread = page?.thread;
-  const itemLabels: Record<string, string> = {
-    commandExecution: "Command",
-    fileChange: "File changes",
-    mcpToolCall: "Tool call",
-    dynamicToolCall: "Tool call",
-    webSearch: "Web search",
-  };
   const activeSettings =
     thread && codexIsActive(thread)
       ? (thread.activeSettings ?? thread.settings)
@@ -199,6 +198,7 @@ export function CodexConversation({
     setError("");
     setDraft("");
     setAttachments([]);
+    setEditingMessage(null);
     follow.current = true;
     if (!id) return;
     const refresh = async () => {
@@ -207,7 +207,12 @@ export function CodexConversation({
         const result = await codexApi().request("thread", { repositoryId, id });
         if (!alive.current || requestRevision !== revision.current) return;
         setPage((previous) => {
-          if (!previous || previous.thread.id !== id) return result;
+          if (
+            !previous ||
+            previous.thread.id !== id ||
+            previous.thread.historyRevision !== result.thread.historyRevision
+          )
+            return result;
           const older = previous.thread.items.filter(
             (item) =>
               !result.thread.items.some((entry) => entry.id === item.id),
@@ -231,6 +236,14 @@ export function CodexConversation({
           };
           setDraft(result.thread.draft);
           setAttachments(result.thread.draftAttachments);
+          if (result.thread.replacement)
+            setEditingMessage({
+              id: result.thread.replacement.itemId,
+              previous: {
+                text: result.thread.draft,
+                attachments: result.thread.draftAttachments,
+              },
+            });
         }
       } catch (e) {
         if (alive.current) setError(errorMessage(e));
@@ -306,27 +319,29 @@ export function CodexConversation({
         draft,
         draftAttachments: attachments,
       });
-      await codexApi().request("send", { ...args, text: draft, attachments });
+      if (editingMessage)
+        await codexApi().request("replaceMessage", {
+          ...args,
+          messageId: editingMessage.id,
+          text: draft,
+          attachments,
+        });
+      else
+        await codexApi().request("send", { ...args, text: draft, attachments });
       if (alive.current) {
         draftRef.current = { text: "", attachments: [] };
         setDraft("");
         setAttachments([]);
+        setEditingMessage(null);
         follow.current = true;
       }
     });
-  const markdown = (value: string) => (
-    <CodexMarkdown
-      text={value}
-      repositoryId={repositoryId}
-      id={id ?? ""}
-      onError={setError}
-    />
-  );
   const canSend =
     !busy &&
     thread &&
     thread.state !== "starting" &&
     !thread.requests.length &&
+    (!editingMessage || (!codexIsActive(thread) && !thread.queue.length)) &&
     Boolean(draft.trim() || attachments.length);
   const addFiles = (files: File[]) => {
     if (!files.length || busy || !id || thread?.archived) return;
@@ -473,42 +488,31 @@ export function CodexConversation({
             </p>
           </div>
         )}
-        {thread.items.map((item) => (
-          <article className={`codex-item ${item.kind}`} key={item.id}>
-            <div className="codex-item-heading">
-              <span>
-                {item.kind === "userMessage"
-                  ? "You"
-                  : item.kind === "agentMessage"
-                    ? "Codex"
-                    : (itemLabels[item.kind] ?? item.kind)}
-                {item.status ? ` · ${item.status}` : ""}
-              </span>
-              <DownloadMessage text={item.text} />
-              <button
-                className="icon-button"
-                aria-label="Copy message"
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(item.text)
-                    .catch((e) => setError(errorMessage(e)))
-                }
-              >
-                <Copy size={12} />
-              </button>
-            </div>
-            {["agentMessage", "userMessage", "plan"].includes(item.kind) ? (
-              <div className="markdown-body">{markdown(item.text)}</div>
-            ) : (
-              <details>
-                <summary>
-                  {item.text.split("\n")[0]?.slice(0, 160) || "Tool activity"}
-                </summary>
-                <pre>{item.text}</pre>
-              </details>
-            )}
-          </article>
-        ))}
+        <TranscriptView
+          thread={thread}
+          onError={setError}
+          editable={
+            !busy &&
+            !thread.archived &&
+            !codexIsActive(thread) &&
+            !thread.queue.length
+          }
+          onEdit={(item) => {
+            const previous = {
+              text: draftRef.current.text,
+              attachments: [...draftRef.current.attachments],
+            };
+            setEditingMessage(
+              (current) => current ?? { id: item.id, previous },
+            );
+            saveDraft(item.text, []);
+            requestAnimationFrame(() =>
+              composer.current
+                ?.querySelector<HTMLElement>('[contenteditable="true"]')
+                ?.focus(),
+            );
+          }}
+        />
         {thread.requests.map((request) => (
           <RequestCard
             key={request.id}
@@ -642,6 +646,7 @@ export function CodexConversation({
       ) : (
         <div
           className="codex-composer"
+          ref={composer}
           onDragOver={(event) => {
             if (event.dataTransfer.types.includes("Files")) {
               event.preventDefault();
@@ -653,34 +658,13 @@ export function CodexConversation({
             addFiles(Array.from(event.dataTransfer.files));
           }}
         >
-          <details className="codex-thread-settings">
-            <summary>
-              {thread.settings.model} · {thread.settings.effort} ·{" "}
-              {thread.settings.mode === "plan" ? "Plan" : "Implement"} ·{" "}
-              {thread.settings.followUp === "steer" ? "Steer" : "Queue"}
-            </summary>
-            <PreferencesEditor
-              compact
-              value={thread.settings}
-              models={models}
-              onChange={(settings) =>
-                void run(async () => {
-                  await codexApi().request("update", {
-                    ...args,
-                    settings: settings as CodexThread["settings"],
-                  });
-                })
-              }
-            />
-            <small>
-              Changes apply to the next turn. Permissions:{" "}
-              {thread.settings.permissions}.
-            </small>
-          </details>
+          {editingMessage && thread.replacement && !busy && (
+            <p className="codex-muted">Replacement pending · Retry to finish</p>
+          )}
           <ComposerEditor
             key={thread.id}
             value={draft}
-            disabled={busy}
+            disabled={busy || Boolean(thread.replacement)}
             placeholder={
               thread.requests.length
                 ? "Answer Codex's request above to continue"
@@ -701,7 +685,7 @@ export function CodexConversation({
                   <button
                     className="icon-button"
                     aria-label={`Remove ${a.name}`}
-                    disabled={busy}
+                    disabled={busy || Boolean(thread.replacement)}
                     onClick={() =>
                       saveDraft(
                         draft,
@@ -720,7 +704,9 @@ export function CodexConversation({
               className="icon-button"
               title="Attach documents or images"
               aria-label="Attach documents or images"
-              disabled={busy || attachments.length >= 20}
+              disabled={
+                busy || Boolean(thread.replacement) || attachments.length >= 20
+              }
               onClick={() =>
                 void run(async () => {
                   const added = await codexApi().request("attach", args);
@@ -735,16 +721,44 @@ export function CodexConversation({
             >
               <ImagePlus size={16} />
             </button>
+            <ModelPicker
+              key={thread.id}
+              value={thread.settings}
+              models={models}
+              disabled={busy}
+              onChange={(settings) =>
+                void run(async () => {
+                  await codexApi().request("update", { ...args, settings });
+                })
+              }
+            />
             <small>
-              Enter to send · Shift+Enter for a new line · ⌘Enter in code
-              · Drop documents here
+              Enter to send · Shift+Enter for a new line · ⌘Enter in code · Drop
+              documents here
             </small>
+            {editingMessage && (
+              <button
+                className="ghost-button codex-cancel-edit"
+                disabled={busy || Boolean(thread.replacement)}
+                onClick={() => {
+                  saveDraft(
+                    editingMessage.previous.text,
+                    editingMessage.previous.attachments,
+                  );
+                  setEditingMessage(null);
+                }}
+              >
+                Cancel
+              </button>
+            )}
             <button
               className="ghost-button"
               disabled={
                 busy ||
                 thread.state === "starting" ||
                 thread.requests.length > 0 ||
+                (Boolean(editingMessage) &&
+                  (codexIsActive(thread) || Boolean(thread.queue.length))) ||
                 (!draft.trim() && !attachments.length)
               }
               onClick={send}
@@ -754,13 +768,15 @@ export function CodexConversation({
               ) : (
                 <Send size={14} />
               )}
-              {thread.state === "running"
-                ? thread.settings.followUp === "queue"
-                  ? "Queue"
-                  : "Steer"
-                : ["interrupted", "failed"].includes(thread.state)
-                  ? "Resume"
-                  : "Send"}
+              {editingMessage
+                ? "Replace response"
+                : thread.state === "running"
+                  ? thread.settings.followUp === "queue"
+                    ? "Queue"
+                    : "Steer"
+                  : ["interrupted", "failed"].includes(thread.state)
+                    ? "Resume"
+                    : "Send"}
             </button>
           </div>
         </div>

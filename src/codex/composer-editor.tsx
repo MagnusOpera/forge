@@ -3,6 +3,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { Editor } from "@tiptap/core";
 import { Markdown } from "@tiptap/markdown";
+import DOMPurify from "dompurify";
 
 export const composerExtensions = () => [
   StarterKit.configure({
@@ -65,6 +66,51 @@ export function handleComposerKeyDown(
   return true;
 }
 
+export function handleComposerPaste(
+  editor: Editor,
+  event: ClipboardEvent,
+): boolean {
+  const text = event.clipboardData?.getData("text/plain") ?? "";
+  const html = event.clipboardData?.getData("text/html") ?? "";
+  if ((!text && !html) || editor.isActive("codeBlock")) return false;
+  // Google Docs supplies formatted HTML and an unformatted plain-text fallback.
+  // Keep only the editor's supported formatting; links and images stay disabled.
+  const safe = html
+    ? DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: [
+          "p",
+          "div",
+          "br",
+          "h1",
+          "h2",
+          "h3",
+          "strong",
+          "b",
+          "em",
+          "i",
+          "pre",
+          "code",
+          "span",
+        ],
+        ALLOWED_ATTR: ["style"],
+      })
+    : "";
+  const document = new DOMParser().parseFromString(safe, "text/html");
+  const formatted =
+    Boolean(document.querySelector("h1, h2, h3, strong, em, i, pre, code")) ||
+    Array.from(document.querySelectorAll<HTMLElement>("b, [style]")).some(
+      (element) =>
+        (element.tagName === "B" && element.style.fontWeight !== "normal") ||
+        /^(bold|bolder|[6-9]00)$/.test(element.style.fontWeight) ||
+        element.style.fontStyle === "italic",
+    );
+  event.preventDefault();
+  if (formatted || !text)
+    editor.commands.insertContent(safe, { contentType: "html" });
+  else editor.commands.insertContent(text, { contentType: "markdown" });
+  return true;
+}
+
 export function ComposerEditor({
   value,
   onChange,
@@ -100,18 +146,8 @@ export function ComposerEditor({
       },
       // File drops belong to the surrounding attachment intake, never the document.
       handleDrop: (_view, event) => Boolean(event.dataTransfer?.files.length),
-      handlePaste: (view, event) => {
-        const text = event.clipboardData?.getData("text/plain");
-        if (
-          !text ||
-          view.state.selection.$from.parent.type.name === "codeBlock"
-        )
-          return false;
-        event.preventDefault();
-        // Parse plain Markdown pastes, just like typing Markdown input rules.
-        editor?.commands.insertContent(text, { contentType: "markdown" });
-        return true;
-      },
+      handlePaste: (_view, event): boolean =>
+        editor ? handleComposerPaste(editor, event) : false,
     },
     onUpdate: ({ editor }) => {
       const markdown = editor.getMarkdown();
@@ -120,7 +156,8 @@ export function ComposerEditor({
     },
   });
   useEffect(() => {
-    editor?.setEditable(!disabled);
+    // A busy-state change must not emit the previous document as a new draft.
+    editor?.setEditable(!disabled, false);
   }, [editor, disabled]);
   useEffect(() => {
     if (editor && value !== lastEmitted.current) {

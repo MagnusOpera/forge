@@ -281,6 +281,7 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           (!Number.isInteger(input.before) || Number(input.before) < 0)
         )
           throw new Error("Invalid history cursor.");
+        void manager.refreshMessageMetadata(thread);
         return manager.page(thread, input.before as number | undefined);
       }
       const attachments = (value: unknown): CodexAttachment[] => {
@@ -325,6 +326,16 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           text: string(input.text, "message", 1_000_000),
           attachments: attachments(input.attachments),
         });
+      if (method === "replaceMessage")
+        return manager.replaceMessage(
+          thread,
+          string(input.messageId, "message ID"),
+          {
+            id: randomUUID(),
+            text: string(input.text, "message", 1_000_000),
+            attachments: attachments(input.attachments),
+          },
+        );
       if (method === "quickAction") {
         if (
           input.action !== "sync" &&

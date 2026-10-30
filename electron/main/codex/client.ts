@@ -108,6 +108,7 @@ export function mapModels(value: unknown): CodexModel[] {
         m.inputModalities.includes("image"),
     }));
 }
+export class CodexRpcError extends Error {}
 export class CodexClient implements CodexTransport {
   private child: ChildProcessWithoutNullStreams | null = null;
   private starting: Promise<void> | null = null;
@@ -267,7 +268,7 @@ export class CodexClient implements CodexTransport {
     clearTimeout(pending.timer);
     if (message.error)
       pending.reject(
-        new Error(
+        new CodexRpcError(
           text(object(message.error).message) || "Codex request failed.",
         ),
       );

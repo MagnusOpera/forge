@@ -4,6 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Clear the Codex input after sending without restoring the previous message when the editor becomes available again.
+
+- Show message timestamps and copy controls on hover, with editing limited to your latest prompt and regenerating its response.
+
+- Align your Codex messages on the right with an accent border and keep replies on the left, with progress and tool activity collapsed under a timed work summary.
+
+- Preserve headings, bold, italic, code, and line breaks when pasting Markdown or formatted documents into Codex messages.
+
+- Use a compact model and effort popover in Codex messages, with a styled model menu, reliable effort changes, and mode and follow-up settings kept in project configuration.
+
 - Compose Codex messages with visual Markdown formatting, attach documents by drag and drop, and view Mermaid diagrams, images, and downloadable files in replies.
 
 - Added a worktree editor shortcut beside Finder, with a global editor preference defaulting to VS Code.

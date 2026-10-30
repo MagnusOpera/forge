@@ -260,17 +260,3 @@ export const CodexMarkdown = memo(function CodexMarkdown({
     </ReactMarkdown>
   );
 });
-export function DownloadMessage({ text }: { text: string }) {
-  return (
-    <button
-      className="icon-button"
-      title="Download Markdown"
-      aria-label="Download message as Markdown"
-      onClick={() =>
-        downloadText(text, "codex-message.md", "text/markdown;charset=utf-8")
-      }
-    >
-      ↓
-    </button>
-  );
-}

@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   codexIsActive,
+  latestCodexUserMessage,
   effectiveCodexPreferences,
   resolveModelPreferences,
   type CodexAttachment,
@@ -23,12 +24,13 @@ import {
   array,
   object,
   text,
+  CodexRpcError,
   type CodexTransport,
   type RpcEvent,
 } from "./client.js";
 import { CodexStore, threadSummary } from "./store.js";
 import { assertWorktree, createWorktree } from "./git.js";
-import { reduceCodexEvent, turnPolicy } from "./events.js";
+import { hydrateCodexTurn, reduceCodexEvent, turnPolicy } from "./events.js";
 const supportedRequests = new Set([
   "item/tool/requestUserInput",
   "item/commandExecution/requestApproval",
@@ -41,6 +43,7 @@ const activeIds = (thread: CodexThread, params: JsonObject): boolean => {
 };
 export class ThreadManager {
   private timers = new Map<string, NodeJS.Timeout>();
+  private metadataAttempts = new Set<string>();
   private locks = new Set<string>();
   private cancelStarting = new Set<string>();
   private closing = false;
@@ -194,6 +197,52 @@ export class ThreadManager {
     this.publish(thread, true);
     return threadSummary(thread);
   }
+  async refreshMessageMetadata(thread: CodexThread): Promise<void> {
+    if (
+      this.closing ||
+      !thread.serverId ||
+      codexIsActive(thread) ||
+      thread.replacement ||
+      this.metadataAttempts.has(thread.id) ||
+      !thread.items.some((item) => item.kind === "userMessage" && !item.turnId)
+    )
+      return;
+    this.metadataAttempts.add(thread.id);
+    const revision = thread.historyRevision;
+    try {
+      const client = this.transport(thread);
+      await client.start();
+      const result = object(
+        await client.request("thread/turns/list", {
+          threadId: thread.serverId,
+          limit: 50,
+          sortDirection: "desc",
+          itemsView: "full",
+        }),
+      );
+      if (
+        this.closing ||
+        thread.historyRevision !== revision ||
+        thread.replacement ||
+        codexIsActive(thread)
+      )
+        return;
+      const known = new Set(thread.items.map((item) => item.id));
+      let matched = false;
+      for (const turn of array(result.data).reverse().map(object)) {
+        const items = array(turn.items).filter((item) =>
+          known.has(text(object(item).id)),
+        );
+        if (items.length) {
+          hydrateCodexTurn(thread, { ...turn, items });
+          matched = true;
+        }
+      }
+      if (matched) this.publish(thread, true);
+    } catch {
+      /* Older runtimes may not expose history timing. Keep the cached conversation usable. */
+    }
+  }
   page(thread: CodexThread, before?: number): CodexThreadPage {
     const end =
       before === undefined
@@ -207,6 +256,10 @@ export class ThreadManager {
   }
   async send(thread: CodexThread, message: CodexMessage): Promise<void> {
     if (this.closing) throw new Error("Forge is quitting.");
+    if (thread.replacement)
+      throw new Error(
+        "Finish or resolve the pending message edit before sending another message.",
+      );
     if (thread.archived)
       throw new Error("Restore this thread before sending a message.");
     if (!message.text.trim() && !message.attachments.length)
@@ -243,6 +296,199 @@ export class ThreadManager {
       return;
     }
     await this.startTurn(thread, message);
+  }
+  async replaceMessage(
+    thread: CodexThread,
+    itemId: string,
+    message: CodexMessage,
+  ): Promise<void> {
+    if (
+      this.closing ||
+      thread.archived ||
+      codexIsActive(thread) ||
+      this.locks.has(thread.id) ||
+      thread.requests.length ||
+      thread.queue.length
+    )
+      throw new Error(
+        "Finish the current turn and clear queued messages before editing.",
+      );
+    if (!message.text.trim() && !message.attachments.length)
+      throw new Error("Write a message or attach a file.");
+    message.attachments.forEach((attachment) =>
+      this.attachmentPath(attachment),
+    );
+    const latestUser = latestCodexUserMessage(thread.items);
+    if (
+      thread.replacement
+        ? thread.replacement.itemId !== itemId
+        : latestUser?.id !== itemId
+    )
+      throw new Error("Only your latest message can be edited.");
+    if (!thread.serverId)
+      throw new Error("This conversation has no Codex thread to edit.");
+    this.locks.add(thread.id);
+    try {
+      await assertWorktree(thread);
+      const client = this.transport(thread);
+      await client.start();
+      const models = await this.threadModels(thread);
+      const settings = resolveModelPreferences(thread.settings, models);
+      if (
+        message.attachments.some(isImageAttachment) &&
+        !models.find((model) => model.id === settings.model)?.images
+      )
+        throw new Error("This model does not support image attachments.");
+      const resumed = object(
+        await client.request("thread/resume", {
+          threadId: thread.serverId,
+          excludeTurns: true,
+          cwd: thread.worktree,
+          approvalPolicy: turnPolicy(settings, thread.worktree).approvalPolicy,
+          sandbox:
+            settings.mode === "plan"
+              ? "read-only"
+              : settings.permissions === "full"
+                ? "danger-full-access"
+                : "workspace-write",
+        }),
+      );
+      if (text(object(resumed.thread).id) !== thread.serverId)
+        throw new Error(
+          "Codex did not resume this conversation. Nothing was replaced.",
+        );
+      const history = object(
+        await client.request("thread/turns/list", {
+          threadId: thread.serverId,
+          limit: 2,
+          sortDirection: "desc",
+          itemsView: "full",
+        }),
+      );
+      const turns = array(history.data).map(object),
+        head = turns[0];
+      if (
+        thread.replacement?.stage === "sending" &&
+        head &&
+        text(head.id) !== thread.replacement.previousTurnId
+      ) {
+        const sent = thread.replacement.message;
+        const users = array(head.items)
+          .map(object)
+          .filter((item) => item.type === "userMessage");
+        const normalize = (parts: unknown) =>
+          array(parts)
+            .map(object)
+            .map((part) => ({
+              type: part.type,
+              ...(part.type === "text"
+                ? { text: part.text }
+                : { path: part.path }),
+            }));
+        if (
+          sent &&
+          users.length === 1 &&
+          JSON.stringify(normalize(users[0].content)) ===
+            JSON.stringify(normalize(this.input(sent)))
+        ) {
+          hydrateCodexTurn(thread, head);
+          thread.state =
+            head.status === "inProgress"
+              ? "running"
+              : head.status === "completed"
+                ? "idle"
+                : head.status === "interrupted"
+                  ? "interrupted"
+                  : "failed";
+          thread.turnId =
+            thread.state === "running" ? text(head.id) : undefined;
+          thread.replacement = undefined;
+          thread.draft = "";
+          thread.draftAttachments = [];
+          this.publish(thread, true);
+          return;
+        }
+      }
+      if (head?.status === "inProgress")
+        throw new Error(
+          "Codex is still working. Stop the turn before editing.",
+        );
+      if (!thread.replacement) {
+        const users = array(head?.items)
+          .map(object)
+          .filter((item) => item.type === "userMessage");
+        if (
+          !head ||
+          !text(head.id) ||
+          users.length !== 1 ||
+          text(users[0].id) !== itemId
+        )
+          throw new Error(
+            "The latest Codex turn has changed or contains follow-up guidance. Refresh the conversation before editing.",
+          );
+        thread.replacement = {
+          itemId,
+          turnId: text(head.id),
+          previousTurnId: text(turns[1]?.id) || null,
+          stage: "reverting",
+        };
+        this.publish(thread, true);
+      }
+      const replacement = thread.replacement;
+      const headId = head ? text(head.id) : null;
+      if (replacement.stage === "reverting" && headId === replacement.turnId) {
+        let result: JsonObject;
+        try {
+          result = object(
+            await client.request("thread/revert", {
+              threadId: thread.serverId,
+              beforeTurnId: replacement.turnId,
+            }),
+          );
+        } catch (error) {
+          if (error instanceof CodexRpcError) {
+            thread.replacement = undefined;
+            this.publish(thread, true);
+          }
+          throw error;
+        }
+        if (text(object(result.thread).id) !== thread.serverId)
+          throw new Error(
+            "Could not confirm the conversation edit. Refresh before retrying.",
+          );
+      } else if (headId !== replacement.previousTurnId) {
+        throw new Error(
+          "The replacement was already submitted or this conversation has changed. Refresh before retrying; no duplicate message was sent.",
+        );
+      }
+      let index = thread.items.findIndex((item) => item.id === itemId);
+      const firstTurnItem = thread.items.findIndex(
+        (item) => item.turnId === replacement.turnId,
+      );
+      if (index >= 0 && firstTurnItem >= 0)
+        index = Math.min(index, firstTurnItem);
+      if (index >= 0) {
+        thread.items = thread.items.slice(0, index);
+        delete thread.turns?.[replacement.turnId];
+        thread.historyRevision = (thread.historyRevision ?? 0) + 1;
+      }
+      replacement.stage = "reverted";
+      thread.state = "idle";
+      thread.error = undefined;
+      thread.draft = message.text;
+      thread.draftAttachments = message.attachments;
+      this.publish(thread, true);
+      // Transfer the lock to startTurn without yielding between the two operations.
+      replacement.stage = "sending";
+      replacement.message = message;
+      this.publish(thread, true);
+      this.locks.delete(thread.id);
+      await this.startTurn(thread, message);
+      thread.replacement = undefined;
+      this.publish(thread, true);
+    } finally {
+      this.locks.delete(thread.id);
+    }
   }
   async quickAction(
     thread: CodexThread,
@@ -379,11 +625,7 @@ export class ThreadManager {
             "Codex did not resume the original thread. The draft was retained; no new turn was sent.",
           );
         for (const turn of array(object(resumed.thread).turns).map(object)) {
-          for (const item of array(turn.items))
-            reduceCodexEvent(thread, {
-              method: "item/completed",
-              params: { item },
-            });
+          hydrateCodexTurn(thread, turn);
         }
         const active = array(object(resumed.thread).turns)
           .map(object)

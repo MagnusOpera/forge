@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
-import { composerExtensions, handleComposerKeyDown } from "./composer-editor";
+import {
+  composerExtensions,
+  handleComposerKeyDown,
+  handleComposerPaste,
+} from "./composer-editor";
 const editors: Editor[] = [];
 const create = (content: string) => {
   const editor = new Editor({
@@ -96,5 +100,78 @@ describe("Codex visual Markdown editor", () => {
       send,
     );
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("Codex clipboard formatting", () => {
+  const releaseNotes = [
+    "# Release Notes",
+    "",
+    "**Context:** Timeline\\",
+    "**Repository:** matisclub/matis-next\\",
+    "**Environment:** prodfr-invest-prod\\",
+    "**Applied Tag:** invest-prod-v2026.38.0\\",
+    "**Entry Head:** 75e52f2",
+  ].join("\n");
+  const paste = (editor: Editor, text: string, html = "") => {
+    const event = {
+      clipboardData: {
+        getData: (type: string) => (type === "text/html" ? html : text),
+      },
+      preventDefault: vi.fn(),
+    } as unknown as ClipboardEvent;
+    return { handled: handleComposerPaste(editor, event), event };
+  };
+  it("pastes the release notes as a heading, bold labels and hard line breaks", () => {
+    const editor = create("");
+    paste(editor, releaseNotes);
+    expect(editor.getHTML()).toContain("<h1>Release Notes</h1>");
+    for (const label of [
+      "Context:",
+      "Repository:",
+      "Environment:",
+      "Applied Tag:",
+      "Entry Head:",
+    ])
+      expect(editor.getHTML()).toContain(`<strong>${label}</strong>`);
+    expect(editor.getHTML().match(/<br>/g)).toHaveLength(4);
+    expect(create(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
+  });
+  it("keeps Google Docs HTML formatting when its plain text has no Markdown", () => {
+    const editor = create("");
+    paste(
+      editor,
+      "Release Notes\nContext: Timeline\nRepository: matisclub/matis-next",
+      '<b id="docs-internal-guid-fixture" style="font-weight:normal"><h1><span>Release Notes</span></h1><p><span style="font-weight:700">Context:</span><span> Timeline</span><br><span style="font-weight:700">Repository:</span> matisclub/matis-next</p><p><span style="font-style:italic">Italic</span> <code>code</code></p></b>',
+    );
+    expect(editor.getHTML()).toContain("<h1>Release Notes</h1>");
+    expect(editor.getHTML()).toContain(
+      "<strong>Context:</strong> Timeline<br><strong>Repository:</strong>",
+    );
+    expect(editor.getHTML()).toContain("<em>Italic</em>");
+    expect(editor.getHTML()).toContain("<code>code</code>");
+    expect(editor.getMarkdown()).toContain("**Context:**");
+  });
+  it("parses Markdown from plain HTML wrappers and strips unsupported active content", () => {
+    const editor = create("");
+    paste(editor, releaseNotes, `<div>${releaseNotes}</div>`);
+    expect(editor.getHTML()).toContain("<h1>Release Notes</h1>");
+    const other = create("");
+    paste(
+      other,
+      "Bold link",
+      '<p onclick="alert(1)"><strong>Bold</strong> <a href="javascript:alert(1)">link</a><img src="https://example.com/pixel"><script>alert(1)</script></p>',
+    );
+    expect(other.getHTML()).toContain("<strong>Bold</strong> link");
+    expect(other.getHTML()).not.toMatch(/<a|<img|<script|onclick/);
+  });
+  it("leaves code block paste literal and inserts into the existing selection", () => {
+    const editor = create("```\ncode\n```");
+    expect(paste(editor, "**literal**", "<b>literal</b>").handled).toBe(false);
+    const other = create("Replace me");
+    other.commands.selectAll();
+    paste(other, releaseNotes);
+    expect(other.getHTML()).not.toContain("Replace me");
+    expect(other.getHTML()).toContain("<h1>Release Notes</h1>");
   });
 });
