@@ -50,3 +50,7 @@ The app is only signed after the GitHub release is published.
 Forge uses an installed Codex CLI and does not bundle or download a runtime. Keep macOS packaging arm64-only. The packaged application must discover Codex from PATH and the common Homebrew/local installation paths, or honor the executable path saved in global configuration. Verify this from a Finder-launched build, whose PATH may differ from a terminal session.
 
 Before release, verify the CLI capability check, browser-based ChatGPT sign-in, model discovery, questions, approvals, Stop, steer/queue, and restart/resume against a disposable Git repository. Check logs, Markdown, and worktree diffs in both themes. Forge's own Codex home, thread records, attachments, and retained worktrees live under its Electron user-data `codex` directory and must never be included in release archives. Existing app updates preserve that directory. Archive does not delete local worktrees or branches.
+
+## Dependency upgrade checks
+
+Forge now builds with Electron 45, React 19, Vite 8, and TypeScript 7. Packaging still targets unsigned macOS arm64 ZIPs before the release signing workflow. Use a supported Node.js version from `package.json` when installing or packaging, and run `make check` to verify types, tests, and the dependency audit.

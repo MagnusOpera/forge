@@ -28,6 +28,8 @@ The tap is `magnusopera/tap`, and the formula is `forge`. You can also download 
 
 ## Development
 
+Use Node.js 22.12+ on the 22 LTS line, or Node.js 24 LTS. CI uses Node.js 22. Node type definitions follow Electron's embedded Node.js 24 runtime.
+
 Install dependencies:
 
 ```sh

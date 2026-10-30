@@ -18,7 +18,6 @@ import {
   FileCode2,
   FileText,
   GitBranch,
-  Github,
   GitPullRequest,
   Inbox,
   KeyRound,
@@ -46,6 +45,7 @@ import {
   X,
   XCircle
 } from "lucide-react";
+import { Github } from "./GithubIcon";
 import type { PatchDiffProps } from "@pierre/diffs/react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -172,7 +172,7 @@ type ThemePreference = ThemeMode | "system";
 type SidebarRepoTab = "favorites" | "all";
 type StoredProjectFocusView = ProjectFocusView | "starred-actions";
 type ProjectWorkflowTab = "favorites" | "all";
-type PatchDiffOptions = NonNullable<PatchDiffProps<unknown>["options"]>;
+type PatchDiffOptions = NonNullable<PatchDiffProps<unknown, undefined>["options"]>;
 type NavigationEntry = {
   focusView: ProjectFocusView;
   pullRequestTab: ProjectPullRequestTab;

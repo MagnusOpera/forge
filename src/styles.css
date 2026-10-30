@@ -3560,6 +3560,7 @@ code {
 .codex-policy-note { grid-column: 1 / -1; color: var(--text-strong); }
 .codex-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .codex-settings-dialog .codex-actions { margin-top: 10px; }
+.codex-settings-dialog > header > .codex-actions { margin-top: 0; flex-wrap: nowrap; }
 .codex-actions .ghost-button, .codex-composer-actions .ghost-button { display: inline-flex; align-items: center; gap: 5px; }
 .codex-path { overflow-wrap: anywhere; font: 11px/1.6 ui-monospace, monospace; color: var(--text-muted); }
 .codex-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 8px; padding: 28px 16px; color: var(--text-muted); text-align: center; font-size: 12px; }
@@ -3621,6 +3622,6 @@ code {
 .codex-diff-scroll { overflow: auto; min-height: 0; padding: 0 16px 16px; }
 .codex-diff-file-title { cursor: pointer; padding: 10px 12px; font-size: 12px; color: var(--text-strong); overflow-wrap: anywhere; }
 .codex-diff-dialog pre { font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: auto; padding: 10px; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 4px; white-space: pre-wrap; }
-.codex-diff-dialog header .ghost-button.active { color: var(--accent); border-color: var(--accent); }
+.codex-diff-dialog header .icon-button.active { color: var(--accent); background: var(--input-bg); }
 
 .codex-start-logo { display: block; width: 96px; height: 96px; margin: 0 auto 16px; object-fit: contain; }

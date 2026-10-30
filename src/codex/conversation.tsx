@@ -171,7 +171,7 @@ export function CodexConversation({
   const [editingQueue, setEditingQueue] = useState<string | null>(null),
     [queueText, setQueueText] = useState("");
   const { models } = useCodexModels();
-  const draftTimer = useRef<ReturnType<typeof setTimeout>>();
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const draftRef = useRef({ text: "", attachments: [] as CodexAttachment[] });
   const loaded = useRef(false),
     revision = useRef(0),

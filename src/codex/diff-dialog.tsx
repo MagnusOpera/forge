@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Loader2, RefreshCw, X } from "lucide-react";
+import { Columns2, List, Loader2, RefreshCw, X } from "lucide-react";
 import type { CodexGitInfo, CodexThreadSummary } from "../../shared/codex";
 import { codexApi, errorMessage } from "./api";
 const DiffFiles = lazy(() => import("./diff-files"));
@@ -85,18 +85,22 @@ export function CodexDiffDialog({
           <h2 id="codex-diff-title">Worktree changes</h2>
           <div className="codex-actions">
             <button
-              className={`ghost-button ${!split ? "active" : ""}`}
+              className={`icon-button ${!split ? "active" : ""}`}
+              aria-label="Unified diff"
+              title="Unified diff"
               aria-pressed={!split}
               onClick={() => setSplit(false)}
             >
-              Unified
+              <List size={17} />
             </button>
             <button
-              className={`ghost-button ${split ? "active" : ""}`}
+              className={`icon-button ${split ? "active" : ""}`}
+              aria-label="Split diff"
+              title="Split diff"
               aria-pressed={split}
               onClick={() => setSplit(true)}
             >
-              Split
+              <Columns2 size={17} />
             </button>
             <button
               className="icon-button"

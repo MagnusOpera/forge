@@ -22,7 +22,7 @@ export default function DiffFiles({
       return [];
     }
   }, [info.diff]);
-  const options: FileDiffProps<undefined>["options"] = {
+  const options: FileDiffProps<undefined, undefined>["options"] = {
     diffStyle: split ? "split" : "unified",
     diffIndicators: "bars",
     disableFileHeader: true,

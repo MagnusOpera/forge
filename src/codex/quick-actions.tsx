@@ -28,7 +28,7 @@ export function CodexQuickActions({
     [error, setError] = useState(""),
     [copied, setCopied] = useState(false),
     [diff, setDiff] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);

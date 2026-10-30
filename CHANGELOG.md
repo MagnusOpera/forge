@@ -4,6 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Aligned diff toolbar icons vertically with the modal title.
+
+- Replaced Unified and Split labels in worktree diffs with compact toolbar icons.
+
+- Updated app and build dependencies, including Electron 45 and React 19, and resolved the dependency audit findings.
+
 - Added a centered, full-color Codex logo to empty thread conversations.
 
 - Matched Codex thread selection, titles, metadata, and status badges to the existing project list style.
