@@ -109,6 +109,7 @@ export class CodexStore {
           projects: {},
         };
     this.configuration.editor ??= DEFAULT_TEXT_EDITOR;
+    this.configuration.sendShortcut ??= "enter";
     const directory = path.join(root, "threads");
     if (existsSync(directory))
       for (const name of readdirSync(directory).filter((name) =>

@@ -1,5 +1,6 @@
+import { Combobox } from "../components/combobox";
 import { useEffect, useState } from "react";
-import { ChevronDown, Pencil, RotateCcw } from "lucide-react";
+import { Pencil, RotateCcw } from "lucide-react";
 import {
   defaultCodexPreferences,
   effectiveCodexPreferences,
@@ -127,36 +128,27 @@ export function PreferencesEditor({
               {isInherited && <small> · Global</small>}
             </span>
             <div className="codex-field-control">
-              <span className="codex-select">
-                <select
-                  aria-label={labels[key]}
-                  value={effective[key]}
-                  onChange={(event) => {
-                    const next = { ...value, [key]: event.target.value };
-                    if (key === "model" && !inherited) {
-                      const selected =
-                        models.find(
-                          (entry) => entry.id === event.target.value,
-                        ) ?? models.find((entry) => entry.isDefault);
-                      if (
-                        selected &&
-                        effective.effort &&
-                        !selected.efforts.includes(effective.effort)
-                      )
-                        next.effort = "";
-                      if (selected && !selected.fast) next.speed = "normal";
-                    }
-                    onChange(next);
-                  }}
-                >
-                  {choices.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={14} aria-hidden="true" />
-              </span>
+              <Combobox
+                label={labels[key]}
+                options={choices}
+                value={effective[key]}
+                onChange={(selectedValue) => {
+                  const next = { ...value, [key]: selectedValue };
+                  if (key === "model" && !inherited) {
+                    const selected =
+                      models.find((entry) => entry.id === selectedValue) ??
+                      models.find((entry) => entry.isDefault);
+                    if (
+                      selected &&
+                      effective.effort &&
+                      !selected.efforts.includes(effective.effort)
+                    )
+                      next.effort = "";
+                    if (selected && !selected.fast) next.speed = "normal";
+                  }
+                  onChange(next);
+                }}
+              />
               {inherited && (
                 <button
                   type="button"

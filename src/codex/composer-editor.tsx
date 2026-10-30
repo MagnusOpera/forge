@@ -4,6 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 import type { Editor } from "@tiptap/core";
 import { Markdown } from "@tiptap/markdown";
 import DOMPurify from "dompurify";
+import type { CodexSendShortcut } from "../../shared/codex";
 
 export const composerExtensions = () => [
   StarterKit.configure({
@@ -25,6 +26,7 @@ export function handleComposerKeyDown(
   editor: Editor,
   event: KeyboardEvent,
   onSend: () => void,
+  sendShortcut: CodexSendShortcut = "enter",
 ): boolean {
   if (event.key !== "Enter" || event.isComposing || editor.view.composing)
     return false;
@@ -54,6 +56,8 @@ export function handleComposerKeyDown(
     return editor.commands.splitBlock();
   }
   if (event.shiftKey) return false;
+  if (sendShortcut === "command-enter" && !event.metaKey && !event.ctrlKey)
+    return false;
   // Enter within code inserts a line; Cmd/Ctrl+Enter sends the message.
   if (
     $from.parent.type.name === "codeBlock" &&
@@ -117,15 +121,18 @@ export function ComposerEditor({
   onSend,
   disabled,
   placeholder,
+  sendShortcut = "enter",
 }: {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
   disabled: boolean;
   placeholder: string;
+  sendShortcut?: CodexSendShortcut;
 }) {
-  const callbacks = useRef({ onChange, onSend });
-  callbacks.current = { onChange, onSend };
+  const callbacks = useRef({ onChange, onSend, sendShortcut });
+  callbacks.current = { onChange, onSend, sendShortcut };
+  const editorRef = useRef<Editor | null>(null);
   const lastEmitted = useRef(value);
   const editor = useEditor({
     extensions: composerExtensions(),
@@ -140,14 +147,22 @@ export function ComposerEditor({
         "data-placeholder": placeholder,
       },
       handleKeyDown: (view, event): boolean => {
-        return editor
-          ? handleComposerKeyDown(editor, event, callbacks.current.onSend)
+        const current = editorRef.current;
+        return current
+          ? handleComposerKeyDown(
+              current,
+              event,
+              callbacks.current.onSend,
+              callbacks.current.sendShortcut,
+            )
           : false;
       },
       // File drops belong to the surrounding attachment intake, never the document.
       handleDrop: (_view, event) => Boolean(event.dataTransfer?.files.length),
       handlePaste: (_view, event): boolean =>
-        editor ? handleComposerPaste(editor, event) : false,
+        editorRef.current
+          ? handleComposerPaste(editorRef.current, event)
+          : false,
     },
     onUpdate: ({ editor }) => {
       const markdown = editor.getMarkdown();
@@ -155,6 +170,7 @@ export function ComposerEditor({
       callbacks.current.onChange(markdown);
     },
   });
+  editorRef.current = editor;
   useEffect(() => {
     // A busy-state change must not emit the previous document as a new draft.
     editor?.setEditable(!disabled, false);

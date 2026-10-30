@@ -23,7 +23,9 @@ export type CodexProject = {
   dirty?: boolean;
 };
 export const DEFAULT_TEXT_EDITOR = "Visual Studio Code";
+export type CodexSendShortcut = "enter" | "command-enter";
 export type CodexConfiguration = {
+  sendShortcut?: CodexSendShortcut;
   editor: string;
   defaults: CodexPreferences;
   executable: string;
@@ -164,7 +166,12 @@ export type CodexCommands = {
   openLink: Command<{ url: string }, void>;
   configuration: Command<Record<string, never>, CodexConfiguration>;
   saveConfiguration: Command<
-    { defaults: CodexPreferences; executable: string; editor?: string },
+    {
+      defaults: CodexPreferences;
+      executable: string;
+      editor?: string;
+      sendShortcut?: CodexSendShortcut;
+    },
     CodexConfiguration
   >;
   saveProject: Command<

@@ -456,3 +456,31 @@ it("requires a native, cancel-by-default confirmation for both checkout directio
     }),
   ).rejects.toThrow("does not belong");
 });
+
+it("persists the global send shortcut and validates renderer input", async () => {
+  const current = (await request("configuration")) as { sendShortcut?: string };
+  expect(current.sendShortcut).toBe("enter");
+  await request("saveConfiguration", {
+    defaults: defaultCodexPreferences,
+    executable: "",
+    sendShortcut: "command-enter",
+  });
+  expect(
+    new CodexStore(path.join(mock.root, "codex")).configuration.sendShortcut,
+  ).toBe("command-enter");
+  await request("saveConfiguration", {
+    defaults: defaultCodexPreferences,
+    executable: "",
+  });
+  expect(
+    ((await request("configuration")) as { sendShortcut?: string })
+      .sendShortcut,
+  ).toBe("command-enter");
+  await expect(
+    request("saveConfiguration", {
+      defaults: defaultCodexPreferences,
+      executable: "",
+      sendShortcut: "invalid",
+    }),
+  ).rejects.toThrow("send shortcut");
+});

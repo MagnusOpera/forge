@@ -43,12 +43,12 @@ it("shows the current checkout and offers the appropriate round-trip action", ()
     />,
   );
   expect(main).toContain('aria-label="Start worktree"');
-  expect(main).toContain(">trunk</span>");
+  expect(main).toContain(">trunk</button>");
   expect(main).not.toContain('aria-label="Merge trunk"');
   expect(main).not.toContain('aria-label="Create PR"');
   const worktree = renderToStaticMarkup(
     <CodexQuickActions thread={thread} theme="light" defaultBranch="trunk" />,
   );
   expect(worktree).toContain('aria-label="Merge into trunk"');
-  expect(worktree).toContain(">Worktree</span>");
+  expect(worktree).toContain(">Worktree</button>");
 });

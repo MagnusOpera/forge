@@ -127,7 +127,9 @@ it("submits revisions through replacement and keeps Cancel immediately before Re
   );
   const cancel =
     container.querySelector<HTMLButtonElement>(".codex-cancel-edit")!;
-  expect(cancel.nextElementSibling?.textContent).toContain("Replace response");
+  expect(cancel.nextElementSibling?.getAttribute("aria-label")).toBe(
+    "Replace response",
+  );
   await act(async () =>
     (cancel.nextElementSibling as HTMLButtonElement).click(),
   );
@@ -161,9 +163,9 @@ it("clears the visible editor and attachments after a successful send", async ()
       />,
     ),
   );
-  const send = Array.from(
-    container.querySelectorAll<HTMLButtonElement>("button"),
-  ).find((button) => button.textContent === "Send")!;
+  const send = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Send"]',
+  )!;
   await act(async () => send.click());
   expect(request).toHaveBeenCalledWith(
     "send",
@@ -190,9 +192,9 @@ it("preserves the visible message and attachments if sending fails", async () =>
       />,
     ),
   );
-  const send = Array.from(
-    container.querySelectorAll<HTMLButtonElement>("button"),
-  ).find((button) => button.textContent === "Send")!;
+  const send = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Send"]',
+  )!;
   await act(async () => send.click());
   expect(container.querySelector('[role="textbox"]')!.textContent).toBe(
     "Unsent draft",
@@ -203,4 +205,125 @@ it("preserves the visible message and attachments if sending fails", async () =>
   expect(container.querySelector('[role="alert"]')!.textContent).toContain(
     "Send failed",
   );
+});
+
+it.each(["starting", "running", "waiting"])(
+  "uses the floating button to stop a %s turn without sending a message",
+  async (state) => {
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (method, input) => {
+      const result = await original(method, input);
+      if (method === "thread")
+        return {
+          ...result,
+          thread: { ...result.thread, state, draft: "", draftAttachments: [] },
+        };
+      return result;
+    });
+    await act(async () =>
+      root.render(
+        <CodexConversation
+          repositoryId="r"
+          id="t"
+          loading={false}
+          onConfigure={() => {}}
+        />,
+      ),
+    );
+    const stop = container.querySelector<HTMLButtonElement>(
+      '.codex-input [aria-label="Stop"]',
+    )!;
+    expect(stop).not.toBeNull();
+    expect(stop.textContent).toBe("");
+    expect(stop.disabled).toBe(false);
+    expect(container.querySelectorAll('[aria-label="Stop"]')).toHaveLength(1);
+    expect(
+      container.querySelector('.codex-composer-status [aria-label="Stop"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Access type"]')!
+        .disabled,
+    ).toBe(true);
+    await act(async () => stop.click());
+    expect(request).toHaveBeenCalledWith("stop", {
+      repositoryId: "r",
+      id: "t",
+    });
+    expect(request.mock.calls.some(([method]) => method === "send")).toBe(
+      false,
+    );
+  },
+);
+
+it("updates access from the composer dropdown while preserving the other chat settings", async () => {
+  await act(async () =>
+    root.render(
+      <CodexConversation
+        repositoryId="r"
+        id="t"
+        loading={false}
+        onConfigure={() => {}}
+      />,
+    ),
+  );
+  const trigger = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Access type"]',
+  )!;
+  expect(trigger.disabled).toBe(false);
+  expect(trigger.textContent).toBe("Ask when needed");
+  const menu = container.querySelector<HTMLElement>(
+    '[role="listbox"][aria-label="Access type"]',
+  )!;
+  menu.removeAttribute("popover");
+  const options = menu.querySelectorAll<HTMLButtonElement>('[role="option"]');
+  expect(Array.from(options, (option) => option.textContent)).toEqual([
+    "Ask when needed",
+    "Strict sandbox",
+    "Full access",
+  ]);
+  act(() => options[0].focus());
+  act(() =>
+    options[0].dispatchEvent(
+      new KeyboardEvent("keydown", { key: "End", bubbles: true }),
+    ),
+  );
+  expect(document.activeElement).toBe(options[2]);
+  await act(async () => options[2].click());
+  expect(request).toHaveBeenCalledWith("update", {
+    repositoryId: "r",
+    id: "t",
+    settings: { ...defaultCodexPreferences, permissions: "full" },
+  });
+  expect(document.activeElement).toBe(trigger);
+  expect(request.mock.calls.some(([method]) => method === "send")).toBe(false);
+});
+it("keeps Plan mode read-only in the access picker", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (method, input) => {
+    const result = await original(method, input);
+    if (method === "thread")
+      return {
+        ...result,
+        thread: {
+          ...result.thread,
+          settings: { ...result.thread.settings, mode: "plan" },
+        },
+      };
+    return result;
+  });
+  await act(async () =>
+    root.render(
+      <CodexConversation
+        repositoryId="r"
+        id="t"
+        loading={false}
+        onConfigure={() => {}}
+      />,
+    ),
+  );
+  const trigger = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Access type"]',
+  )!;
+  expect(trigger.disabled).toBe(true);
+  expect(trigger.textContent).toBe("Read-only");
 });

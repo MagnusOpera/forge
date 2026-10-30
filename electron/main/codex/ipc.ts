@@ -140,10 +140,15 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           input.editor === undefined
             ? store.configuration.editor
             : validateEditor(input.editor);
+        const sendShortcut =
+          input.sendShortcut ?? store.configuration.sendShortcut ?? "enter";
+        if (sendShortcut !== "enter" && sendShortcut !== "command-enter")
+          throw new Error("Invalid send shortcut.");
         const restart = executable !== store.configuration.executable;
         store.configuration.defaults = defaults;
         store.configuration.executable = executable;
         store.configuration.editor = editor;
+        store.configuration.sendShortcut = sendShortcut;
         store.saveConfiguration();
         if (restart) {
           client.stop();

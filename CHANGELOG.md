@@ -4,6 +4,28 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Unify configuration, access, and workflow dropdowns with a shared styled combobox and keyboard navigation.
+
+- Configure Enter or Command/Ctrl+Enter to send messages globally, with reliable shortcuts in the Markdown input.
+
+- Choose the chat access level from a styled dropdown above the Codex input.
+
+- Copy checkout paths from the main/worktree label and open Finder immediately from the folder button.
+
+- Float attachment and Send buttons inside the input, with Send changing to Stop while Codex is processing.
+
+- Center the model and effort popup above its selector while keeping it within the window.
+
+- Place the borderless model selector beside the Git actions above the Codex input, with a matching hover background.
+
+- Remove the keyboard and document-drop helper text below the Codex input.
+
+- Show Codex status and access on the right above the message input.
+
+- Fade the Codex input accent border smoothly on hover and focus.
+
+- Move Codex checkout and Git actions above the message input to free space in the top toolbar.
+
 ## [0.4.0]
 
 

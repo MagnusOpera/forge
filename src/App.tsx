@@ -1,3 +1,4 @@
+import { Combobox } from "./components/combobox";
 import { useSlidingUnderline } from "./useSlidingUnderline";
 import {
   Activity,
@@ -3380,14 +3381,6 @@ export function App() {
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
       <ContentPane
         onGlobalConfiguration={() => setSettingsScope("global")}
-        codexActions={projectFocusView === "codex" ? (
-          <CodexQuickActions
-            key={`${selectedRepo?.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
-            thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
-            theme={activeTheme}
-            defaultBranch={selectedRepo?.defaultBranch}
-          />
-        ) : undefined}
         codexContent={projectFocusView === "codex" && selectedRepo ? (
           <CodexConversation
             key={`${selectedRepo.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
@@ -3395,6 +3388,13 @@ export function App() {
             loading={projectLoading}
             id={selection.kind === "codex" ? selection.threadId : undefined}
             onConfigure={() => setSettingsScope("project")}
+            quickActions={
+              <CodexQuickActions
+                thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
+                theme={activeTheme}
+                defaultBranch={selectedRepo.defaultBranch}
+              />
+            }
           />
         ) : undefined}
         auth={auth}
@@ -4416,7 +4416,6 @@ function WorkflowRunSplitButton(props: {
 function ContentPane(props: {
   onGlobalConfiguration(): void;
   codexContent?: React.ReactNode;
-  codexActions?: React.ReactNode;
   auth: AuthStatus | null;
   repo: RepoSummary | null;
   selection: ContentSelection;
@@ -4655,7 +4654,6 @@ function ContentPane(props: {
           </div>
         </div>
         <div className="header-actions">
-          {props.codexActions}
           <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={props.onGlobalConfiguration}>
             <Settings size={17} />
           </button>
@@ -6497,8 +6495,8 @@ function WorkflowDispatchDialog(props: {
   onChangeValue(key: string, value: string): void;
   onSubmit(): void;
 }) {
-  const firstFieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
-  const setFirstFieldRef = useCallback((element: HTMLInputElement | HTMLSelectElement | null) => {
+  const firstFieldRef = useRef<HTMLInputElement | HTMLButtonElement | null>(null);
+  const setFirstFieldRef = useCallback((element: HTMLInputElement | HTMLButtonElement | null) => {
     firstFieldRef.current = element;
   }, []);
 
@@ -6575,17 +6573,14 @@ function WorkflowDispatchDialog(props: {
                           <span className="workflow-dispatch-description">{input.description}</span>
                         )}
                       {input.type === "choice" || input.type === "environment" ? (
-                        <select
-                          {...commonProps}
-                          onChange={(event) => props.onChangeValue(input.key, event.target.value)}
-                        >
-                          {!input.required && <option value="">Default</option>}
-                          {input.options.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
+                        <Combobox
+                          label={input.label}
+                          triggerRef={index === 0 ? setFirstFieldRef : undefined}
+                          disabled={props.state.submitting}
+                          value={value}
+                          options={[...(!input.required ? [{ value: "", label: "Default" }] : []), ...input.options.map((option) => ({ value: option, label: option }))]}
+                          onChange={(selectedValue) => props.onChangeValue(input.key, selectedValue)}
+                        />
                       ) : input.type === "boolean" ? (
                         <button
                           type="button"

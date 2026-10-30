@@ -85,7 +85,9 @@ export function ModelPicker({
   const position = () => {
     const rect = trigger.current?.getBoundingClientRect();
     if (!rect || !panel.current) return;
-    panel.current.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 276))}px`;
+    const width = Math.min(268, window.innerWidth - 16);
+    const centered = rect.left + rect.width / 2 - width / 2;
+    panel.current.style.left = `${Math.max(8, Math.min(centered, window.innerWidth - width - 8))}px`;
     panel.current.style.bottom = `${Math.max(8, window.innerHeight - rect.top + 8)}px`;
   };
   return (
@@ -93,7 +95,7 @@ export function ModelPicker({
       <button
         ref={trigger}
         type="button"
-        className="ghost-button codex-model-trigger"
+        className="icon-button codex-model-trigger"
         popoverTarget={id}
         disabled={disabled}
         onClick={position}
@@ -134,7 +136,7 @@ export function ModelPicker({
               ref={list}
               role="listbox"
               aria-label="Model"
-              className="codex-model-options"
+              className="codex-model-options combobox-options"
               onKeyDown={(event) => {
                 const options = Array.from(
                   event.currentTarget.querySelectorAll<HTMLButtonElement>(

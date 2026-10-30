@@ -1,8 +1,10 @@
+import { Combobox } from "../components/combobox";
 import { useEffect, useRef, useState } from "react";
 import { FolderOpen, RefreshCw, X } from "lucide-react";
 import type { AuthStatus, RepoSummary } from "../../shared/github";
 import type {
   CodexConfiguration,
+  CodexSendShortcut,
   CodexPreferences,
   CodexStatus,
 } from "../../shared/codex";
@@ -31,6 +33,7 @@ export function CodexSettingsDialog({
   const [preferences, setPreferences] = useState<Partial<CodexPreferences>>({});
   const [executable, setExecutable] = useState("");
   const [editor, setEditor] = useState(DEFAULT_TEXT_EDITOR);
+  const [sendShortcut, setSendShortcut] = useState<CodexSendShortcut>("enter");
   const [status, setStatus] = useState<CodexStatus | null>(null);
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
@@ -55,6 +58,11 @@ export function CodexSettingsDialog({
     const previous = document.activeElement as HTMLElement | null;
     root.current?.querySelector<HTMLElement>("button, input, select")?.focus();
     const key = (event: KeyboardEvent) => {
+      if (
+        (event.key === "Escape" || event.key === "Tab") &&
+        root.current?.querySelector(":popover-open")
+      )
+        return;
       if (event.key === "Escape") {
         event.preventDefault();
         closeRef.current();
@@ -64,7 +72,7 @@ export function CodexSettingsDialog({
           root.current?.querySelectorAll<HTMLElement>(
             "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]",
           ) ?? [],
-        );
+        ).filter((element) => element.getClientRects().length > 0);
         const index = controls.indexOf(document.activeElement as HTMLElement);
         const next =
           (index + (event.shiftKey ? -1 : 1) + controls.length) %
@@ -92,6 +100,7 @@ export function CodexSettingsDialog({
         setConfiguration(c);
         setExecutable(c.executable);
         setEditor(c.editor ?? DEFAULT_TEXT_EDITOR);
+        setSendShortcut(c.sendShortcut ?? "enter");
         setPreferences(
           project ? (c.projects[project.id]?.overrides ?? {}) : c.defaults,
         );
@@ -356,6 +365,29 @@ export function CodexSettingsDialog({
           )}
           {!project && (
             <section>
+              <h3>Message input</h3>
+              <div className="codex-field">
+                <span>Send message with</span>
+                <Combobox
+                  label="Send message with"
+                  value={sendShortcut}
+                  options={[
+                    { value: "enter", label: "Enter" },
+                    { value: "command-enter", label: "⌘Enter / Ctrl+Enter" },
+                  ]}
+                  onChange={setSendShortcut}
+                />
+              </div>
+              <p className="codex-muted">
+                With ⌘Enter / Ctrl+Enter selected, Enter inserts a new line.
+                Shift+Enter always inserts a new line. Inside code blocks, Enter
+                inserts a new line and ⌘Enter / Ctrl+Enter sends. Applies to all
+                chats.
+              </p>
+            </section>
+          )}
+          {!project && (
+            <section>
               <h3>Text editor</h3>
               <div className="codex-field">
                 <span>Application name or .app path</span>
@@ -437,6 +469,7 @@ export function CodexSettingsDialog({
                       defaults: preferences as CodexPreferences,
                       executable,
                       editor,
+                      sendShortcut,
                     });
                 setConfiguration(next);
                 onClose();

@@ -1,16 +1,18 @@
 import codexLogo from "../../assets/codex-colored.svg";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ImagePlus, Loader2, Send, Square, X } from "lucide-react";
 import { TranscriptView } from "./transcript-view";
 import { ComposerEditor } from "./composer-editor";
 import {
   codexIsActive,
+  type CodexSendShortcut,
   type CodexAttachment,
   type CodexPendingRequest,
   type CodexThread,
   type CodexThreadPage,
 } from "../../shared/codex";
 import { codexApi, errorMessage } from "./api";
+import { AccessPicker } from "./access-picker";
 import { ModelPicker } from "./model-picker";
 import { useCodexModels } from "./preferences";
 
@@ -157,17 +159,41 @@ export function CodexConversation({
   id,
   loading,
   onConfigure,
+  quickActions,
 }: {
   repositoryId: string;
   id?: string;
   loading: boolean;
   onConfigure: () => void;
+  quickActions?: ReactNode;
 }) {
   const [page, setPage] = useState<CodexThreadPage | null>(null),
     [error, setError] = useState("");
   const [draft, setDraft] = useState(""),
     [attachments, setAttachments] = useState<CodexAttachment[]>([]);
   const [busy, setBusy] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [sendShortcut, setSendShortcut] = useState<CodexSendShortcut>("enter");
+  useEffect(() => {
+    let mounted = true;
+    const refresh = () =>
+      void codexApi()
+        .request("configuration", {})
+        .then((configuration) => {
+          if (mounted) setSendShortcut(configuration?.sendShortcut ?? "enter");
+        })
+        .catch((error) => {
+          if (mounted) setError(errorMessage(error));
+        });
+    refresh();
+    const unsubscribe = codexApi().onChanged((change) => {
+      if (!change.repositoryId && !change.threadId) refresh();
+    });
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
   const [editingMessage, setEditingMessage] = useState<{
     id: string;
     previous: { text: string; attachments: CodexAttachment[] };
@@ -383,36 +409,6 @@ export function CodexConversation({
     );
   return (
     <div className="codex-conversation">
-      <div className="codex-conversation-toolbar">
-        <span className={`codex-state ${thread.state}`}>
-          {thread.state === "waiting" ? "Needs input" : thread.state}
-        </span>
-        <span className="codex-muted">
-          {activeSettings?.mode === "plan"
-            ? "Read-only"
-            : activeSettings?.permissions === "full"
-              ? "Full access"
-              : activeSettings?.permissions === "strict"
-                ? "Strict sandbox"
-                : "Ask when needed"}
-        </span>
-        <div className="codex-actions">
-          {codexIsActive(thread) && (
-            <button
-              className="ghost-button"
-              title="Stop the current turn and pause queued messages"
-              onClick={() =>
-                void run(async () => {
-                  await codexApi().request("stop", args);
-                })
-              }
-            >
-              <Square size={12} />
-              Stop
-            </button>
-          )}
-        </div>
-      </div>
       <div
         className="codex-transcript"
         ref={scroll}
@@ -658,25 +654,148 @@ export function CodexConversation({
             addFiles(Array.from(event.dataTransfer.files));
           }}
         >
+          <div className="codex-composer-tools">
+            {quickActions}
+            <ModelPicker
+              key={thread.id}
+              value={thread.settings}
+              models={models}
+              disabled={busy}
+              onChange={(settings) =>
+                void run(async () => {
+                  await codexApi().request("update", { ...args, settings });
+                })
+              }
+            />
+            <div
+              className="codex-composer-status"
+              aria-label="Thread status and access"
+            >
+              <span className={`codex-state ${thread.state}`}>
+                {thread.state === "waiting" ? "Needs input" : thread.state}
+              </span>
+              <AccessPicker
+                value={
+                  activeSettings?.permissions ?? thread.settings.permissions
+                }
+                readOnly={activeSettings?.mode === "plan"}
+                disabled={
+                  busy || codexIsActive(thread) || Boolean(thread.replacement)
+                }
+                onChange={(permissions) =>
+                  void run(async () => {
+                    await codexApi().request("update", {
+                      ...args,
+                      settings: { ...thread.settings, permissions },
+                    });
+                  })
+                }
+              />
+            </div>
+          </div>
           {editingMessage && thread.replacement && !busy && (
             <p className="codex-muted">Replacement pending · Retry to finish</p>
           )}
-          <ComposerEditor
-            key={thread.id}
-            value={draft}
-            disabled={busy || Boolean(thread.replacement)}
-            placeholder={
-              thread.requests.length
-                ? "Answer Codex's request above to continue"
-                : thread.state === "running"
-                  ? "Guide the active turn…"
-                  : "Ask Codex…"
-            }
-            onChange={(value) => saveDraft(value, attachments)}
-            onSend={() => {
-              if (canSend) send();
-            }}
-          />
+          <div className="codex-input">
+            <button
+              className="icon-button codex-attach-button"
+              title="Attach documents or images"
+              aria-label="Attach documents or images"
+              disabled={
+                busy || Boolean(thread.replacement) || attachments.length >= 20
+              }
+              onClick={() =>
+                void run(async () => {
+                  const added = await codexApi().request("attach", args);
+                  if (draftRef.current.attachments.length + added.length > 20)
+                    throw new Error("Attach up to 20 files per message.");
+                  saveDraft(draftRef.current.text, [
+                    ...draftRef.current.attachments,
+                    ...added,
+                  ]);
+                })
+              }
+            >
+              <ImagePlus size={16} />
+            </button>
+            <ComposerEditor
+              key={thread.id}
+              value={draft}
+              sendShortcut={sendShortcut}
+              disabled={busy || Boolean(thread.replacement)}
+              placeholder={
+                thread.requests.length
+                  ? "Answer Codex's request above to continue"
+                  : thread.state === "running"
+                    ? "Guide the active turn…"
+                    : "Ask Codex…"
+              }
+              onChange={(value) => saveDraft(value, attachments)}
+              onSend={() => {
+                if (canSend) send();
+              }}
+            />
+            <div className="codex-submit-actions">
+              {editingMessage && (
+                <button
+                  className="ghost-button codex-cancel-edit"
+                  disabled={busy || Boolean(thread.replacement)}
+                  onClick={() => {
+                    saveDraft(
+                      editingMessage.previous.text,
+                      editingMessage.previous.attachments,
+                    );
+                    setEditingMessage(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                className="icon-button codex-send-button"
+                type="button"
+                aria-label={
+                  codexIsActive(thread)
+                    ? "Stop"
+                    : editingMessage
+                      ? "Replace response"
+                      : "Send"
+                }
+                title={
+                  codexIsActive(thread)
+                    ? "Stop the current turn and pause queued messages"
+                    : editingMessage
+                      ? "Replace response"
+                      : "Send"
+                }
+                disabled={codexIsActive(thread) ? stopping : !canSend}
+                onClick={() => {
+                  if (!codexIsActive(thread)) {
+                    send();
+                    return;
+                  }
+                  setStopping(true);
+                  setError("");
+                  void codexApi()
+                    .request("stop", args)
+                    .catch((e) => {
+                      if (alive.current) setError(errorMessage(e));
+                    })
+                    .finally(() => {
+                      if (alive.current) setStopping(false);
+                    });
+                }}
+              >
+                {codexIsActive(thread) ? (
+                  <Square size={14} fill="currentColor" />
+                ) : busy ? (
+                  <Loader2 className="spin" size={16} />
+                ) : (
+                  <Send size={16} />
+                )}
+              </button>
+            </div>
+          </div>
           {attachments.length > 0 && (
             <div className="codex-attachments">
               {attachments.map((a) => (
@@ -699,86 +818,6 @@ export function CodexConversation({
               ))}
             </div>
           )}
-          <div className="codex-composer-actions">
-            <button
-              className="icon-button"
-              title="Attach documents or images"
-              aria-label="Attach documents or images"
-              disabled={
-                busy || Boolean(thread.replacement) || attachments.length >= 20
-              }
-              onClick={() =>
-                void run(async () => {
-                  const added = await codexApi().request("attach", args);
-                  if (draftRef.current.attachments.length + added.length > 20)
-                    throw new Error("Attach up to 20 files per message.");
-                  saveDraft(draftRef.current.text, [
-                    ...draftRef.current.attachments,
-                    ...added,
-                  ]);
-                })
-              }
-            >
-              <ImagePlus size={16} />
-            </button>
-            <ModelPicker
-              key={thread.id}
-              value={thread.settings}
-              models={models}
-              disabled={busy}
-              onChange={(settings) =>
-                void run(async () => {
-                  await codexApi().request("update", { ...args, settings });
-                })
-              }
-            />
-            <small>
-              Enter to send · Shift+Enter for a new line · ⌘Enter in code · Drop
-              documents here
-            </small>
-            {editingMessage && (
-              <button
-                className="ghost-button codex-cancel-edit"
-                disabled={busy || Boolean(thread.replacement)}
-                onClick={() => {
-                  saveDraft(
-                    editingMessage.previous.text,
-                    editingMessage.previous.attachments,
-                  );
-                  setEditingMessage(null);
-                }}
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              className="ghost-button"
-              disabled={
-                busy ||
-                thread.state === "starting" ||
-                thread.requests.length > 0 ||
-                (Boolean(editingMessage) &&
-                  (codexIsActive(thread) || Boolean(thread.queue.length))) ||
-                (!draft.trim() && !attachments.length)
-              }
-              onClick={send}
-            >
-              {busy ? (
-                <Loader2 className="spin" size={14} />
-              ) : (
-                <Send size={14} />
-              )}
-              {editingMessage
-                ? "Replace response"
-                : thread.state === "running"
-                  ? thread.settings.followUp === "queue"
-                    ? "Queue"
-                    : "Steer"
-                  : ["interrupted", "failed"].includes(thread.state)
-                    ? "Resume"
-                    : "Send"}
-            </button>
-          </div>
         </div>
       )}
     </div>

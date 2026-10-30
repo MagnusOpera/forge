@@ -1,7 +1,6 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import {
-  Check,
   Code2,
   FileDiff,
   FolderOpen,
@@ -18,7 +17,6 @@ import {
   codexQuickActionUnavailable,
   type CodexQuickAction,
 } from "../../shared/codexActions";
-import { githubUrlClickActionForDetail } from "../appLogic";
 import { codexApi, errorMessage } from "./api";
 import { CodexDiffDialog } from "./diff-dialog";
 export function CodexQuickActions({
@@ -83,32 +81,12 @@ export function CodexQuickActions({
         aria-label="Worktree quick actions"
       >
         {thread?.worktree && (
-          <span
-            className="codex-checkout-label"
-            title={`${thread.branch} · ${thread.worktree}`}
-          >
-            {thread.checkout === "default" ? thread.branch : "Worktree"}
-          </span>
-        )}
-        <button
-          className={`icon-button underline-action ${copied ? "invoked" : ""}`}
-          aria-label="Copy checkout location. Double-click to open in Finder"
-          title={
-            thread?.worktree
-              ? `${thread.worktree}\nClick to copy · Double-click to open in Finder`
-              : "No worktree selected"
-          }
-          disabled={!thread?.worktree}
-          onClick={(event) => {
-            if (!thread?.worktree) return;
-            if (githubUrlClickActionForDetail(event.detail) === "open") {
-              void execute(async () => {
-                await codexApi().request("openFolder", {
-                  repositoryId: thread.repositoryId,
-                  id: thread.id,
-                });
-              });
-            } else {
+          <button
+            type="button"
+            className={`icon-button codex-checkout-label underline-action ${copied ? "invoked" : ""}`}
+            aria-label="Copy checkout location"
+            title={`${thread.worktree}\nClick to copy path`}
+            onClick={() => {
               void navigator.clipboard
                 .writeText(thread.worktree)
                 .then(() => {
@@ -117,10 +95,28 @@ export function CodexQuickActions({
                   timer.current = setTimeout(() => setCopied(false), 900);
                 })
                 .catch((e) => setError(errorMessage(e)));
-            }
+            }}
+          >
+            {thread.checkout === "default" ? thread.branch : "Worktree"}
+          </button>
+        )}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Open checkout in Finder"
+          title="Open checkout in Finder"
+          disabled={!thread?.worktree || busy}
+          onClick={() => {
+            if (thread)
+              void execute(async () => {
+                await codexApi().request("openFolder", {
+                  repositoryId: thread.repositoryId,
+                  id: thread.id,
+                });
+              });
           }}
         >
-          {copied ? <Check size={16} /> : <FolderOpen size={16} />}
+          <FolderOpen size={16} />
         </button>
         <button
           className="icon-button"
@@ -221,7 +217,6 @@ export function CodexQuickActions({
           </div>
         )}
       </div>
-      <span className="toolbar-divider" />
       {diff &&
         thread &&
         createPortal(

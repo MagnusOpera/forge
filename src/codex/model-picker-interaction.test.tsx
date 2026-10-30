@@ -91,3 +91,37 @@ it("saves accessibility/native range changes even when no pointerup event arrive
     expect.objectContaining({ effort: "high" }),
   );
 });
+
+it("centers the popover above its trigger while keeping it inside the viewport", () => {
+  act(() =>
+    root.render(
+      <ModelPicker
+        value={defaultCodexPreferences}
+        models={models}
+        disabled={false}
+        onChange={() => {}}
+      />,
+    ),
+  );
+  const trigger = container.querySelector<HTMLButtonElement>(
+    ".codex-model-trigger",
+  )!;
+  const panel = container.querySelector<HTMLElement>(".codex-model-popover")!;
+  const bounds = vi.spyOn(trigger, "getBoundingClientRect");
+  try {
+    for (const [viewport, left, width, expected] of [
+      [800, 300, 120, 226],
+      [800, 0, 120, 8],
+      [800, 740, 60, 524],
+      [200, 40, 120, 8],
+    ]) {
+      vi.stubGlobal("innerWidth", viewport);
+      bounds.mockReturnValue({ left, width, top: 500 } as DOMRect);
+      act(() => trigger.click());
+      expect(panel.style.left).toBe(`${expected}px`);
+    }
+  } finally {
+    vi.unstubAllGlobals();
+    bounds.mockRestore();
+  }
+});
