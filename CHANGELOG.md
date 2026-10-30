@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Moved global configuration beside the theme/color picker in the content toolbar, keeping its position consistent when the sidebar is collapsed.
+
 - Added a chat toolbar action to discover and merge the repository default branch into the current worktree with Codex.
 
 - Removed the duplicate bottom separator in global and project configuration.

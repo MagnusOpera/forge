@@ -3328,7 +3328,6 @@ export function App() {
         }}
       />
       <ProjectPane
-        onGlobalConfiguration={() => setSettingsScope("global")}
         onProjectConfiguration={() => setSettingsScope("project")}
         codexCount={codexThreads.threads.filter((thread) => !thread.archived).length}
         codexList={selectedRepo ? (
@@ -3380,6 +3379,7 @@ export function App() {
       />
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
       <ContentPane
+        onGlobalConfiguration={() => setSettingsScope("global")}
         codexActions={projectFocusView === "codex" ? (
           <CodexQuickActions
             key={`${selectedRepo?.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
@@ -3838,7 +3838,6 @@ function RepoButton(props: {
 }
 
 function ProjectPane(props: {
-  onGlobalConfiguration(): void;
   onProjectConfiguration(): void;
   codexList: React.ReactNode;
   codexCount: number;
@@ -3915,9 +3914,6 @@ function ProjectPane(props: {
     <section className="project-pane" tabIndex={0}>
       <div className={cx("pane-header", props.sidebarCollapsed && "collapsed-project-header")}>
         <div className="pane-title">
-          <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={props.onGlobalConfiguration}>
-            <Settings size={17} />
-          </button>
           {props.sidebarCollapsed && (
             <button className="icon-button project-sidebar-toggle" aria-label="Open sidebar" onClick={props.onToggleSidebar}>
               <PanelLeftOpen size={18} />
@@ -4417,6 +4413,7 @@ function WorkflowRunSplitButton(props: {
 }
 
 function ContentPane(props: {
+  onGlobalConfiguration(): void;
   codexContent?: React.ReactNode;
   codexActions?: React.ReactNode;
   auth: AuthStatus | null;
@@ -4658,6 +4655,9 @@ function ContentPane(props: {
         </div>
         <div className="header-actions">
           {props.codexActions}
+          <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={props.onGlobalConfiguration}>
+            <Settings size={17} />
+          </button>
           <div className="theme-accent-control">
             <button
               className="theme-toggle-button"
