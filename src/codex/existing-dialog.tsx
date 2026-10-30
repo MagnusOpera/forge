@@ -1,3 +1,4 @@
+import { ThreadFilterTabs } from "./thread-filter-tabs";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RefreshCw, X } from "lucide-react";
 import type { CodexExistingThread } from "../../shared/codex";
@@ -138,30 +139,12 @@ export function ExistingCodexDialog({
             files and uncommitted changes stay in place. Diffs start from HEAD
             when you add the thread.
           </p>
-          <div
-            className="codex-list-tabs"
-            role="tablist"
-            aria-label="Existing thread filter"
-          >
-            <button
-              className={`workflow-tab ${!archived ? "active" : ""}`}
-              role="tab"
-              aria-selected={!archived}
-              disabled={busy}
-              onClick={() => setArchived(false)}
-            >
-              Active
-            </button>
-            <button
-              className={`workflow-tab ${archived ? "active" : ""}`}
-              role="tab"
-              aria-selected={archived}
-              disabled={busy}
-              onClick={() => setArchived(true)}
-            >
-              Archived
-            </button>
-          </div>
+          <ThreadFilterTabs
+            archived={archived}
+            onChange={setArchived}
+            disabled={busy}
+            label="Existing thread filter"
+          />
           {error && (
             <p className="inline-error" role="alert">
               {error}

@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { ThreadFilterTabs } from "./thread-filter-tabs";
 import { ExistingCodexDialog } from "./existing-dialog";
 import { useEffect, useState } from "react";
 import {
@@ -70,28 +71,12 @@ export function CodexThreadList({
       }}
     >
       <div className="codex-list-actions">
-        <div
-          className="codex-list-tabs"
-          role="tablist"
-          aria-label="Thread filter"
-        >
-          <button
-            className={`workflow-tab ${!archived ? "active" : ""}`}
-            role="tab"
-            aria-selected={!archived}
-            onClick={() => setArchived(false)}
-          >
-            Active
-          </button>
-          <button
-            className={`workflow-tab ${archived ? "active" : ""}`}
-            role="tab"
-            aria-selected={archived}
-            onClick={() => setArchived(true)}
-          >
-            Archived
-          </button>
-        </div>
+        <ThreadFilterTabs
+          archived={archived}
+          onChange={setArchived}
+          activeCount={threads.filter((t) => !t.archived).length}
+          archivedCount={threads.filter((t) => t.archived).length}
+        />
         <div className="codex-actions">
           <button
             className="icon-button"

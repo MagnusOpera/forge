@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronDown, Pencil, RotateCcw } from "lucide-react";
 import {
   defaultCodexPreferences,
   effectiveCodexPreferences,
@@ -120,42 +121,56 @@ export function PreferencesEditor({
             label: `${effective[key]} (unavailable)`,
           });
         return (
-          <label className="codex-field" key={key}>
+          <div className="codex-field" key={key}>
             <span>
               {labels[key]}
               {isInherited && <small> · Global</small>}
             </span>
             <div className="codex-field-control">
-              <select
-                aria-label={labels[key]}
-                value={effective[key]}
-                onChange={(event) => {
-                  const next = { ...value, [key]: event.target.value };
-                  if (key === "model" && !inherited) {
-                    const selected =
-                      models.find((entry) => entry.id === event.target.value) ??
-                      models.find((entry) => entry.isDefault);
-                    if (
-                      selected &&
-                      effective.effort &&
-                      !selected.efforts.includes(effective.effort)
-                    )
-                      next.effort = "";
-                    if (selected && !selected.fast) next.speed = "normal";
-                  }
-                  onChange(next);
-                }}
-              >
-                {choices.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <span className="codex-select">
+                <select
+                  aria-label={labels[key]}
+                  value={effective[key]}
+                  onChange={(event) => {
+                    const next = { ...value, [key]: event.target.value };
+                    if (key === "model" && !inherited) {
+                      const selected =
+                        models.find(
+                          (entry) => entry.id === event.target.value,
+                        ) ?? models.find((entry) => entry.isDefault);
+                      if (
+                        selected &&
+                        effective.effort &&
+                        !selected.efforts.includes(effective.effort)
+                      )
+                        next.effort = "";
+                      if (selected && !selected.fast) next.speed = "normal";
+                    }
+                    onChange(next);
+                  }}
+                >
+                  {choices.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} aria-hidden="true" />
+              </span>
               {inherited && (
                 <button
                   type="button"
-                  className="ghost-button"
+                  className={`icon-button codex-override-button ${!isInherited ? "active" : ""}`}
+                  aria-label={
+                    isInherited
+                      ? `Override ${labels[key]}`
+                      : `Use global value for ${labels[key]}`
+                  }
+                  title={
+                    isInherited
+                      ? `Override ${labels[key]}`
+                      : `Use global value for ${labels[key]}`
+                  }
                   onClick={() => {
                     const next = { ...value };
                     if (isInherited)
@@ -164,11 +179,11 @@ export function PreferencesEditor({
                     onChange(next);
                   }}
                 >
-                  {isInherited ? "Override" : "Use global"}
+                  {isInherited ? <Pencil size={14} /> : <RotateCcw size={14} />}
                 </button>
               )}
             </div>
-          </label>
+          </div>
         );
       })}
       {!compact && effective.permissions === "full" && (

@@ -4,6 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Removed the duplicate bottom separator in global and project configuration.
+
+- Matched Active and Archived thread tabs to pull request tabs, with icons, counts, and a sliding underline.
+
+- Inset configuration dropdown chevrons and replaced override controls with compact icons.
+
 - Added project browsing and resumption of existing Codex app and CLI threads, with recent history when available.
 
 - Aligned diff toolbar icons vertically with the modal title.

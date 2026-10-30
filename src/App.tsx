@@ -1,3 +1,4 @@
+import { useSlidingUnderline } from "./useSlidingUnderline";
 import {
   Activity,
   AlertCircle,
@@ -47,7 +48,7 @@ import {
 } from "lucide-react";
 import { Github } from "./GithubIcon";
 import type { PatchDiffProps } from "@pierre/diffs/react";
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
@@ -259,7 +260,6 @@ const themePreferenceOptions: ThemePreference[] = ["system", "light", "dark"];
 type AccentColor = (typeof accentColors)[number];
 type AppCssVars = React.CSSProperties & Record<"--accent", string>;
 type SwatchCssVars = React.CSSProperties & Record<"--swatch-color", string>;
-type SlidingUnderlineVars = React.CSSProperties & Record<"--tab-underline-left" | "--tab-underline-width", string>;
 type ViewTransitionHandle = { finished: Promise<void> };
 type DocumentWithViewTransition = Document & {
   startViewTransition?: (updateCallback: () => void) => ViewTransitionHandle;
@@ -565,55 +565,6 @@ function useSystemTheme(): ThemeMode {
   return systemTheme;
 }
 
-function useSlidingUnderline(layoutKey: string) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [underlineStyle, setUnderlineStyle] = useState<SlidingUnderlineVars>({
-    "--tab-underline-left": "0px",
-    "--tab-underline-width": "0px"
-  });
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return undefined;
-    }
-
-    let frame: number | null = null;
-    const update = () => {
-      if (frame) {
-        window.cancelAnimationFrame(frame);
-      }
-
-      frame = window.requestAnimationFrame(() => {
-        const active = container.querySelector<HTMLElement>('[data-active-tab="true"]');
-        frame = null;
-        setUnderlineStyle({
-          "--tab-underline-left": active ? `${active.offsetLeft}px` : "0px",
-          "--tab-underline-width": active ? `${active.offsetWidth}px` : "0px"
-        });
-      });
-    };
-
-    update();
-    const active = container.querySelector<HTMLElement>('[data-active-tab="true"]');
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
-    observer?.observe(container);
-    if (active) {
-      observer?.observe(active);
-    }
-    window.addEventListener("resize", update);
-
-    return () => {
-      if (frame) {
-        window.cancelAnimationFrame(frame);
-      }
-      observer?.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, [layoutKey]);
-
-  return { containerRef, underlineStyle };
-}
 
 function repoKey(repo: { owner: string; name: string }): string {
   return `${repo.owner}/${repo.name}`;
