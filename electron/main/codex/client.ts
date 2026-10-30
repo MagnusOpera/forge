@@ -127,6 +127,7 @@ export class CodexClient implements CodexTransport {
     private home: string,
     private executable: () => string,
     private timeoutMs = 30_000,
+    private sharedHome = false,
   ) {}
   async start(): Promise<void> {
     if (this.starting) return this.starting;
@@ -167,6 +168,17 @@ export class CodexClient implements CodexTransport {
       assertCapabilities(
         readFileSync(path.join(schemaDir, "ClientRequest.json"), "utf8"),
       );
+      if (this.sharedHome) {
+        const schema = readFileSync(
+          path.join(schemaDir, "ClientRequest.json"),
+          "utf8",
+        );
+        for (const method of ["thread/list", "thread/read"])
+          if (!schema.includes(`"${method}"`))
+            throw new Error(
+              `Installed Codex CLI does not support ${method}. Update Codex CLI to browse existing threads.`,
+            );
+      }
     } finally {
       rmSync(schemaDir, { recursive: true, force: true });
     }
@@ -177,8 +189,7 @@ export class CodexClient implements CodexTransport {
         "app-server",
         "--listen",
         "stdio://",
-        "-c",
-        'cli_auth_credentials_store="file"',
+        ...(this.sharedHome ? [] : ["-c", 'cli_auth_credentials_store="file"']),
         "-c",
         "features.default_mode_request_user_input=true",
       ],
@@ -187,7 +198,9 @@ export class CodexClient implements CodexTransport {
         env: {
           ...process.env,
           CODEX_HOME: this.home,
-          CODEX_SQLITE_HOME: this.home,
+          CODEX_SQLITE_HOME: this.sharedHome
+            ? process.env.CODEX_SQLITE_HOME || this.home
+            : this.home,
         },
       },
     );

@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { Archive, MessageSquare, Pencil, Plus, RotateCcw } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ExistingCodexDialog } from "./existing-dialog";
+import { useEffect, useState } from "react";
+import {
+  Archive,
+  History,
+  MessageSquare,
+  Pencil,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 import { codexIsActive, type CodexThreadSummary } from "../../shared/codex";
 import { codexApi, errorMessage } from "./api";
 export function CodexThreadList({
@@ -24,6 +33,8 @@ export function CodexThreadList({
     [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null),
     [title, setTitle] = useState("");
+  const [existing, setExisting] = useState(false);
+  useEffect(() => setExisting(false), [repositoryId]);
   const visible = threads.filter((t) => t.archived === archived);
   const run = async (action: () => Promise<void>) => {
     setError("");
@@ -81,24 +92,48 @@ export function CodexThreadList({
             Archived
           </button>
         </div>
-        <button
-          className="icon-button"
-          title="New thread"
-          aria-label="New Codex thread"
-          disabled={busy || loading}
-          onClick={() =>
-            void run(async () => {
-              const thread = await codexApi().request("create", {
-                repositoryId,
-              });
-              setArchived(false);
-              onSelect(thread.id);
-            })
-          }
-        >
-          <Plus size={16} />
-        </button>
+        <div className="codex-actions">
+          <button
+            className="icon-button"
+            title="Existing Codex threads"
+            aria-label="Browse existing Codex threads"
+            disabled={busy || loading}
+            onClick={() => setExisting(true)}
+          >
+            <History size={16} />
+          </button>
+          <button
+            className="icon-button"
+            title="New thread"
+            aria-label="New Codex thread"
+            disabled={busy || loading}
+            onClick={() =>
+              void run(async () => {
+                const thread = await codexApi().request("create", {
+                  repositoryId,
+                });
+                setArchived(false);
+                onSelect(thread.id);
+              })
+            }
+          >
+            <Plus size={16} />
+          </button>
+        </div>
       </div>
+      {existing &&
+        createPortal(
+          <ExistingCodexDialog
+            key={repositoryId}
+            repositoryId={repositoryId}
+            onSelect={(id) => {
+              setArchived(false);
+              onSelect(id);
+            }}
+            onClose={() => setExisting(false)}
+          />,
+          document.querySelector(".app-shell") ?? document.body,
+        )}
       {(error || loadError) && (
         <div className="inline-error" role="alert">
           {error || loadError}
@@ -152,6 +187,7 @@ export function CodexThreadList({
                   <span className="focus-meta">
                     {thread.settings.mode === "plan" ? "Plan" : "Implement"} ·{" "}
                     {thread.settings.model || "Codex default"}
+                    {thread.sourceHome ? " · Codex app/CLI" : ""}
                   </span>
                 </span>
                 <span

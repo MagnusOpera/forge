@@ -108,6 +108,42 @@ describe("Codex preload IPC handlers", () => {
       }),
     ).rejects.toThrow("does not belong");
   });
+  it("validates existing-thread requests and never accepts renderer-supplied folders or homes", async () => {
+    const rpc = vi.spyOn(CodexClient.prototype, "request");
+    await expect(
+      request("existing", { repositoryId: "R_123", archived: "yes" }),
+    ).rejects.toThrow("archive filter");
+    await expect(
+      request("existing", { repositoryId: "R_123", cursor: 7 }),
+    ).rejects.toThrow("cursor");
+    await expect(
+      request("adopt", {
+        repositoryId: "R_123",
+        serverId: "../sessions/other",
+        archived: false,
+      }),
+    ).rejects.toThrow("thread ID");
+    await expect(
+      request("adopt", {
+        repositoryId: "R_123",
+        serverId: "valid-id",
+        archived: "yes",
+      }),
+    ).rejects.toThrow("archive state");
+    await expect(
+      request("adopt", {
+        repositoryId: "R_123",
+        serverId: "valid-id",
+        archived: false,
+        cwd: "/arbitrary",
+        home: "/arbitrary",
+      }),
+    ).rejects.toThrow("local Git folder");
+    await expect(
+      request("models", { repositoryId: "R_123", id: "not-owned" }),
+    ).rejects.toThrow("does not belong");
+    expect(rpc).not.toHaveBeenCalled();
+  });
   it("reports a missing CLI without disabling configuration", async () => {
     await request("saveConfiguration", {
       defaults: defaultCodexPreferences,

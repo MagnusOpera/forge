@@ -170,8 +170,10 @@ export function CodexConversation({
   const [busy, setBusy] = useState(false);
   const [editingQueue, setEditingQueue] = useState<string | null>(null),
     [queueText, setQueueText] = useState("");
-  const { models } = useCodexModels();
-  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { models } = useCodexModels(repositoryId, id);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const draftRef = useRef({ text: "", attachments: [] as CodexAttachment[] });
   const loaded = useRef(false),
     revision = useRef(0),
@@ -403,6 +405,18 @@ export function CodexConversation({
               60;
         }}
       >
+        {thread.sourceHome && (
+          <p className="codex-external-note">
+            Continuing the original Codex thread in{" "}
+            <code>{thread.worktree}</code>. Uses your Codex app/CLI account;
+            Forge's selected model and permissions apply to new turns. This
+            folder may be shared with other threads. Finish or stop work in
+            Codex before sending here.
+          </p>
+        )}
+        {thread.historyWarning && (
+          <p className="codex-external-note">{thread.historyWarning}</p>
+        )}
         {page.before !== null && (
           <button
             className="ghost-button"
@@ -449,9 +463,9 @@ export function CodexConversation({
               height={96}
             />
             <p>
-              A separate worktree will be created from committed HEAD when you
-              send the first message. Uncommitted changes in the configured
-              checkout are excluded.
+              {thread.sourceHome
+                ? "Send a message to resume the original Codex thread in its existing working folder. Codex retains its stored conversation context."
+                : "A separate worktree will be created from committed HEAD when you send the first message. Uncommitted changes in the configured checkout are excluded."}
             </p>
           </div>
         )}

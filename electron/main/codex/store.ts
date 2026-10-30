@@ -65,6 +65,8 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
     worktree,
     branch,
     baseCommit,
+    sourceHome,
+    historyWarning,
   } = thread;
   return {
     id,
@@ -79,6 +81,8 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
     worktree,
     branch,
     baseCommit,
+    sourceHome,
+    historyWarning,
   };
 }
 export class CodexStore {

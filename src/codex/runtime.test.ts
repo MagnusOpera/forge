@@ -806,3 +806,306 @@ describe("stdio app-server transport", () => {
     expect(events.at(-1)?.method).toBe("connection/failed");
   });
 });
+
+describe("existing Codex threads", () => {
+  async function existingSetup() {
+    const repo = await repository(),
+      root = directory(),
+      home = directory();
+    const store = new CodexStore(root),
+      local = new FakeTransport(),
+      external = new FakeTransport();
+    store.configuration.projects.R_123 = {
+      repositoryId: "R_123",
+      path: repo,
+      overrides: {},
+    };
+    const manager = new ThreadManager(
+      store,
+      local,
+      async () => models,
+      vi.fn(),
+      () => "attachment.png",
+      () => ({ client: external, models: async () => models }),
+    );
+    managers.push(manager);
+    const { ExistingThreads } = await import(
+      "../../electron/main/codex/existing"
+    );
+    const browser = new ExistingThreads(manager, home);
+    const rpc = vi
+      .spyOn(external, "request")
+      .mockImplementation(async (method) => {
+        if (method === "thread/read")
+          return {
+            thread: {
+              id: "existing-1",
+              name: "Original conversation",
+              cwd: repo,
+            },
+          };
+        if (method === "thread/turns/list")
+          return {
+            data: [
+              {
+                items: [
+                  {
+                    id: "old-message",
+                    type: "userMessage",
+                    content: [{ type: "text", text: "Keep this context" }],
+                  },
+                ],
+              },
+            ],
+          };
+        if (method === "account/read")
+          return { account: { email: "external@example.invalid" } };
+        if (method === "thread/resume")
+          return { thread: { id: "existing-1", turns: [] } };
+        if (method === "turn/start") return { turn: { id: "external-turn" } };
+        return {};
+      });
+    return { repo, root, home, store, local, external, manager, browser, rpc };
+  }
+  it("lists only matching Git repositories, including linked worktrees and subfolders, through the protocol", async () => {
+    const { repo, browser, rpc, manager } = await existingSetup();
+    const worktree = await createWorktree(repo, directory(), randomUUID());
+    mkdirSync(path.join(worktree.worktree, "subfolder"));
+    const unrelated = await repository();
+    rpc.mockResolvedValueOnce({
+      data: [
+        { id: "one", cwd: repo, name: "Main checkout", updatedAt: 1700000000 },
+        {
+          id: "two",
+          cwd: path.join(worktree.worktree, "subfolder"),
+          preview: "Linked worktree",
+        },
+        { id: "wrong", cwd: unrelated },
+        { id: "missing", cwd: "/missing/folder" },
+      ],
+      nextCursor: "next-page",
+    });
+    const page = await browser.list("R_123");
+    expect(page.threads.map((t) => t.id)).toEqual(["one", "two"]);
+    expect(page.nextCursor).toBe("next-page");
+    expect(rpc).toHaveBeenCalledWith(
+      "thread/list",
+      expect.objectContaining({
+        useStateDbOnly: false,
+        sourceKinds: expect.arrayContaining(["appServer"]),
+      }),
+    );
+    expect(manager.store.list("R_123")).toEqual([]);
+  });
+  it("adds once, preserves history and dirty files, and resumes the original ID using the external runtime", async () => {
+    const { repo, home, browser, store, manager, external, local, rpc, root } =
+      await existingSetup();
+    writeFileSync(path.join(repo, "file.txt"), "uncommitted original work\n");
+    const [summary, duplicate] = await Promise.all([
+      browser.adopt("R_123", "existing-1", false),
+      browser.adopt("R_123", "existing-1", false),
+    ]);
+    expect(duplicate.id).toBe(summary.id);
+    const thread = store.get("R_123", summary.id);
+    expect(thread).toMatchObject({
+      sourceHome: home,
+      serverId: "existing-1",
+      worktree: await realpathSync(repo),
+      branch: "main",
+    });
+    expect(thread.items[0].text).toContain("Keep this context");
+    expect((await browser.adopt("R_123", "existing-1", false)).id).toBe(
+      summary.id,
+    );
+    await manager.send(thread, message("Continue the task"));
+    expect(rpc).toHaveBeenCalledWith(
+      "thread/resume",
+      expect.objectContaining({ threadId: "existing-1", cwd: thread.worktree }),
+    );
+    expect(rpc).not.toHaveBeenCalledWith("thread/start", expect.anything());
+    expect(local.calls).toEqual([]);
+    expect(readFileSync(path.join(repo, "file.txt"), "utf8")).toBe(
+      "uncommitted original work\n",
+    );
+    external.emit("turn/completed", {
+      threadId: "existing-1",
+      turn: { id: "external-turn", status: "completed" },
+    });
+    const restarted = new CodexStore(root).get("R_123", summary.id);
+    expect(restarted.sourceHome).toBe(home);
+    expect(restarted.serverId).toBe("existing-1");
+  });
+  it("rejects mismatched IDs, unrelated or missing folders, and running threads before attaching or restoring", async () => {
+    const { browser, rpc, repo, store } = await existingSetup();
+    for (const thread of [
+      { id: "other", cwd: repo },
+      { id: "existing-1", cwd: await repository() },
+      { id: "existing-1", cwd: "/missing/folder" },
+      { id: "existing-1", cwd: repo, status: { type: "active" } },
+    ]) {
+      rpc.mockResolvedValueOnce({ thread });
+      await expect(
+        browser.adopt("R_123", "existing-1", true),
+      ).rejects.toThrow();
+    }
+    expect(store.list("R_123")).toEqual([]);
+    expect(rpc).not.toHaveBeenCalledWith("thread/unarchive", expect.anything());
+  });
+  it("can resume when optional history loading fails, but never replaces a missing server thread", async () => {
+    const { browser, rpc, manager, store } = await existingSetup();
+    rpc.mockResolvedValueOnce({
+      thread: {
+        id: "existing-1",
+        cwd: store.configuration.projects.R_123.path,
+      },
+    });
+    rpc.mockRejectedValueOnce(new Error("unsupported history"));
+    const summary = await browser.adopt("R_123", "existing-1", false);
+    const thread = store.get("R_123", summary.id);
+    expect(thread.historyWarning).toContain("could not be displayed");
+    rpc.mockImplementation(async (method) => {
+      if (method === "account/read") return { account: { email: "signed-in" } };
+      if (method === "thread/resume") throw new Error("Thread not found");
+      return {};
+    });
+    await expect(manager.send(thread, message())).rejects.toThrow(
+      "Thread not found",
+    );
+    expect(thread.serverId).toBe("existing-1");
+    expect(rpc).not.toHaveBeenCalledWith("thread/start", expect.anything());
+  });
+  it("isolates transport events, request IDs, and process failures between native and external threads", async () => {
+    const { manager, browser, store, external, local } = await existingSetup();
+    const imported = store.get(
+      "R_123",
+      (await browser.adopt("R_123", "existing-1", false)).id,
+    );
+    const native = store.get("R_123", (await manager.create("R_123")).id);
+    native.serverId = imported.serverId;
+    native.state = "running";
+    native.turnId = "native-turn";
+    await manager.send(imported, message());
+    const questions = { questions: [{ id: "q", question: "Choose?" }] };
+    external.emit(
+      "item/tool/requestUserInput",
+      { ...questions, threadId: imported.serverId, turnId: "external-turn" },
+      7,
+    );
+    local.emit(
+      "item/tool/requestUserInput",
+      { ...questions, threadId: native.serverId, turnId: "native-turn" },
+      7,
+    );
+    await manager.answer(imported, 7, { q: "External answer" });
+    expect(external.responses).toHaveLength(1);
+    expect(local.responses).toHaveLength(0);
+    expect(native.requests).toHaveLength(1);
+    external.emit("connection/failed", { message: "External process exited" });
+    expect(imported.state).toBe("interrupted");
+    expect(native.state).toBe("waiting");
+    local.emit("connection/failed", { message: "Local process exited" });
+    expect(native.state).toBe("interrupted");
+  });
+  it("restores archived originals only when explicitly selected", async () => {
+    const { browser, rpc } = await existingSetup();
+    const result = await browser.adopt("R_123", "existing-1", true);
+    expect(result.archived).toBe(false);
+    expect(rpc).toHaveBeenCalledWith("thread/unarchive", {
+      threadId: "existing-1",
+    });
+    expect(rpc).not.toHaveBeenCalledWith("thread/resume", expect.anything());
+    expect(rpc).not.toHaveBeenCalledWith("turn/start", expect.anything());
+  });
+  it("continues pagination across unrelated pages and terminates repeated cursors", async () => {
+    const { browser, rpc, repo } = await existingSetup();
+    rpc.mockResolvedValueOnce({ data: [], nextCursor: "older" });
+    rpc.mockResolvedValueOnce({
+      data: [{ id: "found", cwd: repo }],
+      nextCursor: "more",
+    });
+    expect((await browser.list("R_123")).threads[0].id).toBe("found");
+    rpc.mockResolvedValue({ data: [], nextCursor: "same" });
+    expect((await browser.list("R_123", "cursor", true)).nextCursor).toBeNull();
+    expect(rpc).toHaveBeenCalledWith(
+      "thread/list",
+      expect.objectContaining({ archived: true, cursor: "cursor" }),
+    );
+  });
+});
+
+describe("existing-thread recovery", () => {
+  it("restores the source home after restart and sends steer, Stop, and approvals to that runtime", async () => {
+    const { store, repo, thread, manager: original } = await setup();
+    original.flush();
+    thread.sourceHome = directory();
+    thread.serverId = "original-id";
+    thread.worktree = realpathSync(repo);
+    thread.branch = "main";
+    thread.baseCommit = (await git(repo, ["rev-parse", "HEAD"])).trim();
+    thread.state = "running";
+    thread.turnId = "old-turn";
+    store.saveThread(thread);
+    const recovered = new CodexStore(store.root),
+      local = new FakeTransport(),
+      external = new FakeTransport();
+    const factory = vi.fn(() => ({
+      client: external,
+      models: async () => models,
+    }));
+    const manager = new ThreadManager(
+      recovered,
+      local,
+      async () => models,
+      vi.fn(),
+      () => "image.png",
+      factory,
+    );
+    managers.push(manager);
+    const resumed = recovered.get(thread.repositoryId, thread.id);
+    expect(resumed.state).toBe("interrupted");
+    expect(resumed.queuePaused).toBe(true);
+    const rpc = vi
+      .spyOn(external, "request")
+      .mockImplementation(async (method) => {
+        if (method === "account/read")
+          return { account: { email: "original-account" } };
+        if (method === "thread/resume")
+          return { thread: { id: "original-id", turns: [] } };
+        if (method === "turn/start") return { turn: { id: "resumed-turn" } };
+        return {};
+      });
+    await manager.send(resumed, message("Resume here"));
+    expect(factory).toHaveBeenCalledWith(thread.sourceHome);
+    expect(rpc).toHaveBeenCalledWith(
+      "turn/start",
+      expect.objectContaining({
+        approvalPolicy: "on-request",
+        threadId: "original-id",
+      }),
+    );
+    await manager.send(resumed, message("Steer this turn"));
+    expect(rpc).toHaveBeenCalledWith(
+      "turn/steer",
+      expect.objectContaining({
+        threadId: "original-id",
+        expectedTurnId: "resumed-turn",
+      }),
+    );
+    external.emit(
+      "item/commandExecution/requestApproval",
+      { threadId: "original-id", turnId: "resumed-turn", command: "npm test" },
+      4,
+    );
+    await manager.answer(resumed, 4, undefined, false);
+    expect(external.responses[0]).toEqual({
+      id: 4,
+      result: { decision: "decline" },
+    });
+    await manager.stop(resumed);
+    expect(rpc).toHaveBeenCalledWith("turn/interrupt", {
+      threadId: "original-id",
+      turnId: "resumed-turn",
+    });
+    expect(local.calls).toEqual([]);
+  });
+});

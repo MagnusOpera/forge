@@ -54,3 +54,5 @@ Before release, verify the CLI capability check, browser-based ChatGPT sign-in, 
 ## Dependency upgrade checks
 
 Forge now builds with Electron 45, React 19, Vite 8, and TypeScript 7. Packaging still targets unsigned macOS arm64 ZIPs before the release signing workflow. Use a supported Node.js version from `package.json` when installing or packaging, and run `make check` to verify types, tests, and the dependency audit.
+
+Existing-thread smoke checks should use a disposable Codex home and Git repository. Verify listing, Git project matching, original-ID resumption, questions/approvals, and restart recovery alongside an isolated Forge thread. Existing threads use the app/CLI account and original working folder; verify that Forge does not copy credentials or create replacement worktrees.

@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added project browsing and resumption of existing Codex app and CLI threads, with recent history when available.
+
 - Aligned diff toolbar icons vertically with the modal title.
 
 - Replaced Unified and Split labels in worktree diffs with compact toolbar icons.

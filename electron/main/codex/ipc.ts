@@ -9,6 +9,8 @@ import {
   chmodSync,
 } from "node:fs";
 import path from "node:path";
+import os from "node:os";
+import { ExistingThreads } from "./existing.js";
 import { CodexClient, object, text } from "./client.js";
 import { CodexStore } from "./store.js";
 import { ThreadManager } from "./threads.js";
@@ -40,6 +42,10 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
   let store: CodexStore | undefined,
     client: CodexClient | undefined,
     manager: ThreadManager | undefined;
+  let existing: ExistingThreads | undefined;
+  const sourceHome = path.resolve(
+    process.env.CODEX_HOME || path.join(os.homedir(), ".codex"),
+  );
   let loginId: string | null = null;
   const changed = (change: CodexChange) => {
     if (change.auth) loginId = null;
@@ -68,7 +74,17 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         () => client!.models(),
         changed,
         attachmentPath,
+        (home) => {
+          const external = new CodexClient(
+            home,
+            () => store!.configuration.executable,
+            30_000,
+            true,
+          );
+          return { client: external, models: () => external.models() };
+        },
       );
+      existing = new ExistingThreads(manager, sourceHome);
     }
     return { store, client: client!, manager: manager! };
   };
@@ -124,7 +140,10 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         store.configuration.defaults = defaults;
         store.configuration.executable = executable;
         store.saveConfiguration();
-        if (restart) client.stop();
+        if (restart) {
+          client.stop();
+          manager.stopExternalRuntimes();
+        }
         changed({});
         return store.configuration;
       }
@@ -136,7 +155,16 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         changed({});
         return;
       }
-      if (method === "models") return client.models();
+      if (method === "models") {
+        if (input.id !== undefined)
+          return manager.threadModels(
+            store.get(
+              repositoryId(input.repositoryId),
+              string(input.id, "thread ID"),
+            ),
+          );
+        return client.models();
+      }
       if (method === "login") {
         await client.start();
         const result = object(
@@ -201,6 +229,25 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         store.saveConfiguration();
         changed({ repositoryId: projectId });
         return store.configuration;
+      }
+      if (method === "existing") {
+        if (input.archived !== undefined && typeof input.archived !== "boolean")
+          throw new Error("Invalid archive filter.");
+        return existing!.list(
+          projectId,
+          input.cursor === undefined
+            ? undefined
+            : string(input.cursor, "thread cursor", 4096),
+          input.archived === true,
+        );
+      }
+      if (method === "adopt") {
+        const serverId = string(input.serverId, "Codex thread ID");
+        if (!/^[a-zA-Z0-9_-]+$/.test(serverId))
+          throw new Error("Invalid Codex thread ID.");
+        if (typeof input.archived !== "boolean")
+          throw new Error("Invalid archive state.");
+        return existing!.adopt(projectId, serverId, input.archived);
       }
       if (method === "list") return store.list(projectId);
       if (method === "create") return manager.create(projectId);

@@ -14,15 +14,17 @@ const labels: Record<keyof CodexPreferences, string> = {
   followUp: "Follow-up behavior",
   permissions: "Permissions",
 };
-export function useCodexModels() {
+export function useCodexModels(repositoryId?: string, id?: string) {
   const [models, setModels] = useState<CodexModel[]>([]),
     [error, setError] = useState("");
   useEffect(() => {
     let active = true;
+    setModels([]);
+    setError("");
     if (!window.forgeCodex) return;
     const refresh = () =>
       void codexApi()
-        .request("models", {})
+        .request("models", id ? { repositoryId, id } : {})
         .then((result) => {
           if (active) {
             setModels(result);
@@ -44,7 +46,7 @@ export function useCodexModels() {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [repositoryId, id]);
   return { models, error };
 }
 export function PreferencesEditor({

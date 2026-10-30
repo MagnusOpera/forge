@@ -90,6 +90,8 @@ export type CodexThreadSummary = {
   worktree: string;
   branch: string;
   baseCommit: string;
+  sourceHome?: string;
+  historyWarning?: string;
 };
 export type CodexThread = CodexThreadSummary & {
   activeSettings?: CodexPreferences;
@@ -108,6 +110,15 @@ export type CodexGitInfo = {
   status: string;
   diff: string;
   untracked: { path: string; text: string }[];
+};
+export type CodexExistingThread = {
+  id: string;
+  title: string;
+  cwd: string;
+  updatedAt: string;
+  active: boolean;
+  archived: boolean;
+  attachedId?: string;
 };
 type Command<I, O> = { input: I; output: O };
 type ThreadInput = { repositoryId: string; id: string };
@@ -130,7 +141,15 @@ export type CodexCommands = {
   login: Command<Record<string, never>, void>;
   logout: Command<Record<string, never>, void>;
   cancelLogin: Command<Record<string, never>, void>;
-  models: Command<Record<string, never>, CodexModel[]>;
+  models: Command<{ repositoryId?: string; id?: string }, CodexModel[]>;
+  existing: Command<
+    { repositoryId: string; cursor?: string; archived?: boolean },
+    { home: string; threads: CodexExistingThread[]; nextCursor: string | null }
+  >;
+  adopt: Command<
+    { repositoryId: string; serverId: string; archived: boolean },
+    CodexThreadSummary
+  >;
   list: Command<{ repositoryId: string }, CodexThreadSummary[]>;
   create: Command<{ repositoryId: string }, CodexThreadSummary>;
   thread: Command<ThreadInput & { before?: number }, CodexThreadPage>;
