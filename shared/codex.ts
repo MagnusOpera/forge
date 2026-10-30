@@ -22,7 +22,9 @@ export type CodexProject = {
   warning?: string;
   dirty?: boolean;
 };
+export const DEFAULT_TEXT_EDITOR = "Visual Studio Code";
 export type CodexConfiguration = {
+  editor: string;
   defaults: CodexPreferences;
   executable: string;
   projects: Record<string, CodexProject>;
@@ -126,7 +128,7 @@ export type CodexCommands = {
   openLink: Command<{ url: string }, void>;
   configuration: Command<Record<string, never>, CodexConfiguration>;
   saveConfiguration: Command<
-    { defaults: CodexPreferences; executable: string },
+    { defaults: CodexPreferences; executable: string; editor?: string },
     CodexConfiguration
   >;
   saveProject: Command<
@@ -191,6 +193,8 @@ export type CodexCommands = {
   attach: Command<ThreadInput, CodexAttachment[]>;
   git: Command<ThreadInput, CodexGitInfo>;
   openFolder: Command<ThreadInput, void>;
+  openEditor: Command<ThreadInput, void>;
+  pickEditor: Command<Record<string, never>, string | null>;
 };
 export type CodexChange = {
   connectionError?: string;

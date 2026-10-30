@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
+  Code2,
   FileDiff,
   FolderOpen,
   GitCommitHorizontal,
@@ -108,6 +109,23 @@ export function CodexQuickActions({
           }}
         >
           {copied ? <Check size={16} /> : <FolderOpen size={16} />}
+        </button>
+        <button
+          className="icon-button"
+          aria-label="Open worktree in text editor"
+          title="Open worktree in text editor"
+          disabled={!thread?.worktree || busy}
+          onClick={() => {
+            if (thread)
+              void execute(async () => {
+                await codexApi().request("openEditor", {
+                  repositoryId: thread.repositoryId,
+                  id: thread.id,
+                });
+              });
+          }}
+        >
+          <Code2 size={16} />
         </button>
         <button
           className="icon-button"

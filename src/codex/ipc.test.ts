@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
@@ -23,7 +23,12 @@ vi.mock("electron", () => ({
   shell: { openExternal: vi.fn(), openPath: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
 }));
-import { shell } from "electron";
+import { shell, dialog } from "electron";
+import * as editorLauncher from "../../electron/main/codex/editor";
+import { CodexStore } from "../../electron/main/codex/store";
+import { git } from "../../electron/main/codex/git";
+import { randomUUID } from "node:crypto";
+import type { CodexThread } from "../../shared/codex";
 import { CodexClient } from "../../electron/main/codex/client";
 import { registerCodexIpc } from "../../electron/main/codex/ipc";
 let frame: { url: string };
@@ -143,6 +148,103 @@ describe("Codex preload IPC handlers", () => {
       request("models", { repositoryId: "R_123", id: "not-owned" }),
     ).rejects.toThrow("does not belong");
     expect(rpc).not.toHaveBeenCalled();
+  });
+  it("opens only the owned worktree using the current global editor preference", async () => {
+    const folder = path.join(mock.root, "repository");
+    mkdirSync(folder);
+    await git(folder, ["init", "-b", "main"]);
+    await git(folder, [
+      "-c",
+      "user.name=Forge test",
+      "-c",
+      "user.email=test@example.invalid",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "Initial",
+    ]);
+    const store = new CodexStore(path.join(mock.root, "codex"));
+    const id = randomUUID(),
+      now = new Date().toISOString();
+    const thread: CodexThread = {
+      id,
+      repositoryId: "R_123",
+      title: "Editor test",
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+      settings: defaultCodexPreferences,
+      state: "idle",
+      worktree: folder,
+      branch: "main",
+      baseCommit: (await git(folder, ["rev-parse", "HEAD"])).trim(),
+      serverId: "",
+      repositoryPath: folder,
+      items: [],
+      requests: [],
+      queue: [],
+      queuePaused: true,
+      draft: "",
+      draftAttachments: [],
+    };
+    store.saveThread(thread);
+    const launch = vi
+      .spyOn(editorLauncher, "openInTextEditor")
+      .mockResolvedValue();
+    await request("openEditor", {
+      repositoryId: "R_123",
+      id,
+      path: "/untrusted",
+      editor: "Untrusted app",
+    });
+    expect(launch).toHaveBeenLastCalledWith(folder, "Visual Studio Code");
+    await request("saveConfiguration", {
+      defaults: defaultCodexPreferences,
+      executable: "",
+      editor: "Cursor",
+    });
+    await request("openEditor", { repositoryId: "R_123", id });
+    expect(launch).toHaveBeenLastCalledWith(folder, "Cursor");
+    expect(
+      new CodexStore(path.join(mock.root, "codex")).configuration.editor,
+    ).toBe("Cursor");
+    await expect(
+      request("openEditor", { repositoryId: "OTHER", id }),
+    ).rejects.toThrow("does not belong");
+    expect(launch).toHaveBeenCalledTimes(2);
+  });
+  it("validates editor configuration and uses a native application picker without saving prematurely", async () => {
+    const appPath = path.join(mock.root, "My Editor.app");
+    mkdirSync(appPath);
+    vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePaths: [appPath],
+    });
+    expect(await request("pickEditor")).toBe(appPath);
+    expect(dialog.showOpenDialog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        filters: [{ name: "Applications", extensions: ["app"] }],
+      }),
+    );
+    expect(await request("configuration")).toMatchObject({
+      editor: "Visual Studio Code",
+    });
+    await expect(
+      request("saveConfiguration", {
+        defaults: defaultCodexPreferences,
+        executable: "",
+        editor: "/bin/sh",
+      }),
+    ).rejects.toThrow(".app path");
+    expect(await request("configuration")).toMatchObject({
+      editor: "Visual Studio Code",
+    });
+    vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: true,
+      filePaths: [],
+    });
+    expect(await request("pickEditor")).toBeNull();
   });
   it("reports a missing CLI without disabling configuration", async () => {
     await request("saveConfiguration", {

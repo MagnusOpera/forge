@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added a worktree editor shortcut beside Finder, with a global editor preference defaulting to VS Code.
+
 - Moved global configuration beside the theme/color picker in the content toolbar, keeping its position consistent when the sidebar is collapsed.
 
 - Added a chat toolbar action to discover and merge the repository default branch into the current worktree with Codex.

@@ -6,6 +6,7 @@ import type {
   CodexPreferences,
   CodexStatus,
 } from "../../shared/codex";
+import { DEFAULT_TEXT_EDITOR } from "../../shared/codex";
 import { CLASSIC_TOKEN_SETTINGS_URL } from "../../shared/auth";
 import { codexApi, errorMessage } from "./api";
 import { PreferencesEditor, useCodexModels } from "./preferences";
@@ -29,6 +30,7 @@ export function CodexSettingsDialog({
   );
   const [preferences, setPreferences] = useState<Partial<CodexPreferences>>({});
   const [executable, setExecutable] = useState("");
+  const [editor, setEditor] = useState(DEFAULT_TEXT_EDITOR);
   const [status, setStatus] = useState<CodexStatus | null>(null);
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
@@ -89,6 +91,7 @@ export function CodexSettingsDialog({
         if (!active) return;
         setConfiguration(c);
         setExecutable(c.executable);
+        setEditor(c.editor ?? DEFAULT_TEXT_EDITOR);
         setPreferences(
           project ? (c.projects[project.id]?.overrides ?? {}) : c.defaults,
         );
@@ -353,6 +356,46 @@ export function CodexSettingsDialog({
           )}
           {!project && (
             <section>
+              <h3>Text editor</h3>
+              <div className="codex-field">
+                <span>Application name or .app path</span>
+                <div className="codex-field-control">
+                  <input
+                    aria-label="Text editor application"
+                    value={editor}
+                    onChange={(event) => setEditor(event.target.value)}
+                    placeholder={DEFAULT_TEXT_EDITOR}
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Choose text editor application"
+                    title="Choose application"
+                    disabled={busy}
+                    onClick={() =>
+                      void operation(async () => {
+                        const selected = await codexApi().request(
+                          "pickEditor",
+                          {},
+                        );
+                        if (selected) setEditor(selected);
+                      })
+                    }
+                  >
+                    <FolderOpen size={16} />
+                  </button>
+                </div>
+              </div>
+              <p className="codex-muted">
+                The editor button beside Finder opens the selected chat's
+                worktree. Defaults to Visual Studio Code; no command-line
+                launcher is required.
+              </p>
+            </section>
+          )}
+          {!project && (
+            <section>
               <h3>Codex runtime</h3>
               <label className="codex-field">
                 <span>Executable path</span>
@@ -393,6 +436,7 @@ export function CodexSettingsDialog({
                   : await codexApi().request("saveConfiguration", {
                       defaults: preferences as CodexPreferences,
                       executable,
+                      editor,
                     });
                 setConfiguration(next);
                 onClose();

@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { openInTextEditor, validateEditor } from "./editor.js";
 import { ExistingThreads } from "./existing.js";
 import { CodexClient, object, text } from "./client.js";
 import { CodexStore } from "./store.js";
@@ -136,9 +137,14 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           throw new Error(
             "Stop active threads before changing the Codex executable.",
           );
+        const editor =
+          input.editor === undefined
+            ? store.configuration.editor
+            : validateEditor(input.editor);
         const restart = executable !== store.configuration.executable;
         store.configuration.defaults = defaults;
         store.configuration.executable = executable;
+        store.configuration.editor = editor;
         store.saveConfiguration();
         if (restart) {
           client.stop();
@@ -146,6 +152,23 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         }
         changed({});
         return store.configuration;
+      }
+      if (method === "pickEditor") {
+        const result = await dialog.showOpenDialog(target, {
+          title: "Choose text editor application",
+          defaultPath: "/Applications",
+          properties: ["openFile"],
+          filters: [{ name: "Applications", extensions: ["app"] }],
+        });
+        if (result.canceled || !result.filePaths[0]) return null;
+        const selected = result.filePaths[0];
+        if (
+          !path.isAbsolute(selected) ||
+          !selected.endsWith(".app") ||
+          !statSync(selected).isDirectory()
+        )
+          throw new Error("Choose a macOS text editor application (.app).");
+        return validateEditor(selected);
       }
       if (method === "status")
         return { ...(await client.status()), loginPending: Boolean(loginId) };
@@ -347,6 +370,11 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
             : string(input.text, "queued message", 1_000_000),
         );
       if (method === "git") return gitInfo(thread);
+      if (method === "openEditor") {
+        await assertWorktree(thread);
+        await openInTextEditor(thread.worktree, store.configuration.editor);
+        return;
+      }
       if (method === "openFolder") {
         await assertWorktree(thread);
         const error = await shell.openPath(thread.worktree);
