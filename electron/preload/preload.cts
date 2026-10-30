@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type {
   AddPullRequestCommentPayload,
   CacheRequestOptions,
@@ -112,6 +112,7 @@ const api: GithubFocusApi = {
 contextBridge.exposeInMainWorld("githubFocus", api);
 
 const codexApi: import("../../shared/codex.js").CodexApi = {
+  attachFiles: (input, files) => ipcRenderer.invoke("codex:request", "attach", { ...input, paths: files.map((file) => webUtils.getPathForFile(file)) }),
   request: (method, input) => ipcRenderer.invoke("codex:request", method, input),
   onChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, change: import("../../shared/codex.js").CodexChange) => callback(change);

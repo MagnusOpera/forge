@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Compose Codex messages with visual Markdown formatting, attach documents by drag and drop, and view Mermaid diagrams, images, and downloadable files in replies.
+
 - Added a worktree editor shortcut beside Finder, with a global editor preference defaulting to VS Code.
 
 - Moved global configuration beside the theme/color picker in the content toolbar, keeping its position consistent when the sidebar is collapsed.

@@ -162,6 +162,34 @@ async function setup() {
     thread = store.get("R_123", summary.id);
   return { store, client, manager, thread, repo };
 }
+describe("Codex document input", () => {
+  it("sends documents as local file context and images through native image input, including steer", async () => {
+    const { manager, thread, client } = await setup();
+    const input = {
+      ...message("Read the document"),
+      attachments: [
+        { id: "doc.pdf", name: "spec.pdf", kind: "document" as const },
+        { id: "image.png", name: "diagram.png", kind: "image" as const },
+      ],
+    };
+    await manager.send(thread, input);
+    const start = client.calls.find((call) => call.method === "turn/start")!;
+    expect(start.params.input).toEqual([
+      { type: "text", text: "Read the document", text_elements: [] },
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining(
+          '"name":"spec.pdf","path":"attachment.png"',
+        ),
+      }),
+      { type: "localImage", path: "attachment.png" },
+    ]);
+    await manager.send(thread, input);
+    expect(
+      client.calls.find((call) => call.method === "turn/steer")?.params.input,
+    ).toEqual(start.params.input);
+  });
+});
 describe("Codex events and persistence", () => {
   it("keeps the full transcript, reconciles streamed completion and paginates", () => {
     const thread = makeThread();
@@ -829,9 +857,8 @@ describe("existing Codex threads", () => {
       () => ({ client: external, models: async () => models }),
     );
     managers.push(manager);
-    const { ExistingThreads } = await import(
-      "../../electron/main/codex/existing"
-    );
+    const { ExistingThreads } =
+      await import("../../electron/main/codex/existing");
     const browser = new ExistingThreads(manager, home);
     const rpc = vi
       .spyOn(external, "request")

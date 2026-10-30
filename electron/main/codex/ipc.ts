@@ -1,13 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import {
-  mkdirSync,
-  readFileSync,
-  existsSync,
-  copyFileSync,
-  statSync,
-  chmodSync,
-} from "node:fs";
+  importAttachments,
+  resolveOutputFile,
+  imageExtension,
+  MAX_ATTACHMENT_BYTES,
+} from "./files.js";
+import { readFileSync, existsSync, copyFileSync, statSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { openInTextEditor, validateEditor } from "./editor.js";
@@ -53,12 +52,12 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
     window()?.webContents.send("codex:changed", change);
   };
   const attachmentPath = (attachment: CodexAttachment): string => {
-    if (!/^[a-f0-9-]{36}(?:\.(?:png|jpg|webp|gif))?$/.test(attachment.id))
+    if (!/^[a-f0-9-]{36}(?:\.[a-z0-9.]{1,15})?$/.test(attachment.id))
       throw new Error("Invalid attachment ID.");
     const file = path.join(store!.root, "attachments", attachment.id);
     if (!existsSync(file))
       throw new Error(
-        `Image attachment ${attachment.name} is missing. Attach it again.`,
+        `Attachment ${attachment.name} is missing. Attach it again.`,
       );
     return file;
   };
@@ -286,12 +285,15 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
       }
       const attachments = (value: unknown): CodexAttachment[] => {
         if (!Array.isArray(value) || value.length > 20)
-          throw new Error("Invalid image attachments.");
+          throw new Error("Invalid attachments.");
         return value.map((entry) => {
           const a = object(entry);
-          const attachment = {
+          const attachment: CodexAttachment = {
             id: string(a.id, "attachment ID"),
             name: string(a.name, "attachment name", 1024),
+            ...(a.kind === "image" || a.kind === "document"
+              ? { kind: a.kind }
+              : {}),
           };
           attachmentPath(attachment);
           return attachment;
@@ -381,58 +383,54 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         if (error) throw new Error(error);
         return;
       }
+      if (method === "outputFile") {
+        const file = resolveOutputFile(
+          string(input.href, "file link", 8192),
+          thread.worktree,
+          path.join(store.root, "attachments"),
+        );
+        if (input.action === "reveal") {
+          shell.showItemInFolder(file);
+          return null;
+        }
+        if (input.action === "save") {
+          const result = await dialog.showSaveDialog(target, {
+            title: "Save document",
+            defaultPath: path.basename(file),
+          });
+          if (!result.canceled && result.filePath)
+            copyFileSync(file, result.filePath);
+          return null;
+        }
+        if (input.action === "image") {
+          if (statSync(file).size > MAX_ATTACHMENT_BYTES)
+            throw new Error("Image is too large to preview.");
+          const data = readFileSync(file),
+            extension = imageExtension(data);
+          if (!extension) throw new Error("Unsupported image format.");
+          return `data:image/${extension === ".jpg" ? "jpeg" : extension.slice(1)};base64,${data.toString("base64")}`;
+        }
+        throw new Error("Unsupported file action.");
+      }
       if (method === "attach") {
         if (thread.archived)
-          throw new Error("Restore the thread before attaching images.");
-        const result = await dialog.showOpenDialog(target, {
-          title: "Attach images",
-          properties: ["openFile", "multiSelections"],
-          filters: [
-            {
-              name: "Images",
-              extensions: ["png", "jpg", "jpeg", "webp", "gif"],
-            },
-          ],
-        });
-        if (result.canceled) return [];
-        const directory = path.join(store.root, "attachments");
-        mkdirSync(directory, { recursive: true, mode: 0o700 });
-        const selected: CodexAttachment[] = [];
-        for (const file of result.filePaths.slice(0, 20)) {
-          if (statSync(file).size > 20 * 1024 * 1024)
-            throw new Error("Images must be 20 MB or smaller.");
-          const data = readFileSync(file),
-            header = data.subarray(0, 12);
-          if (
-            !(
-              header
-                .subarray(0, 8)
-                .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
-              header.subarray(0, 3).equals(Buffer.from([255, 216, 255])) ||
-              header.toString("ascii", 0, 3) === "GIF" ||
-              (header.toString("ascii", 0, 4) === "RIFF" &&
-                header.toString("ascii", 8, 12) === "WEBP")
-            )
-          )
-            throw new Error("Unsupported image format.");
-          const extension =
-            header[0] === 137
-              ? ".png"
-              : header[0] === 255
-                ? ".jpg"
-                : header.toString("ascii", 0, 3) === "GIF"
-                  ? ".gif"
-                  : ".webp";
-          const attachment = {
-            id: `${randomUUID()}${extension}`,
-            name: path.basename(file),
-          };
-          const destination = path.join(directory, attachment.id);
-          copyFileSync(file, destination);
-          chmodSync(destination, 0o600);
-          selected.push(attachment);
+          throw new Error("Restore the thread before attaching files.");
+        let files: string[];
+        if (input.paths !== undefined) {
+          if (!Array.isArray(input.paths) || input.paths.length > 20)
+            throw new Error("Invalid attachments.");
+          files = input.paths.map((file) =>
+            string(file, "attachment path", 8192),
+          );
+        } else {
+          const result = await dialog.showOpenDialog(target, {
+            title: "Attach documents or images",
+            properties: ["openFile", "multiSelections"],
+          });
+          if (result.canceled) return [];
+          files = result.filePaths;
         }
-        return selected;
+        return importAttachments(store.root, files);
       }
       throw new Error("Unsupported Codex operation.");
     },

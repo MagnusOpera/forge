@@ -66,19 +66,23 @@ export type CodexPendingRequest = {
   params: JsonObject;
   questions?: CodexQuestion[];
 };
-export type CodexAttachment = { id: string; name: string };
+export type CodexAttachment = {
+  id: string;
+  name: string;
+  kind?: "image" | "document";
+};
+export function isImageAttachment(attachment: CodexAttachment): boolean {
+  return attachment.kind
+    ? attachment.kind === "image"
+    : /\.(png|jpg|webp|gif)$/.test(attachment.id);
+}
 export type CodexMessage = {
   id: string;
   text: string;
   attachments: CodexAttachment[];
 };
 export type CodexThreadState =
-  | "idle"
-  | "starting"
-  | "running"
-  | "waiting"
-  | "interrupted"
-  | "failed";
+  "idle" | "starting" | "running" | "waiting" | "interrupted" | "failed";
 export type CodexThreadSummary = {
   id: string;
   repositoryId: string;
@@ -190,7 +194,11 @@ export type CodexCommands = {
     },
     void
   >;
-  attach: Command<ThreadInput, CodexAttachment[]>;
+  attach: Command<ThreadInput & { paths?: string[] }, CodexAttachment[]>;
+  outputFile: Command<
+    ThreadInput & { href: string; action: "reveal" | "save" | "image" },
+    string | null
+  >;
   git: Command<ThreadInput, CodexGitInfo>;
   openFolder: Command<ThreadInput, void>;
   openEditor: Command<ThreadInput, void>;
@@ -203,6 +211,7 @@ export type CodexChange = {
   auth?: { success: boolean; error?: string };
 };
 export interface CodexApi {
+  attachFiles?(input: ThreadInput, files: File[]): Promise<CodexAttachment[]>;
   request<K extends keyof CodexCommands>(
     method: K,
     input: CodexCommands[K]["input"],

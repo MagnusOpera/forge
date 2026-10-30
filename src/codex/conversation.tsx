@@ -1,9 +1,8 @@
 import codexLogo from "../../assets/codex-colored.svg";
 import { useEffect, useRef, useState } from "react";
 import { Copy, ImagePlus, Loader2, Send, Square, X } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
+import { CodexMarkdown, DownloadMessage } from "./markdown";
+import { ComposerEditor } from "./composer-editor";
 import {
   codexIsActive,
   type CodexAttachment,
@@ -316,29 +315,34 @@ export function CodexConversation({
       }
     });
   const markdown = (value: string) => (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkBreaks]}
-      components={{
-        a: ({ href, children }) => (
-          <a
-            href={href}
-            onClick={(event) => {
-              event.preventDefault();
-              if (href && /^https?:\/\//.test(href))
-                void codexApi()
-                  .request("openLink", { url: href })
-                  .catch((e) => setError(errorMessage(e)));
-            }}
-          >
-            {children}
-          </a>
-        ),
-        img: ({ alt }) => <span>[Image: {alt || "attachment"}]</span>,
-      }}
-    >
-      {value}
-    </ReactMarkdown>
+    <CodexMarkdown
+      text={value}
+      repositoryId={repositoryId}
+      id={id ?? ""}
+      onError={setError}
+    />
   );
+  const canSend =
+    !busy &&
+    thread &&
+    thread.state !== "starting" &&
+    !thread.requests.length &&
+    Boolean(draft.trim() || attachments.length);
+  const addFiles = (files: File[]) => {
+    if (!files.length || busy || !id || thread?.archived) return;
+    void run(async () => {
+      if (attachments.length + files.length > 20)
+        throw new Error("Attach up to 20 files per message.");
+      const api = codexApi();
+      if (!api.attachFiles)
+        throw new Error("File drop is unavailable. Use the attachment picker.");
+      const added = await api.attachFiles(args, files);
+      saveDraft(draftRef.current.text, [
+        ...draftRef.current.attachments,
+        ...added,
+      ]);
+    });
+  };
   if (!id)
     return (
       <div className="codex-empty">
@@ -480,6 +484,7 @@ export function CodexConversation({
                     : (itemLabels[item.kind] ?? item.kind)}
                 {item.status ? ` · ${item.status}` : ""}
               </span>
+              <DownloadMessage text={item.text} />
               <button
                 className="icon-button"
                 aria-label="Copy message"
@@ -597,7 +602,7 @@ export function CodexConversation({
                 </form>
               ) : (
                 <div className="codex-queued-message">
-                  <span>{message.text || "Image attachments"}</span>
+                  <span>{message.text || "Attachments"}</span>
                   <button
                     className="ghost-button"
                     disabled={busy || thread.archived}
@@ -635,7 +640,19 @@ export function CodexConversation({
           This thread is archived. Restore it from the thread list to continue.
         </div>
       ) : (
-        <div className="codex-composer">
+        <div
+          className="codex-composer"
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes("Files")) {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = busy ? "none" : "copy";
+            }
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            addFiles(Array.from(event.dataTransfer.files));
+          }}
+        >
           <details className="codex-thread-settings">
             <summary>
               {thread.settings.model} · {thread.settings.effort} ·{" "}
@@ -660,34 +677,20 @@ export function CodexConversation({
               {thread.settings.permissions}.
             </small>
           </details>
-          <textarea
-            aria-label="Message Codex"
+          <ComposerEditor
+            key={thread.id}
+            value={draft}
+            disabled={busy}
             placeholder={
               thread.requests.length
                 ? "Answer Codex's request above to continue"
                 : thread.state === "running"
-                  ? thread.settings.followUp === "steer"
-                    ? "Guide the active turn…"
-                    : "Queue a follow-up…"
+                  ? "Guide the active turn…"
                   : "Ask Codex…"
             }
-            value={draft}
-            disabled={busy}
-            onChange={(event) => saveDraft(event.target.value, attachments)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing
-              ) {
-                event.preventDefault();
-                if (
-                  !busy &&
-                  !thread.requests.length &&
-                  (draft.trim() || attachments.length)
-                )
-                  send();
-              }
+            onChange={(value) => saveDraft(value, attachments)}
+            onSend={() => {
+              if (canSend) send();
             }}
           />
           {attachments.length > 0 && (
@@ -698,6 +701,7 @@ export function CodexConversation({
                   <button
                     className="icon-button"
                     aria-label={`Remove ${a.name}`}
+                    disabled={busy}
                     onClick={() =>
                       saveDraft(
                         draft,
@@ -714,19 +718,27 @@ export function CodexConversation({
           <div className="codex-composer-actions">
             <button
               className="icon-button"
-              title="Attach images"
-              aria-label="Attach images"
+              title="Attach documents or images"
+              aria-label="Attach documents or images"
               disabled={busy || attachments.length >= 20}
               onClick={() =>
                 void run(async () => {
                   const added = await codexApi().request("attach", args);
-                  saveDraft(draft, [...attachments, ...added].slice(0, 20));
+                  if (draftRef.current.attachments.length + added.length > 20)
+                    throw new Error("Attach up to 20 files per message.");
+                  saveDraft(draftRef.current.text, [
+                    ...draftRef.current.attachments,
+                    ...added,
+                  ]);
                 })
               }
             >
               <ImagePlus size={16} />
             </button>
-            <small>Enter to send · Shift+Enter for a new line</small>
+            <small>
+              Enter to send · Shift+Enter for a new line · ⌘Enter in code
+              · Drop documents here
+            </small>
             <button
               className="ghost-button"
               disabled={

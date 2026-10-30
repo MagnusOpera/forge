@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
@@ -20,8 +26,12 @@ vi.mock("electron", () => ({
     handle: (name: string, handler: (...args: unknown[]) => unknown) =>
       mock.handlers.set(name, handler),
   },
-  shell: { openExternal: vi.fn(), openPath: vi.fn() },
-  dialog: { showOpenDialog: vi.fn() },
+  shell: {
+    openExternal: vi.fn(),
+    openPath: vi.fn(),
+    showItemInFolder: vi.fn(),
+  },
+  dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
 }));
 import { shell, dialog } from "electron";
 import * as editorLauncher from "../../electron/main/codex/editor";
@@ -290,5 +300,83 @@ describe("Codex preload IPC handlers", () => {
     await expect(
       request("openLink", { url: "https://secret@example.invalid/" }),
     ).rejects.toThrow("Only HTTP");
+  });
+});
+
+describe("Codex attachment and output IPC", () => {
+  it("imports dropped documents, persists their kind, saves output files and rejects escapes", async () => {
+    const store = new CodexStore(path.join(mock.root, "codex"));
+    const folder = path.join(mock.root, "work");
+    mkdirSync(folder);
+    const id = randomUUID(),
+      now = new Date().toISOString();
+    store.saveThread({
+      id,
+      repositoryId: "R_123",
+      title: "Files",
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+      settings: defaultCodexPreferences,
+      state: "idle",
+      worktree: folder,
+      branch: "main",
+      baseCommit: "",
+      serverId: "",
+      repositoryPath: folder,
+      items: [],
+      requests: [],
+      queue: [],
+      queuePaused: false,
+      draft: "",
+      draftAttachments: [],
+    });
+    const args = { repositoryId: "R_123", id };
+    const source = path.join(mock.root, "spec.pdf");
+    writeFileSync(source, "%PDF-1.7 fixture");
+    const attachments = (await request("attach", {
+      ...args,
+      paths: [source],
+    })) as { id: string; name: string; kind: string }[];
+    expect(attachments[0]).toMatchObject({
+      name: "spec.pdf",
+      kind: "document",
+    });
+    await request("update", { ...args, draftAttachments: attachments });
+    expect(
+      new CodexStore(path.join(mock.root, "codex")).get("R_123", id)
+        .draftAttachments,
+    ).toEqual(attachments);
+    writeFileSync(path.join(folder, "result.pdf"), "result bytes");
+    const destination = path.join(mock.root, "saved.pdf");
+    vi.mocked(dialog.showSaveDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePath: destination,
+    });
+    await request("outputFile", {
+      ...args,
+      href: "result.pdf",
+      action: "save",
+    });
+    expect(readFileSync(destination, "utf8")).toBe("result bytes");
+    await request("outputFile", {
+      ...args,
+      href: "result.pdf",
+      action: "reveal",
+    });
+    expect(shell.showItemInFolder).toHaveBeenCalled();
+    await expect(
+      request("outputFile", { ...args, href: source, action: "save" }),
+    ).rejects.toThrow("working folder");
+    await expect(
+      request("outputFile", { ...args, href: "result.pdf", action: "image" }),
+    ).rejects.toThrow("image format");
+    await expect(
+      request("attach", { ...args, paths: [folder] }),
+    ).rejects.toThrow("20 MB");
+    await request("update", { ...args, archived: true });
+    await expect(
+      request("attach", { ...args, paths: [source] }),
+    ).rejects.toThrow("Restore");
   });
 });
