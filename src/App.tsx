@@ -33,6 +33,8 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Settings,
+  Bot,
   Search,
   Star,
   StarOff,
@@ -81,6 +83,7 @@ import {
   pullRequestTabForState,
   pullRequestWorkflowState,
   projectViewNavigationDirection,
+  repositorySelectionFocusView,
   repositoryAllowsPullRequestAutoMerge,
   removePullRequestLabelOptimistically,
   reviewDecisionForReviewEvent,
@@ -123,6 +126,12 @@ import type {
   WorkflowSummary
 } from "../shared/github";
 
+import { CodexQuickActions } from "./codex/quick-actions";
+import { CodexSettingsDialog } from "./codex/settings";
+import { CodexConversation } from "./codex/conversation";
+import { CodexThreadList } from "./codex/threads";
+import { useCodexThreads } from "./codex/api";
+
 const PatchDiff = lazy(async () => {
   const module = await import("@pierre/diffs/react");
   return { default: module.PatchDiff };
@@ -130,6 +139,7 @@ const PatchDiff = lazy(async () => {
 
 type ContentSelection =
   | { kind: "repo" }
+  | { kind: "codex"; threadId: string }
   | { kind: "pr"; pr: PullRequestSummary }
   | { kind: "issue"; issue: IssueSummary }
   | { kind: "run"; run: WorkflowRunSummary; focusedJobId?: number | null }
@@ -640,6 +650,7 @@ function workflowRunFallbackFromCheck(repo: RepoRef, check: CheckSummary): Workf
 }
 
 function selectionRouteKey(selection: ContentSelection): string {
+  if (selection.kind === "codex") return `codex:${selection.threadId}`;
   if (selection.kind === "pr") {
     return `pr:${selection.pr.number}`;
   }
@@ -883,7 +894,7 @@ function openUrlForSelection(selection: ContentSelection, repo: RepoSummary | nu
     return null;
   }
 
-  if (selection.kind === "repo") {
+  if (selection.kind === "repo" || selection.kind === "codex") {
     return repo.url;
   }
   if (selection.kind === "pr") {
@@ -1167,6 +1178,8 @@ export function App() {
   const [recentRepos, setRecentRepos] = useState<RepoSummary[]>([]);
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<RepoSummary | null>(null);
+  const [settingsScope, setSettingsScope] = useState<"global" | "project" | null>(null);
+  const codexThreads = useCodexThreads(selectedRepo?.id);
   const [repoLabels, setRepoLabels] = useState<LabelSummary[]>([]);
   const [pullRequests, setPullRequests] = useState<PullRequestSummary[]>([]);
   const [issues, setIssues] = useState<IssueSummary[]>([]);
@@ -1360,6 +1373,7 @@ export function App() {
   }, [visibleRepos]);
 
   const middleItems = useMemo<MiddleItem[]>(() => {
+    if (projectFocusView === "codex") return [];
     if (projectFocusView === "workflow-runs") {
       return workflowRuns.map((run) => ({ id: `run:${run.id}`, kind: "run" as const, run }));
     }
@@ -1615,13 +1629,17 @@ export function App() {
   const selectRepo = useCallback(
     (repo: RepoSummary) => {
       setSelectedRepo(repo);
+      setStoredProjectFocusView((current) => repositorySelectionFocusView(
+        current === "starred-actions" ? "workflows" : current,
+        favoriteKeys.includes(repoKey(repo))
+      ));
       setSelection({ kind: "repo" });
       setRepoLabels([]);
       setPrDetail(null);
       setRunDetail(null);
       setLocalRecentKeys((current) => [repoKey(repo), ...current.filter((key) => key !== repoKey(repo))].slice(0, 20));
     },
-    [setLocalRecentKeys]
+    [setLocalRecentKeys, favoriteKeys, setStoredProjectFocusView]
   );
 
   const toggleFavorite = useCallback(
@@ -3041,6 +3059,8 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      if (isTabNavigation(event) && (projectFocusView === "codex" || settingsScope)) return;
       if (isTabNavigation(event)) {
         event.preventDefault();
         return;
@@ -3070,11 +3090,13 @@ export function App() {
 
         if (shortcut === "open-pull-requests") {
           setStoredProjectFocusView("pull-requests");
+          if (selection.kind === "codex") setSelection({ kind: "repo" });
           setProjectPullRequestTab("open");
           return;
         }
 
         setStoredProjectFocusView(shortcut);
+        if (shortcut !== "codex" && selection.kind === "codex") setSelection({ kind: "repo" });
         return;
       }
 
@@ -3113,7 +3135,7 @@ export function App() {
       }
 
       const selectionDelta = middlePaneSelectionDelta(event);
-      if (selectionDelta !== null) {
+      if (selectionDelta !== null && projectFocusView !== "codex") {
         event.preventDefault();
         setMiddleKeyboardNavigating(true);
         moveMiddleSelection(selectionDelta);
@@ -3125,6 +3147,7 @@ export function App() {
         event.preventDefault();
         const nextView = adjacentProjectFocusView(projectFocusView, viewDirection);
         setStoredProjectFocusView(nextView);
+        if (nextView !== "codex" && selection.kind === "codex") setSelection({ kind: "repo" });
         if (nextView === "pull-requests") {
           setProjectPullRequestTab("open");
         }
@@ -3160,7 +3183,8 @@ export function App() {
     setProjectPullRequestTab,
     setSidebarCollapsedWithAnimation,
     setStoredProjectFocusView,
-    sidebarCollapsed
+    sidebarCollapsed,
+    settingsScope
   ]);
 
   const saveToken = async (event: React.FormEvent) => {
@@ -3353,6 +3377,21 @@ export function App() {
         }}
       />
       <ProjectPane
+        onGlobalConfiguration={() => setSettingsScope("global")}
+        onProjectConfiguration={() => setSettingsScope("project")}
+        codexCount={codexThreads.threads.filter((thread) => !thread.archived).length}
+        codexList={selectedRepo ? (
+          <CodexThreadList
+            key={selectedRepo.id}
+            repositoryId={selectedRepo.id}
+            loading={projectLoading}
+            threads={codexThreads.threads}
+            selectedId={selection.kind === "codex" ? selection.threadId : undefined}
+            onSelect={(threadId) => setSelection({ kind: "codex", threadId })}
+            onConfigure={() => setSettingsScope("project")}
+            error={codexThreads.error}
+          />
+        ) : null}
         repo={selectedRepo}
         sidebarCollapsed={sidebarCollapsed}
         issues={issues}
@@ -3368,7 +3407,10 @@ export function App() {
         loading={projectLoading}
         error={projectError}
         selection={selection}
-        onFocusView={setStoredProjectFocusView}
+        onFocusView={(view) => {
+          setStoredProjectFocusView(view);
+          if (view !== "codex" && selection.kind === "codex") setSelection({ kind: "repo" });
+        }}
         onPullRequestTab={setProjectPullRequestTab}
         onWorkflowTab={setProjectWorkflowTab}
         onRefresh={() => void refreshActivePane()}
@@ -3387,10 +3429,25 @@ export function App() {
       />
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
       <ContentPane
+        codexActions={projectFocusView === "codex" ? (
+          <CodexQuickActions
+            key={`${selectedRepo?.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
+            thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
+            theme={activeTheme}
+          />
+        ) : undefined}
+        codexContent={projectFocusView === "codex" && selectedRepo ? (
+          <CodexConversation
+            key={`${selectedRepo.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
+            repositoryId={selectedRepo.id}
+            loading={projectLoading}
+            id={selection.kind === "codex" ? selection.threadId : undefined}
+            onConfigure={() => setSettingsScope("project")}
+          />
+        ) : undefined}
         auth={auth}
-        onClearToken={requestClearStoredToken}
         repo={selectedRepo}
-        selection={selection}
+        selection={projectFocusView === "codex" && selection.kind !== "codex" ? { kind: "repo" } : selection}
         prDetail={prDetail}
         runDetail={runDetail}
         prTab={prTab}
@@ -3431,6 +3488,22 @@ export function App() {
         onRunWorkflowWithArguments={runWorkflowWithArguments}
         workflowRuns={workflowRuns}
       />
+      {settingsScope && (
+        <CodexSettingsDialog
+          project={settingsScope === "project" ? selectedRepo ?? undefined : undefined}
+          auth={auth}
+          onClose={() => setSettingsScope(null)}
+          onSaveGithub={async (token) => {
+            const next = await api.saveToken(token);
+            setAuth(next);
+          }}
+          onRemoveGithub={() => {
+            setSettingsScope(null);
+            requestClearStoredToken();
+          }}
+          onOpenUrl={openGithubUrl}
+        />
+      )}
       {confirmationDialog && (
         <ConfirmationDialog
           title={confirmationDialog.title}
@@ -3814,6 +3887,10 @@ function RepoButton(props: {
 }
 
 function ProjectPane(props: {
+  onGlobalConfiguration(): void;
+  onProjectConfiguration(): void;
+  codexList: React.ReactNode;
+  codexCount: number;
   repo: RepoSummary | null;
   sidebarCollapsed: boolean;
   issues: IssueSummary[];
@@ -3887,6 +3964,9 @@ function ProjectPane(props: {
     <section className="project-pane" tabIndex={0}>
       <div className={cx("pane-header", props.sidebarCollapsed && "collapsed-project-header")}>
         <div className="pane-title">
+          <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={props.onGlobalConfiguration}>
+            <Settings size={17} />
+          </button>
           {props.sidebarCollapsed && (
             <button className="icon-button project-sidebar-toggle" aria-label="Open sidebar" onClick={props.onToggleSidebar}>
               <PanelLeftOpen size={18} />
@@ -3899,6 +3979,7 @@ function ProjectPane(props: {
             disabled={!props.repo}
             view={props.focusView}
             counts={{
+              codex: props.codexCount,
               "pull-requests": props.openPullRequests.length,
               "workflow-runs": props.workflowRuns.length,
               issues: props.issues.length,
@@ -3931,6 +4012,9 @@ function ProjectPane(props: {
           <div className="project-identity">
             <span className="owner">{props.repo.owner}</span>
             <span className="full-name">{props.repo.fullName}</span>
+            <button className="icon-button project-configuration" aria-label="Project configuration" title="Project configuration" onClick={props.onProjectConfiguration} disabled={props.loading}>
+              <Settings size={14} />
+            </button>
           </div>
           {props.error && (
             <div className="inline-error">
@@ -3938,7 +4022,7 @@ function ProjectPane(props: {
               <span>{props.error}</span>
             </div>
           )}
-          {props.focusView === "workflow-runs" ? (
+          {props.focusView === "codex" ? props.codexList : props.focusView === "workflow-runs" ? (
             <WorkflowRunsSection
               runs={props.workflowRuns}
               selected={props.selection}
@@ -3984,6 +4068,7 @@ function ProjectFocusToolbar(props: {
     `${props.view}:${props.disabled}:${props.counts["pull-requests"]}:${props.counts["workflow-runs"]}:${props.counts.issues}:${props.counts.workflows}`
   );
   const items: Array<{ view: ProjectFocusView; label: string; shortcut: string; icon: React.ReactNode }> = [
+    { view: "codex", label: "Codex", shortcut: "⌘⇧C", icon: <Bot size={15} /> },
     { view: "pull-requests", label: "Pull Requests", shortcut: "⌘⇧P", icon: <GitPullRequest size={15} /> },
     { view: "workflow-runs", label: "Workflow Runs", shortcut: "⌘⇧R", icon: <Activity size={15} /> },
     { view: "issues", label: "Issues", shortcut: "⌘⇧I", icon: <Inbox size={15} /> },
@@ -4381,6 +4466,8 @@ function WorkflowRunSplitButton(props: {
 }
 
 function ContentPane(props: {
+  codexContent?: React.ReactNode;
+  codexActions?: React.ReactNode;
   auth: AuthStatus | null;
   repo: RepoSummary | null;
   selection: ContentSelection;
@@ -4400,7 +4487,6 @@ function ContentPane(props: {
   canNavigateBack: boolean;
   canNavigateForward: boolean;
   accentColor: string;
-  onClearToken(): void;
   onPrTabChange(tab: string): void;
   onRunTabChange(tab: string): void;
   onNavigateBack(): void;
@@ -4576,7 +4662,7 @@ function ContentPane(props: {
             </button>
           </div>
           <div className="content-title">
-            <ContentTitle selection={props.selection} repo={props.repo} />
+            {props.codexContent ? <span>Codex</span> : <ContentTitle selection={props.selection} repo={props.repo} />}
             <GithubUrlActionButton
               url={githubUrl}
               className="content-title-action"
@@ -4620,11 +4706,7 @@ function ContentPane(props: {
           </div>
         </div>
         <div className="header-actions">
-          {props.auth?.configured && (
-            <button className="icon-button" aria-label="Clear token" onClick={props.onClearToken}>
-              <KeyRound size={16} />
-            </button>
-          )}
+          {props.codexActions}
           <div className="theme-accent-control">
             <button
               className="theme-toggle-button"
@@ -4666,7 +4748,7 @@ function ContentPane(props: {
           </div>
         </div>
       </div>
-      {props.error ? (
+      {props.codexContent ? props.codexContent : props.error ? (
         <div className="content-scroll">
           <div className="inline-error large">
             <AlertCircle size={18} />
@@ -4713,7 +4795,7 @@ function ContentPane(props: {
           onCopyText={props.onCopyText}
           onTab={props.onRunTabChange}
         />
-      ) : (
+      ) : props.selection.kind === "workflow" ? (
         <WorkflowContent
           workflow={props.selection.workflow}
           repo={props.repo}
@@ -4723,7 +4805,7 @@ function ContentPane(props: {
           onRun={props.onRunWorkflow}
           onRunWithArguments={props.onRunWorkflowWithArguments}
         />
-      )}
+      ) : null}
     </main>
   );
 }
@@ -4743,6 +4825,7 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
     return <span>Content</span>;
   }
 
+  if (props.selection.kind === "codex") return <span>Codex</span>;
   if (props.selection.kind === "repo") {
     return <span>{props.repo.fullName}</span>;
   }

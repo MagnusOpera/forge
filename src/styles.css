@@ -3533,3 +3533,94 @@ code {
     padding: 16px 18px 28px;
   }
 }
+
+/* Codex uses the same pane, typography, controls, and theme variables as GitHub views. */
+.project-identity { position: relative; padding-right: 34px; }
+.project-configuration { position: absolute; right: 6px; top: 10px; }
+.codex-modal-backdrop { position: fixed; inset: 0; z-index: 100; background: rgb(0 0 0 / .42); display: grid; place-items: center; padding: 30px; -webkit-app-region: no-drag; }
+.codex-settings-dialog { display: flex; flex-direction: column; width: min(700px, 100%); max-height: calc(100vh - 60px); border: 1px solid var(--panel-border); border-radius: 10px; background: var(--content-bg); box-shadow: 0 16px 60px rgb(0 0 0 / .3); color: var(--text-base); }
+.codex-settings-dialog > header, .codex-settings-dialog > footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; flex-shrink: 0; }
+.codex-settings-dialog > header { border-bottom: 1px solid var(--border); }
+.codex-settings-dialog > footer { border-top: 1px solid var(--border); justify-content: flex-end; }
+.codex-settings-dialog h2 { margin: 0; color: var(--title); font-size: 16px; }
+.codex-settings-dialog h3, .codex-request h3, .codex-changes h3 { margin: 0 0 8px; color: var(--heading); font-size: 13px; }
+.codex-settings-scroll { overflow: auto; padding: 0 18px; }
+.codex-settings-scroll > section { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.codex-settings-scroll p { margin: 8px 0; line-height: 1.5; font-size: 12px; }
+.codex-settings-dialog .inline-error { margin: 12px 0; }
+.codex-preferences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.codex-field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; min-width: 0; }
+.codex-field > span { color: var(--text-strong); }
+.codex-field small, .codex-muted { color: var(--text-muted); }
+.codex-field-control { display: flex; align-items: center; gap: 6px; }
+.codex-field-control .ghost-button { font-size: 10px; flex-shrink: 0; padding: 5px; }
+.codex-field input, .codex-field select, .codex-thread-row input, .codex-conversation textarea, .codex-request input { width: 100%; min-width: 0; border: 1px solid var(--control-border); border-radius: 5px; padding: 7px 9px; background: var(--input-bg); color: var(--text-base); font: inherit; -webkit-app-region: no-drag; }
+.codex-field select { font-size: 12px; }
+.codex-field input:focus, .codex-field select:focus, .codex-conversation textarea:focus, .codex-thread-row input:focus, .codex-request input:focus { outline: 1px solid var(--accent); outline-offset: 1px; }
+.codex-policy-note { grid-column: 1 / -1; color: var(--text-strong); }
+.codex-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.codex-settings-dialog .codex-actions { margin-top: 10px; }
+.codex-actions .ghost-button, .codex-composer-actions .ghost-button { display: inline-flex; align-items: center; gap: 5px; }
+.codex-path { overflow-wrap: anywhere; font: 11px/1.6 ui-monospace, monospace; color: var(--text-muted); }
+.codex-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 8px; padding: 28px 16px; color: var(--text-muted); text-align: center; font-size: 12px; }
+.codex-empty p { margin: 0; line-height: 1.6; }
+.codex-thread-list { min-width: 0; }
+.codex-list-actions { display: flex; justify-content: space-between; align-items: center; padding: 4px 4px 8px; }
+.codex-list-tabs { display: flex; gap: 4px; }
+.codex-list-tabs .active { color: var(--accent); border-bottom: 2px solid var(--accent); border-radius: 0; }
+.codex-thread-row { display: flex; gap: 0; padding: 0; }
+.codex-thread-select { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; flex: 1; min-height: 42px; padding: 6px 8px; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; }
+.codex-state { color: var(--text-muted); font-size: 11px; }
+.codex-state.running, .codex-state.starting { color: var(--accent); }
+.codex-state.waiting { color: var(--text-strong); font-weight: 600; }
+.codex-state.failed { color: var(--danger, #e87979); }
+.codex-thread-actions { display: flex; flex-shrink: 0; padding-right: 4px; }
+.codex-thread-actions .icon-button { width: 24px; height: 26px; }
+.codex-thread-row form { display: flex; gap: 4px; padding: 6px; width: 100%; }
+.codex-conversation { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.codex-conversation-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--border); font-size: 11px; }
+.codex-conversation-toolbar > .codex-actions { margin-left: auto; }
+.codex-transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; }
+.codex-item { padding: 12px 0; border-bottom: 1px solid var(--border-soft); overflow-wrap: anywhere; }
+.codex-item-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 11px; color: var(--text-muted); }
+.codex-item-heading .icon-button { width: 24px; height: 24px; }
+.codex-item.userMessage > .markdown-body { border-left: 2px solid var(--accent); padding-left: 12px; }
+.codex-conversation .markdown-body { font-size: 13px; line-height: 1.65; }
+.codex-conversation pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 4px; font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.codex-conversation details summary { cursor: pointer; font-size: 12px; line-height: 1.6; color: var(--text-muted); }
+.codex-start-note { margin: 24px auto; max-width: 420px; font-size: 12px; color: var(--text-muted); line-height: 1.7; }
+.codex-request { margin: 16px 0; border: 1px solid var(--accent); border-radius: 6px; padding: 12px; font-size: 12px; }
+.codex-request fieldset { border: 0; margin: 0 0 12px; padding: 0; }
+.codex-request legend { color: var(--text-strong); margin-bottom: 8px; line-height: 1.6; }
+.codex-answer-options { display: grid; gap: 6px; margin: 8px 0; }
+.codex-answer-options button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; white-space: normal; }
+.codex-answer-options button small { display: block; color: var(--text-muted); margin-top: 4px; }
+.codex-answer-options .active { border: 1px solid var(--accent); color: var(--accent); }
+.codex-conversation textarea { resize: vertical; min-height: 70px; font-size: 13px; line-height: 1.6; }
+.codex-composer { margin: 0 16px 14px; padding: 10px; border: 1px solid var(--control-border); border-radius: 7px; flex-shrink: 0; }
+.codex-composer > textarea { display: block; max-height: 180px; resize: vertical; margin-top: 8px; border: 0; background: transparent; }
+.codex-composer-actions { display: flex; align-items: center; gap: 8px; padding-top: 6px; }
+.codex-composer-actions > small { color: var(--text-muted); font-size: 10px; }
+.codex-composer-actions > button:last-child { margin-left: auto; }
+.codex-thread-settings .compact { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); padding-bottom: 8px; }
+.codex-thread-settings > small { color: var(--text-muted); font-size: 10px; }
+.codex-attachments { display: flex; flex-wrap: wrap; gap: 6px; }
+.codex-attachments > span { display: flex; align-items: center; padding: 2px 6px; background: var(--input-bg); border-radius: 4px; font-size: 11px; }
+.codex-queue { padding: 8px 16px; border-top: 1px solid var(--border); max-height: 180px; overflow: auto; font-size: 12px; }
+.codex-queued-message { display: flex; align-items: center; gap: 6px; }
+.codex-queued-message > span { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.codex-archived { padding: 20px; color: var(--text-muted); font-size: 12px; }
+.codex-changes { margin: 12px 0; border: 1px solid var(--border); border-radius: 5px; padding: 12px; }
+
+.codex-settings-dialog .ghost-button { gap: 6px; }
+.codex-preferences.compact { max-height: 220px; overflow: auto; }
+.codex-quick-actions { position: relative; display: flex; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
+.codex-action-error { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(360px, 70vw); padding: 10px; display: flex; align-items: flex-start; gap: 6px; background: var(--content-bg); border: 1px solid var(--control-border); border-radius: 6px; box-shadow: 0 8px 24px var(--modal-shadow); font-size: 12px; line-height: 1.5; }
+.codex-action-error > span { flex: 1; }
+.codex-diff-dialog { width: min(1200px, calc(100vw - 48px)); height: min(900px, calc(100vh - 60px)); }
+.codex-diff-scroll { overflow: auto; min-height: 0; padding: 0 16px 16px; }
+.codex-diff-file-title { cursor: pointer; padding: 10px 12px; font-size: 12px; color: var(--text-strong); overflow-wrap: anywhere; }
+.codex-diff-dialog pre { font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: auto; padding: 10px; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 4px; white-space: pre-wrap; }
+.codex-diff-dialog header .ghost-button.active { color: var(--accent); border-color: var(--accent); }
+
+.codex-start-logo { display: block; width: 96px; height: 96px; margin: 0 auto 16px; object-fit: contain; }

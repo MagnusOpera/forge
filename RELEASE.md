@@ -44,3 +44,9 @@ Configure these repository secrets before publishing a release:
 - `PAT_HOMEBREW_TAP`: token with write access to `MagnusOpera/homebrew-tap`.
 
 The app is only signed after the GitHub release is published.
+
+## Codex runtime packaging
+
+Forge uses an installed Codex CLI and does not bundle or download a runtime. Keep macOS packaging arm64-only. The packaged application must discover Codex from PATH and the common Homebrew/local installation paths, or honor the executable path saved in global configuration. Verify this from a Finder-launched build, whose PATH may differ from a terminal session.
+
+Before release, verify the CLI capability check, browser-based ChatGPT sign-in, model discovery, questions, approvals, Stop, steer/queue, and restart/resume against a disposable Git repository. Check logs, Markdown, and worktree diffs in both themes. Forge's own Codex home, thread records, attachments, and retained worktrees live under its Electron user-data `codex` directory and must never be included in release archives. Existing app updates preserve that directory. Archive does not delete local worktrees or branches.

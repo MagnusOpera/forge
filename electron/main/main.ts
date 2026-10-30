@@ -59,7 +59,7 @@ import type {
   WorkflowRunSummary,
   WorkflowSummary
 } from "../../shared/github.js";
-import { DEFAULT_SIDEBAR_APPEARANCE_MODE } from "../../shared/github.js";
+import { DEFAULT_SIDEBAR_APPEARANCE_MODE, repositoryIdentity } from "../../shared/github.js";
 import { parseWorkflowDispatchConfig } from "../../shared/workflowDispatch.js";
 import {
   isClassicPersonalAccessToken,
@@ -67,6 +67,8 @@ import {
   REQUIRED_CLASSIC_TOKEN_SCOPES
 } from "../../shared/auth.js";
 import { AUTO_MERGE_API_UNAVAILABLE_MESSAGE, isAutoMergeNotAllowedMessage } from "../../shared/errors.js";
+
+import { registerCodexIpc } from "./codex/ipc.js";
 
 type GraphqlClient = typeof graphql;
 
@@ -897,7 +899,7 @@ function toRepo(repo: any): RepoSummary {
         : undefined;
 
   return {
-    id: String(repo.id),
+    id: repositoryIdentity(repo),
     owner: repo.owner.login,
     name: repo.name,
     fullName: repo.nameWithOwner ?? `${repo.owner.login}/${repo.name}`,
@@ -2514,6 +2516,7 @@ function registerIpc(): void {
 }
 
 registerIpc();
+registerCodexIpc(() => mainWindow);
 
 app.whenReady().then(async () => {
   await migrateLegacyUserData();

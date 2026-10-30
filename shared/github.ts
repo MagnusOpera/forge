@@ -386,3 +386,8 @@ export interface GithubFocusApi {
   setSidebarAppearanceMode(mode: SidebarAppearanceMode): Promise<void>;
   platform: string;
 }
+
+// REST uses a numeric id; GraphQL uses the node id. Local project data must use one identity.
+export function repositoryIdentity(repo: { id: string | number; node_id?: string }): string {
+  return String(repo.node_id ?? repo.id);
+}

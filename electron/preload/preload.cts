@@ -110,3 +110,13 @@ const api: GithubFocusApi = {
 };
 
 contextBridge.exposeInMainWorld("githubFocus", api);
+
+const codexApi: import("../../shared/codex.js").CodexApi = {
+  request: (method, input) => ipcRenderer.invoke("codex:request", method, input),
+  onChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: import("../../shared/codex.js").CodexChange) => callback(change);
+    ipcRenderer.on("codex:changed", listener);
+    return () => ipcRenderer.removeListener("codex:changed", listener);
+  }
+};
+contextBridge.exposeInMainWorld("forgeCodex", codexApi);

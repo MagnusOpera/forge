@@ -4,6 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Added a centered, full-color Codex logo to empty thread conversations.
+
+- Matched Codex thread selection, titles, metadata, and status badges to the existing project list style.
+
+- Added thread toolbar shortcuts to copy or open worktrees, review diffs, and ask Codex to commit, push, or create a pull request.
+
+- Added local Codex threads with planning, implementation, questions, approvals, steering, queued follow-ups, and isolated Git worktrees.
+- Added global and per-project Codex configuration, including model, effort, speed, permissions, and local repository folders.
+- Made Codex the default view when selecting favorite repositories and moved GitHub token management into global configuration.
+
 ## [0.3.0]
 
 

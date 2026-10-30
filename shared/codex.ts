@@ -1,0 +1,252 @@
+export type JsonObject = Record<string, unknown>;
+export type CodexPreferences = {
+  model: string;
+  effort: string;
+  speed: "normal" | "fast";
+  mode: "implement" | "plan";
+  followUp: "steer" | "queue";
+  permissions: "ask" | "strict" | "full";
+};
+export const defaultCodexPreferences: CodexPreferences = {
+  model: "",
+  effort: "",
+  speed: "normal",
+  mode: "implement",
+  followUp: "steer",
+  permissions: "ask",
+};
+export type CodexProject = {
+  repositoryId: string;
+  path: string;
+  overrides: Partial<CodexPreferences>;
+  warning?: string;
+  dirty?: boolean;
+};
+export type CodexConfiguration = {
+  defaults: CodexPreferences;
+  executable: string;
+  projects: Record<string, CodexProject>;
+};
+export type CodexModel = {
+  id: string;
+  name: string;
+  efforts: string[];
+  defaultEffort: string;
+  isDefault: boolean;
+  fast: boolean;
+  images: boolean;
+};
+export type CodexStatus = {
+  loginPending?: boolean;
+  connected: boolean;
+  authenticated: boolean;
+  email?: string;
+  plan?: string;
+  error?: string;
+  version?: string;
+};
+export type CodexItem = {
+  id: string;
+  kind: string;
+  text: string;
+  status?: string;
+};
+export type CodexQuestion = {
+  id: string;
+  question: string;
+  header: string;
+  options: { label: string; description: string }[];
+  secret?: boolean;
+};
+export type CodexPendingRequest = {
+  id: string | number;
+  method: string;
+  params: JsonObject;
+  questions?: CodexQuestion[];
+};
+export type CodexAttachment = { id: string; name: string };
+export type CodexMessage = {
+  id: string;
+  text: string;
+  attachments: CodexAttachment[];
+};
+export type CodexThreadState =
+  | "idle"
+  | "starting"
+  | "running"
+  | "waiting"
+  | "interrupted"
+  | "failed";
+export type CodexThreadSummary = {
+  id: string;
+  repositoryId: string;
+  title: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  settings: CodexPreferences;
+  state: CodexThreadState;
+  error?: string;
+  worktree: string;
+  branch: string;
+  baseCommit: string;
+};
+export type CodexThread = CodexThreadSummary & {
+  activeSettings?: CodexPreferences;
+  serverId: string;
+  repositoryPath: string;
+  turnId?: string;
+  items: CodexItem[];
+  requests: CodexPendingRequest[];
+  queue: CodexMessage[];
+  queuePaused: boolean;
+  draft: string;
+  draftAttachments: CodexAttachment[];
+};
+export type CodexThreadPage = { thread: CodexThread; before: number | null };
+export type CodexGitInfo = {
+  status: string;
+  diff: string;
+  untracked: { path: string; text: string }[];
+};
+type Command<I, O> = { input: I; output: O };
+type ThreadInput = { repositoryId: string; id: string };
+export type CodexCommands = {
+  openLink: Command<{ url: string }, void>;
+  configuration: Command<Record<string, never>, CodexConfiguration>;
+  saveConfiguration: Command<
+    { defaults: CodexPreferences; executable: string },
+    CodexConfiguration
+  >;
+  saveProject: Command<
+    { repositoryId: string; overrides: Partial<CodexPreferences> },
+    CodexConfiguration
+  >;
+  pickFolder: Command<
+    { repositoryId: string; fullName: string },
+    CodexConfiguration
+  >;
+  status: Command<Record<string, never>, CodexStatus>;
+  login: Command<Record<string, never>, void>;
+  logout: Command<Record<string, never>, void>;
+  cancelLogin: Command<Record<string, never>, void>;
+  models: Command<Record<string, never>, CodexModel[]>;
+  list: Command<{ repositoryId: string }, CodexThreadSummary[]>;
+  create: Command<{ repositoryId: string }, CodexThreadSummary>;
+  thread: Command<ThreadInput & { before?: number }, CodexThreadPage>;
+  update: Command<
+    ThreadInput & {
+      title?: string;
+      archived?: boolean;
+      settings?: CodexPreferences;
+      draft?: string;
+      draftAttachments?: CodexAttachment[];
+    },
+    void
+  >;
+  send: Command<
+    ThreadInput & { text: string; attachments: CodexAttachment[] },
+    void
+  >;
+  quickAction: Command<
+    ThreadInput & { action: import("./codexActions.js").CodexQuickAction },
+    void
+  >;
+  stop: Command<ThreadInput, void>;
+  answer: Command<
+    ThreadInput & {
+      requestId: string | number;
+      answers?: Record<string, string>;
+      approve?: boolean;
+    },
+    void
+  >;
+  queue: Command<
+    ThreadInput & {
+      action: "resume" | "remove" | "edit";
+      messageId?: string;
+      text?: string;
+    },
+    void
+  >;
+  attach: Command<ThreadInput, CodexAttachment[]>;
+  git: Command<ThreadInput, CodexGitInfo>;
+  openFolder: Command<ThreadInput, void>;
+};
+export type CodexChange = {
+  connectionError?: string;
+  repositoryId?: string;
+  threadId?: string;
+  auth?: { success: boolean; error?: string };
+};
+export interface CodexApi {
+  request<K extends keyof CodexCommands>(
+    method: K,
+    input: CodexCommands[K]["input"],
+  ): Promise<CodexCommands[K]["output"]>;
+  onChanged(callback: (change: CodexChange) => void): () => void;
+}
+export function effectiveCodexPreferences(
+  defaults: CodexPreferences,
+  overrides: Partial<CodexPreferences>,
+): CodexPreferences {
+  return { ...defaults, ...overrides };
+}
+export function resolveModelPreferences(
+  settings: CodexPreferences,
+  models: CodexModel[],
+): CodexPreferences {
+  const model = settings.model
+    ? models.find((entry) => entry.id === settings.model)
+    : (models.find((entry) => entry.isDefault) ?? models[0]);
+  if (!model)
+    throw new Error(
+      settings.model
+        ? `Model ${settings.model} is unavailable. Choose a model in Codex settings.`
+        : "Codex returned no available models.",
+    );
+  const effort = settings.effort || model.defaultEffort;
+  if (!model.efforts.includes(effort))
+    throw new Error(
+      `Effort ${effort} is unavailable for ${model.name}. Choose a supported effort.`,
+    );
+  if (settings.speed === "fast" && !model.fast)
+    throw new Error(
+      `Fast speed is unavailable for ${model.name}. Choose normal speed.`,
+    );
+  return { ...settings, model: model.id, effort };
+}
+export function codexIsActive(
+  thread: Pick<CodexThreadSummary, "state">,
+): boolean {
+  return ["starting", "running", "waiting"].includes(thread.state);
+}
+export function validatePreferences(
+  value: unknown,
+  partial = false,
+): Partial<CodexPreferences> {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Invalid Codex settings.");
+  const result: Partial<CodexPreferences> = {};
+  const options = {
+    speed: ["normal", "fast"],
+    mode: ["implement", "plan"],
+    followUp: ["steer", "queue"],
+    permissions: ["ask", "strict", "full"],
+  };
+  for (const key of Object.keys(
+    defaultCodexPreferences,
+  ) as (keyof CodexPreferences)[]) {
+    const v = (value as Record<string, unknown>)[key];
+    if (v === undefined && partial) continue;
+    if (
+      typeof v !== "string" ||
+      v.length > 200 ||
+      (key in options &&
+        !(options[key as keyof typeof options] as string[]).includes(v))
+    )
+      throw new Error(`Invalid Codex ${key}.`);
+    Object.assign(result, { [key]: v });
+  }
+  return result;
+}
