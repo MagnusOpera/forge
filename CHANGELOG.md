@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Keep Codex composer tools on one row when narrowing a thread window.
+
 ## [0.9.1]
 
 
