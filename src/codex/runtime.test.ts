@@ -1481,3 +1481,18 @@ describe("existing-thread recovery", () => {
     expect(local.calls).toEqual([]);
   });
 });
+
+it("prepares a new chat worktree for its terminal without contacting Codex, then reuses it for the first turn", async () => {
+  const { manager, thread, client } = await setup();
+  expect(thread.worktree).toBe("");
+  await manager.prepareTerminalCheckout(thread);
+  const checkout = thread.worktree;
+  expect(checkout).toBeTruthy();
+  expect(client.calls).toHaveLength(0);
+  await manager.prepareTerminalCheckout(thread);
+  expect(thread.worktree).toBe(checkout);
+  await manager.send(thread, message("Continue in this checkout"));
+  expect(
+    client.calls.find((call) => call.method === "thread/start")?.params.cwd,
+  ).toBe(checkout);
+});

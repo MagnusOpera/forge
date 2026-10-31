@@ -44,6 +44,7 @@ import { git } from "../../electron/main/codex/git";
 import { randomUUID } from "node:crypto";
 import type { CodexThread } from "../../shared/codex";
 import { CodexClient } from "../../electron/main/codex/client";
+import { TerminalManager } from "../../electron/main/codex/terminal";
 import { ThreadManager } from "../../electron/main/codex/threads";
 import { registerCodexIpc } from "../../electron/main/codex/ipc";
 let frame: { url: string };
@@ -411,6 +412,10 @@ it("requires a native, cancel-by-default confirmation for both checkout directio
   };
   store.saveThread(thread);
   const decisions: boolean[] = [];
+  vi.spyOn(TerminalManager.prototype, "has").mockReturnValue(true);
+  const endTerminal = vi
+    .spyOn(TerminalManager.prototype, "close")
+    .mockImplementation(() => {});
   vi.spyOn(ThreadManager.prototype, "checkout").mockImplementation(
     async (_thread, _action, confirm) => {
       decisions.push(await confirm("Move checkout?", "Review destination"));
@@ -448,6 +453,13 @@ it("requires a native, cancel-by-default confirmation for both checkout directio
     });
   }
   expect(decisions).toEqual([false, true, false, true]);
+  expect(endTerminal).toHaveBeenCalledTimes(2);
+  expect(dialog.showMessageBox).toHaveBeenLastCalledWith(
+    expect.anything(),
+    expect.objectContaining({
+      detail: expect.stringContaining("end this chat's terminal session"),
+    }),
+  );
   await expect(
     request("checkout", {
       repositoryId: "OTHER",
@@ -483,4 +495,113 @@ it("persists the global send shortcut and validates renderer input", async () =>
       sendShortcut: "invalid",
     }),
   ).rejects.toThrow("send shortcut");
+});
+
+it("scopes terminal requests to the owned chat without accepting a renderer-supplied cwd", async () => {
+  const store = new CodexStore(path.join(mock.root, "codex"));
+  const thread: CodexThread = {
+    id: randomUUID(),
+    repositoryId: "R_123",
+    title: "Terminal",
+    archived: false,
+    createdAt: "",
+    updatedAt: "",
+    settings: defaultCodexPreferences,
+    state: "idle",
+    worktree: "/owned",
+    branch: "main",
+    baseCommit: "base",
+    serverId: "server",
+    repositoryPath: "/repo",
+    items: [],
+    requests: [],
+    queue: [],
+    queuePaused: false,
+    draft: "",
+    draftAttachments: [],
+  };
+  store.saveThread(thread);
+  const open = vi.spyOn(TerminalManager.prototype, "open").mockResolvedValue({
+    id: thread.id,
+    repositoryId: thread.repositoryId,
+    sessionId: "session",
+    attachmentId: "view",
+    cwd: "/owned",
+    cols: 80,
+    rows: 24,
+    data: "",
+    sequence: 0,
+    exited: false,
+  });
+  const write = vi
+    .spyOn(TerminalManager.prototype, "write")
+    .mockImplementation(() => {});
+  await request("terminalOpen", {
+    repositoryId: thread.repositoryId,
+    id: thread.id,
+    attachmentId: "view",
+    cols: 80,
+    rows: 24,
+    cwd: "/arbitrary",
+  });
+  expect(open).toHaveBeenCalledWith(
+    expect.objectContaining({ worktree: "/owned" }),
+    80,
+    24,
+    "view",
+  );
+  await request("terminalWrite", {
+    repositoryId: thread.repositoryId,
+    id: thread.id,
+    sessionId: "session",
+    data: "pwd\r",
+  });
+  expect(write).toHaveBeenCalledWith(
+    expect.objectContaining({ id: thread.id }),
+    "session",
+    "pwd\r",
+  );
+  await expect(
+    request("terminalOpen", {
+      repositoryId: "OTHER",
+      id: thread.id,
+      attachmentId: "view",
+      cols: 80,
+      rows: 24,
+    }),
+  ).rejects.toThrow("does not belong");
+  await expect(
+    request("terminalWrite", {
+      repositoryId: "OTHER",
+      id: thread.id,
+      sessionId: "session",
+      data: "bad",
+    }),
+  ).rejects.toThrow("does not belong");
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(write).toHaveBeenCalledTimes(1);
+});
+
+it("ends the terminal only after archiving succeeds, and does not revive it on restore", async () => {
+  const store = new CodexStore(path.join(mock.root, "codex"));
+  const thread: CodexThread = {
+    id: randomUUID(), repositoryId: "R_123", title: "Terminal", archived: false,
+    createdAt: "", updatedAt: "", settings: defaultCodexPreferences,
+    state: "idle", worktree: "/owned", branch: "main", baseCommit: "base",
+    serverId: "server", repositoryPath: "/repo", items: [], requests: [],
+    queue: [], queuePaused: false, draft: "", draftAttachments: [],
+  };
+  store.saveThread(thread);
+  const close = vi.spyOn(TerminalManager.prototype, "close");
+  const args = { repositoryId: thread.repositoryId, id: thread.id };
+  await request("update", { ...args, title: "Renamed" });
+  expect(close).not.toHaveBeenCalled();
+  const update = vi.spyOn(ThreadManager.prototype, "update");
+  update.mockImplementationOnce(() => { throw new Error("Stop this thread before archiving it."); });
+  await expect(request("update", { ...args, archived: true })).rejects.toThrow("Stop this thread");
+  expect(close).not.toHaveBeenCalled();
+  await request("update", { ...args, archived: true });
+  expect(close).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: thread.id, archived: true }));
+  await request("update", { ...args, archived: false });
+  expect(close).toHaveBeenCalledTimes(1);
 });

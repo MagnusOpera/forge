@@ -60,7 +60,7 @@ beforeEach(() => {
           ? []
           : undefined,
     );
-  window.forgeCodex = { request, onChanged: () => () => {} } as CodexApi;
+  window.forgeCodex = { request, onChanged: () => () => {}, onTerminalEvent: () => () => {} } as CodexApi;
 });
 afterEach(() => {
   act(() => root.unmount());

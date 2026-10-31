@@ -13,6 +13,8 @@ import { openInTextEditor, validateEditor } from "./editor.js";
 import { ExistingThreads } from "./existing.js";
 import { CodexClient, object, text } from "./client.js";
 import { CodexStore } from "./store.js";
+import { terminalDimensions } from "../../../shared/terminal.js";
+import { TerminalManager } from "./terminal.js";
 import { ThreadManager } from "./threads.js";
 import { assertWorktree, gitInfo, inspectRepository } from "./git.js";
 import {
@@ -41,7 +43,8 @@ function repositoryId(value: unknown): string {
 export function registerCodexIpc(window: () => BrowserWindow | null): void {
   let store: CodexStore | undefined,
     client: CodexClient | undefined,
-    manager: ThreadManager | undefined;
+    manager: ThreadManager | undefined,
+    terminals: TerminalManager | undefined;
   let existing: ExistingThreads | undefined;
   const sourceHome = path.resolve(
     process.env.CODEX_HOME || path.join(os.homedir(), ".codex"),
@@ -85,8 +88,11 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         },
       );
       existing = new ExistingThreads(manager, sourceHome);
+      terminals = new TerminalManager((event) =>
+        window()?.webContents.send("codex:terminal", event),
+      );
     }
-    return { store, client: client!, manager: manager! };
+    return { store, client: client!, manager: manager!, terminals: terminals! };
   };
   ipcMain.handle(
     "codex:request",
@@ -105,7 +111,7 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
       )
         throw new Error("Untrusted Codex caller.");
       const input = object(raw),
-        { store, client, manager } = services();
+        { store, client, manager, terminals } = services();
       if (method === "openLink") {
         const url = new URL(string(input.url, "link", 8192));
         if (
@@ -323,6 +329,7 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         if (input.draftAttachments !== undefined)
           update.draftAttachments = attachments(input.draftAttachments);
         manager.update(thread, update);
+        if (update.archived === true) terminals.close(thread);
         return;
       }
       if (method === "send")
@@ -341,6 +348,49 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
             attachments: attachments(input.attachments),
           },
         );
+      if (method === "terminalOpen") {
+        terminalDimensions(input.cols, input.rows);
+        const attachmentId = string(
+          input.attachmentId,
+          "terminal attachment ID",
+        );
+        if (manager.isChangingCheckout(thread))
+          throw new Error("Wait for the checkout change to finish.");
+        if (!thread.worktree) await manager.prepareTerminalCheckout(thread);
+        return terminals.open(thread, input.cols, input.rows, attachmentId);
+      }
+      if (
+        [
+          "terminalWrite",
+          "terminalResize",
+          "terminalAck",
+          "terminalDetach",
+          "terminalClose",
+        ].includes(String(method))
+      ) {
+        const sessionId = string(input.sessionId, "terminal session ID");
+        if (method === "terminalWrite") {
+          if (manager.isChangingCheckout(thread))
+            throw new Error("Wait for the checkout change to finish.");
+          return terminals.write(thread, sessionId, input.data);
+        }
+        if (method === "terminalResize")
+          return terminals.resize(thread, sessionId, input.cols, input.rows);
+        if (method === "terminalAck")
+          return terminals.acknowledge(
+            thread,
+            sessionId,
+            input.sequence,
+            string(input.attachmentId, "terminal attachment ID"),
+          );
+        if (method === "terminalDetach")
+          return terminals.detach(
+            thread,
+            sessionId,
+            string(input.attachmentId, "terminal attachment ID"),
+          );
+        return terminals.close(thread, sessionId);
+      }
       if (method === "quickAction") {
         if (
           input.action !== "sync" &&
@@ -359,7 +409,11 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
             type: "question",
             title,
             message: title,
-            detail,
+            detail:
+              detail +
+              (terminals.has(thread.id)
+                ? "\n\nThis will end this chat's terminal session and its running commands."
+                : ""),
             buttons: [
               "Cancel",
               input.action === "merge"
@@ -370,6 +424,7 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
             cancelId: 0,
             noLink: true,
           });
+          if (result.response === 1) terminals.close(thread);
           return result.response === 1;
         });
       }
@@ -473,5 +528,8 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
       throw new Error("Unsupported Codex operation.");
     },
   );
-  app.on("before-quit", () => manager?.flush());
+  app.on("before-quit", () => {
+    terminals?.dispose();
+    manager?.flush();
+  });
 }

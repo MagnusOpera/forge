@@ -522,6 +522,45 @@ export class ThreadManager {
       attachments: [],
     });
   }
+  async prepareTerminalCheckout(thread: CodexThread): Promise<void> {
+    if (
+      this.closing ||
+      this.checkoutLocks.has(thread.repositoryPath) ||
+      this.locks.has(thread.id)
+    )
+      throw new Error(
+        "Wait for the chat checkout to finish starting or changing.",
+      );
+    if (thread.archived || thread.replacement || thread.mergedInto)
+      throw new Error(
+        "Restore the chat and finish pending edits or checkout changes first.",
+      );
+    if (thread.worktree) {
+      await assertWorktree(thread);
+      return;
+    }
+    if (thread.sourceHome)
+      throw new Error(
+        "Restore the original working folder before opening its terminal.",
+      );
+    this.locks.add(thread.id);
+    try {
+      Object.assign(
+        thread,
+        await createWorktree(
+          thread.repositoryPath,
+          path.join(this.store.root, "worktrees"),
+          thread.id,
+        ),
+      );
+      this.publish(thread, true);
+    } finally {
+      this.locks.delete(thread.id);
+    }
+  }
+  isChangingCheckout(thread: CodexThread): boolean {
+    return this.checkoutLocks.has(thread.repositoryPath);
+  }
   async checkout(
     thread: CodexThread,
     action: "merge" | "worktree",

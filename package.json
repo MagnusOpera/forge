@@ -19,7 +19,8 @@
     "website:build": "node website/build.mjs",
     "test": "vitest run --reporter=default --reporter=junit --outputFile.junit=.out/test-results/unit.xml",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
-    "preview": "vite preview --host 127.0.0.1 --port 4173"
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "postinstall": "node scripts/prepare-terminal.cjs"
   },
   "build": {
     "appId": "com.magnusopera.forge",
@@ -51,7 +52,10 @@
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/node-pty/prebuilds/**/*"
+    ]
   },
   "dependencies": {
     "@octokit/graphql": "^9.0.5",
@@ -62,8 +66,10 @@
     "@tiptap/starter-kit": "^3.32.2",
     "dompurify": "^3.4.17",
     "electron-updater": "^6.8.11",
+    "ghostty-web": "^0.4.0",
     "lucide-react": "^1.65.0",
     "mermaid": "^12.2.0",
+    "node-pty": "^1.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",

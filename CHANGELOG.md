@@ -4,6 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Prevent terminal memory corruption from carrying over when a terminal is destroyed and recreated.
+
+- Keep the terminal header compact by removing the repeated branch and checkout path.
+
+- End a chat’s terminal session and discard its retained output when the chat is archived.
+
+- Avoid a terminal startup error when a new shell has not produced its first output yet.
+
+- Open a resizable Ghostty terminal below the Codex input, with persistent shell sessions per chat in its worktree or default-branch checkout.
+
 ## [0.6.0]
 
 

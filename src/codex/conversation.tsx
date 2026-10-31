@@ -480,7 +480,9 @@ export function CodexConversation({
             <p>
               {thread.sourceHome
                 ? "Send a message to resume the original Codex thread in its existing working folder. Codex retains its stored conversation context."
-                : "A separate worktree will be created from committed HEAD when you send the first message. Uncommitted changes in the configured checkout are excluded."}
+                : thread.worktree
+                  ? "Send a message to work with Codex in this chat’s checkout."
+                  : "A separate worktree will be created from committed HEAD when you send the first message. Uncommitted changes in the configured checkout are excluded."}
             </p>
           </div>
         )}

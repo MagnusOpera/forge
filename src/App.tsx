@@ -1,3 +1,4 @@
+import { TerminalPanel } from "./codex/terminal-panel";
 import { Combobox } from "./components/combobox";
 import { useSlidingUnderline } from "./useSlidingUnderline";
 import {
@@ -15,6 +16,7 @@ import {
   Code2,
   Command,
   Construction,
+  TerminalSquare,
   createLucideIcon,
   ExternalLink,
   FileCode2,
@@ -1116,6 +1118,7 @@ function CommitActionButton(props: {
 }
 
 export function App() {
+  const [openTerminals, setOpenTerminals] = useState<Record<string, boolean>>({});
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [tokenDraft, setTokenDraft] = useState("");
@@ -1132,6 +1135,17 @@ export function App() {
   const [selectedRepo, setSelectedRepo] = useState<RepoSummary | null>(null);
   const [settingsScope, setSettingsScope] = useState<"global" | "project" | null>(null);
   const codexThreads = useCodexThreads(selectedRepo?.id);
+  useEffect(() => {
+    const archivedKeys = codexThreads.threads
+      .filter((thread) => thread.archived)
+      .map((thread) => `${selectedRepo?.id}:${thread.id}`);
+    setOpenTerminals((current) => {
+      if (!archivedKeys.some((key) => current[key])) return current;
+      const next = { ...current };
+      archivedKeys.forEach((key) => delete next[key]);
+      return next;
+    });
+  }, [codexThreads.threads, selectedRepo?.id]);
   const [repoLabels, setRepoLabels] = useState<LabelSummary[]>([]);
   const [pullRequests, setPullRequests] = useState<PullRequestSummary[]>([]);
   const [issues, setIssues] = useState<IssueSummary[]>([]);
@@ -3011,6 +3025,7 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest(".codex-terminal-screen")) return;
       if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
       if (isTabNavigation(event) && (projectFocusView === "codex" || settingsScope)) return;
       if (isTabNavigation(event)) {
@@ -3206,6 +3221,10 @@ export function App() {
     window.addEventListener("pointerup", onUp);
   };
 
+  const terminalThread = selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined;
+  const terminalKey = `${selectedRepo?.id}:${terminalThread?.id}`;
+  const terminalOpen = Boolean(terminalThread && !terminalThread.archived && openTerminals[terminalKey]);
+  const toggleTerminal = () => { if (terminalThread) setOpenTerminals((current) => ({ ...current, [terminalKey]: !current[terminalKey] })); };
   const gridTemplateColumns = sidebarCollapsed
     ? `0px 0px ${middleWidth}px 1px minmax(0, 1fr)`
     : `${leftWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`;
@@ -3389,25 +3408,31 @@ export function App() {
               theme={activeTheme}
               group="checkout"
             />
+            <button className="icon-button codex-terminal-toggle" aria-label="Toggle terminal" title={terminalThread ? "Toggle terminal" : "Select a chat to open its terminal"} aria-pressed={terminalOpen} disabled={!terminalThread || terminalThread.archived} onClick={toggleTerminal}>
+              <TerminalSquare size={16} />
+            </button>
             <span className="toolbar-divider" />
           </>
         ) : undefined}
         codexContent={projectFocusView === "codex" && selectedRepo ? (
-          <CodexConversation
-            key={`${selectedRepo.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
-            repositoryId={selectedRepo.id}
-            loading={projectLoading}
-            id={selection.kind === "codex" ? selection.threadId : undefined}
-            onConfigure={() => setSettingsScope("project")}
-            quickActions={
-              <CodexQuickActions
-                group="git"
-                thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
-                theme={activeTheme}
-                defaultBranch={selectedRepo.defaultBranch}
-              />
-            }
-          />
+          <div className="codex-workspace">
+            <CodexConversation
+              key={`${selectedRepo.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
+              repositoryId={selectedRepo.id}
+              loading={projectLoading}
+              id={selection.kind === "codex" ? selection.threadId : undefined}
+              onConfigure={() => setSettingsScope("project")}
+              quickActions={
+                <CodexQuickActions
+                  group="git"
+                  thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
+                  theme={activeTheme}
+                  defaultBranch={selectedRepo.defaultBranch}
+                />
+              }
+            />
+            {terminalOpen && terminalThread && <TerminalPanel key={`${selectedRepo.id}:${terminalThread.id}`} thread={terminalThread} theme={activeTheme} onHide={() => setOpenTerminals((current) => ({ ...current, [terminalKey]: false }))} />}
+          </div>
         ) : undefined}
         auth={auth}
         repo={selectedRepo}

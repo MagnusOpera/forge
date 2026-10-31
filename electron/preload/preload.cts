@@ -112,6 +112,11 @@ const api: GithubFocusApi = {
 contextBridge.exposeInMainWorld("githubFocus", api);
 
 const codexApi: import("../../shared/codex.js").CodexApi = {
+  onTerminalEvent: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: import("../../shared/terminal.js").TerminalEvent) => callback(event);
+    ipcRenderer.on("codex:terminal", listener);
+    return () => ipcRenderer.removeListener("codex:terminal", listener);
+  },
   attachFiles: (input, files) => ipcRenderer.invoke("codex:request", "attach", { ...input, paths: files.map((file) => webUtils.getPathForFile(file)) }),
   request: (method, input) => ipcRenderer.invoke("codex:request", method, input),
   onChanged: (callback) => {

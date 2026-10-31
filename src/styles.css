@@ -3778,3 +3778,17 @@ code {
 .combobox-toolbar .combobox-trigger:hover:not(:disabled) { background: var(--hover-bg); color: var(--text-hover); }
 .combobox-menu { position: fixed; inset: auto; box-sizing: border-box; margin: 0; padding: 6px; overflow-y: auto; border: 1px solid var(--control-border); border-radius: 8px; background: var(--content-bg); color: var(--text-base); box-shadow: 0 8px 28px var(--modal-shadow); font: inherit; -webkit-app-region: no-drag; }
 .combobox-menu:popover-open { display: flex; flex-direction: column; gap: 2px; }
+
+.codex-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.codex-terminal-toggle[aria-pressed="true"] { color: var(--accent); }
+.codex-terminal { display: flex; flex: 0 0 auto; flex-direction: column; min-width: 0; min-height: 90px; background: var(--content-bg); overflow: hidden; }
+.codex-terminal > header { display: flex; align-items: center; gap: 6px; padding: 3px 10px; font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.codex-terminal > header > small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.codex-terminal-actions { display: flex; margin-left: auto; flex-shrink: 0; }
+.codex-terminal-actions .icon-button { width: 24px; height: 24px; }
+.codex-terminal-screen { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 0 8px 6px; }
+.codex-terminal-screen > div { height: 100%; }
+.codex-terminal-loading { padding: 3px 10px; color: var(--text-muted); font-size: 11px; }
+.codex-terminal-splitter { position: relative; flex: 0 0 5px; cursor: row-resize; touch-action: none; outline-offset: -1px; }
+.codex-terminal-splitter::after { content: ""; position: absolute; inset: 2px 0 auto; height: 1px; background: var(--border); transition: background-color 180ms ease-in-out; }
+.codex-terminal-splitter:hover::after, .codex-terminal-splitter:focus-visible::after { background: var(--accent); }

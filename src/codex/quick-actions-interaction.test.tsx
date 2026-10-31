@@ -16,7 +16,7 @@ it("copies from the checkout label with temporary feedback and opens Finder with
   const copy = vi.fn().mockResolvedValue(undefined);
   const request = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText: copy } });
-  window.forgeCodex = { request, onChanged: () => () => {} } as CodexApi;
+  window.forgeCodex = { request, onChanged: () => () => {}, onTerminalEvent: () => () => {} } as CodexApi;
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);

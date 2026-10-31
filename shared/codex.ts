@@ -225,6 +225,27 @@ export type CodexCommands = {
     void
   >;
   checkout: Command<ThreadInput & { action: "merge" | "worktree" }, void>;
+  terminalOpen: Command<
+    ThreadInput & { cols: number; rows: number; attachmentId: string },
+    import("./terminal.js").TerminalSnapshot
+  >;
+  terminalWrite: Command<
+    ThreadInput & { sessionId: string; data: string },
+    void
+  >;
+  terminalResize: Command<
+    ThreadInput & { sessionId: string; cols: number; rows: number },
+    void
+  >;
+  terminalAck: Command<
+    ThreadInput & { sessionId: string; attachmentId: string; sequence: number },
+    void
+  >;
+  terminalDetach: Command<
+    ThreadInput & { sessionId: string; attachmentId: string },
+    void
+  >;
+  terminalClose: Command<ThreadInput & { sessionId: string }, void>;
   stop: Command<ThreadInput, void>;
   answer: Command<
     ThreadInput & {
@@ -265,6 +286,9 @@ export interface CodexApi {
     input: CodexCommands[K]["input"],
   ): Promise<CodexCommands[K]["output"]>;
   onChanged(callback: (change: CodexChange) => void): () => void;
+  onTerminalEvent(
+    callback: (event: import("./terminal.js").TerminalEvent) => void,
+  ): () => void;
 }
 export function effectiveCodexPreferences(
   defaults: CodexPreferences,

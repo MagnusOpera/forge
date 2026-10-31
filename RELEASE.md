@@ -56,3 +56,9 @@ Before release, verify the CLI capability check, browser-based ChatGPT sign-in, 
 Forge now builds with Electron 45, React 19, Vite 8, and TypeScript 7. Packaging still targets unsigned macOS arm64 ZIPs before the release signing workflow. Use a supported Node.js version from `package.json` when installing or packaging, and run `make check` to verify types, tests, and the dependency audit.
 
 Existing-thread smoke checks should use a disposable Codex home and Git repository. Verify listing, Git project matching, original-ID resumption, questions/approvals, and restart recovery alongside an isolated Forge thread. Existing threads use the app/CLI account and original working folder; verify that Forge does not copy credentials or create replacement worktrees.
+
+## Embedded terminal packaging
+
+The renderer uses Coder’s `ghostty-web` with its bundled Ghostty WASM; it loads locally without a CDN or a server. Microsoft’s `node-pty` runs only in Electron main and uses N-API prebuilds. `npm ci` runs `scripts/prepare-terminal.cjs` to mark the Unix spawn helper executable. Keep `node_modules/node-pty/prebuilds` in `asarUnpack` so the native addon and helper can load from the packaged app. No Electron ABI rebuild is needed for these N-API prebuilds.
+
+Before a release, verify a terminal in the unsigned macOS arm64 package: shell startup in the selected chat checkout, input and output, Ctrl+C, paste, resize, both themes, hiding/reopening, chat switching, session termination, and app shutdown. Confirm a checkout change closes its prior terminal session and reopening starts in the new folder. Terminal buffers and shell processes are in memory only and must not become release artifacts.
