@@ -370,7 +370,12 @@ export class ThreadManager {
       codexIsActive(thread) ||
       thread.replacement ||
       this.metadataAttempts.has(thread.id) ||
-      !thread.items.some((item) => item.kind === "userMessage" && !item.turnId)
+      !thread.items.some((item) =>
+        ["userMessage", "agentMessage", "fileChange"].includes(item.kind) &&
+        (!item.turnId || !thread.turns?.[item.turnId] ||
+          (item.kind === "fileChange" && !item.changes) ||
+          (item.kind === "userMessage" && !item.attachments)),
+      )
     )
       return;
     this.metadataAttempts.add(thread.id);
@@ -461,7 +466,7 @@ export class ThreadManager {
       await this.transport(thread).request("turn/steer", {
         threadId: thread.serverId,
         expectedTurnId,
-        input: this.input(message),
+        input: this.input(thread, message),
       });
       // No fallback resend on a finished-turn race or uncertain request outcome.
       thread.draft = "";
@@ -565,7 +570,7 @@ export class ThreadManager {
           sent &&
           users.length === 1 &&
           JSON.stringify(normalize(users[0].content)) ===
-            JSON.stringify(normalize(this.input(sent)))
+            JSON.stringify(normalize(this.input(thread, sent)))
         ) {
           hydrateCodexTurn(thread, head);
           thread.state =
@@ -847,7 +852,9 @@ export class ThreadManager {
       this.checkoutLocks.delete(thread.repositoryPath);
     }
   }
-  private input(message: CodexMessage): JsonObject[] {
+  private input(thread: CodexThread, message: CodexMessage): JsonObject[] {
+    for (const attachment of message.attachments)
+      (thread.attachmentNames ??= {})[this.attachmentPath(attachment)] = attachment.name;
     return [
       ...(message.text.trim()
         ? [{ type: "text", text: message.text, text_elements: [] }]
@@ -1006,7 +1013,7 @@ export class ThreadManager {
           threadId: thread.serverId,
           cwd: thread.worktree,
           runtimeWorkspaceRoots: [thread.worktree],
-          input: this.input(message),
+          input: this.input(thread, message),
           ...turnPolicy(settings, thread.worktree),
           model: settings.model,
           effort: settings.effort,

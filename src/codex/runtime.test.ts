@@ -170,8 +170,61 @@ async function setup() {
   return { store, client, manager, thread, repo };
 }
 describe("Codex document input", () => {
+  it("preserves structured file changes in live and historical events", async () => {
+    const { thread, store } = await setup();
+    const changes = [{ path: "src/example.ts", diff: "@@ -1 +1 @@\n-old\n+new" }];
+    const changed = { id: "files", type: "fileChange", status: "completed", changes };
+    reduceCodexEvent(thread, { method: "item/completed", params: { item: changed, turnId: "turn" } });
+    expect(thread.items[0].changes).toEqual(changes);
+    thread.items[0].changes = undefined;
+    hydrateCodexTurn(thread, { id: "turn", items: [changed] });
+    store.saveThread(thread);
+    expect(new CodexStore(store.root).get(thread.repositoryId, thread.id).items[0].changes).toEqual(changes);
+  });
+  it("keeps attachment filenames through live events, history hydration and storage", async () => {
+    const { thread, store } = await setup();
+    thread.attachmentNames = { "/tmp/dog #1?.png": "My dog.png" };
+    const image = {
+      id: "photo-message",
+      type: "userMessage",
+      content: [
+        { type: "text", text: "This is a photo of a dog" },
+        { type: "localImage", path: "/tmp/dog #1?.png" },
+        { type: "localImage", path: "/tmp/another dog.png" },
+      ],
+    };
+    reduceCodexEvent(thread, {
+      method: "item/started",
+      params: { item: image, turnId: "photo-turn" },
+    });
+    expect(thread.items[0]).toMatchObject({
+      text: "This is a photo of a dog",
+      attachments: [
+        { name: "My dog.png", href: "file:///tmp/dog%20%231%3F.png", kind: "image" },
+        { name: "another dog.png", href: "file:///tmp/another%20dog.png", kind: "image" },
+      ],
+    });
+    reduceCodexEvent(thread, {
+      method: "item/completed",
+      params: { item: { id: image.id, type: "userMessage" } },
+    });
+    expect(thread.items[0].attachments).toHaveLength(2);
+    store.saveThread(thread);
+    expect(new CodexStore(store.root).get(thread.repositoryId, thread.id).items[0].attachments)
+      .toEqual(thread.items[0].attachments);
+
+    // Refreshing an older cached placeholder must also upgrade image-only messages.
+    thread.items[0].text = "[Image attachment]";
+    hydrateCodexTurn(thread, {
+      id: "photo-turn",
+      items: [{ ...image, content: image.content.slice(1) }],
+    });
+    expect(thread.items[0].text).toBe("");
+    expect(thread.items[0].attachments).toHaveLength(2);
+  });
+
   it("sends documents as local file context and images through native image input, including steer", async () => {
-    const { manager, thread, client } = await setup();
+    const { manager, thread, client, store } = await setup();
     const input = {
       ...message("Read the document"),
       attachments: [
@@ -180,6 +233,10 @@ describe("Codex document input", () => {
       ],
     };
     await manager.send(thread, input);
+    expect(thread.attachmentNames?.["attachment.png"]).toBe("diagram.png");
+    store.saveThread(thread);
+    expect(new CodexStore(store.root).get(thread.repositoryId, thread.id).attachmentNames)
+      .toEqual(thread.attachmentNames);
     const start = client.calls.find((call) => call.method === "turn/start")!;
     expect(start.params.input).toEqual([
       { type: "text", text: "Read the document", text_elements: [] },
@@ -390,6 +447,23 @@ describe("Replace the latest Codex message", () => {
   });
 });
 describe("Codex events and persistence", () => {
+  it("backfills missing file summaries even when cached messages already have turn IDs", async () => {
+    const { manager, thread, client } = await setup();
+    thread.serverId = "existing-thread";
+    thread.turns = { turn: { durationMs: 70_000 } };
+    thread.items = [
+      { id: "files", kind: "fileChange", text: "src/a.ts\n-old\n+new", turnId: "turn" },
+      { id: "answer", kind: "agentMessage", text: "Done", turnId: "turn" },
+    ];
+    const changes = [{ path: "src/a.ts", diff: "@@ -1 +1 @@\n-old\n+new\n" }];
+    client.reply = (method) => method === "thread/turns/list" ? { data: [{
+      id: "turn", durationMs: 70_000,
+      items: [{ id: "files", type: "fileChange", changes }],
+    }] } : undefined;
+    await manager.refreshMessageMetadata(thread);
+    expect(thread.items[0].changes).toEqual(changes);
+    expect(thread.items).toHaveLength(2);
+  });
   it("backfills historical message timing once without adding unseen conversation items", async () => {
     const { manager, thread, client, oldTurn, previous } =
       await editingScenario();

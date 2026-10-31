@@ -1,16 +1,21 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Columns2, List, Loader2, RefreshCw, X } from "lucide-react";
-import type { CodexGitInfo, CodexThreadSummary } from "../../shared/codex";
+import type { CodexFileChange, CodexGitInfo, CodexThreadSummary } from "../../shared/codex";
 import { codexApi, errorMessage } from "./api";
+import { recordedPatch } from "./transcript";
 const DiffFiles = lazy(() => import("./diff-files"));
 export function CodexDiffDialog({
   thread,
   theme,
   onClose,
+  changes,
+  filePath,
 }: {
-  thread: CodexThreadSummary;
+  thread: Pick<CodexThreadSummary, "id" | "repositoryId"> & Partial<CodexThreadSummary>;
   theme: "light" | "dark";
   onClose: () => void;
+  changes?: CodexFileChange[];
+  filePath?: string;
 }) {
   const [info, setInfo] = useState<CodexGitInfo | null>(null),
     [error, setError] = useState("");
@@ -52,6 +57,15 @@ export function CodexDiffDialog({
     let active = true;
     setLoading(true);
     setError("");
+    if (changes) {
+      setInfo({
+        status: "",
+        diff: recordedPatch(filePath ? changes.filter((file) => file.path === filePath) : changes),
+        untracked: [],
+      });
+      setLoading(false);
+      return;
+    }
     void codexApi()
       .request("git", { repositoryId: thread.repositoryId, id: thread.id })
       .then((result) => {
@@ -66,7 +80,7 @@ export function CodexDiffDialog({
     return () => {
       active = false;
     };
-  }, [thread.repositoryId, thread.id, refresh]);
+  }, [thread.repositoryId, thread.id, refresh, changes, filePath]);
   return (
     <div
       className="codex-modal-backdrop"
@@ -82,7 +96,7 @@ export function CodexDiffDialog({
         aria-labelledby="codex-diff-title"
       >
         <header>
-          <h2 id="codex-diff-title">Worktree changes</h2>
+          <h2 id="codex-diff-title">{changes ? filePath ?? "Edited files" : "Worktree changes"}</h2>
           <div className="codex-actions">
             <button
               className={`icon-button ${!split ? "active" : ""}`}
@@ -102,14 +116,14 @@ export function CodexDiffDialog({
             >
               <Columns2 size={17} />
             </button>
-            <button
+            {!changes && <button
               className="icon-button"
               aria-label="Refresh worktree diff"
               disabled={loading}
               onClick={() => setRefresh((value) => value + 1)}
             >
               <RefreshCw size={15} className={loading ? "spin" : undefined} />
-            </button>
+            </button>}
             <button
               className="icon-button"
               aria-label="Close worktree diff"
@@ -120,13 +134,13 @@ export function CodexDiffDialog({
           </div>
         </header>
         <div className="codex-diff-scroll">
-          <p className="codex-path">
+          {!changes && <p className="codex-path">
             {thread.branch}
             <br />
             {thread.worktree}
             <br />
-            Compared with {thread.baseCommit.slice(0, 12)}
-          </p>
+            Compared with {thread.baseCommit?.slice(0, 12)}
+          </p>}
           {error && (
             <p role="alert" className="inline-error">
               {error}
@@ -139,9 +153,9 @@ export function CodexDiffDialog({
           ) : (
             info && (
               <>
-                <pre className="codex-git-status">
+                {!changes && <pre className="codex-git-status">
                   {info.status || "Working tree clean"}
-                </pre>
+                </pre>}
                 <Suspense
                   fallback={<p className="codex-muted">Loading diff…</p>}
                 >

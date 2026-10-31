@@ -163,6 +163,7 @@ export function CodexConversation({
   loading,
   onConfigure,
   quickActions,
+  theme = "dark",
   interactionDisabled = false,
 }: {
   repositoryId: string;
@@ -170,6 +171,7 @@ export function CodexConversation({
   loading: boolean;
   onConfigure: () => void;
   quickActions?: ReactNode;
+  theme?: "light" | "dark";
   interactionDisabled?: boolean;
 }) {
   const [page, setPage] = useState<CodexThreadPage | null>(null),
@@ -559,6 +561,7 @@ export function CodexConversation({
         )}
         <TranscriptView
           thread={thread}
+          theme={theme}
           onError={setError}
           editable={
             !busy &&

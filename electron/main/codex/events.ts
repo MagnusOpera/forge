@@ -1,4 +1,5 @@
 import type { CodexThread, JsonObject } from "../../../shared/codex.js";
+import { userMessageContent } from "./message-content.js";
 import { array, object, text, type RpcEvent } from "./client.js";
 function recordTurn(
   thread: CodexThread,
@@ -156,15 +157,10 @@ export function reduceCodexEvent(thread: CodexThread, event: RpcEvent): void {
       .join("\n\n");
     if (!content && typeof params.delta !== "string" && !existing) return;
   }
-  if (kind === "userMessage")
-    content = array(item.content)
-      .map(object)
-      .map(
-        (part) =>
-          text(part.text) ||
-          (part.type === "localImage" ? "[Image attachment]" : ""),
-      )
-      .join("\n");
+  const message = kind === "userMessage" && Array.isArray(item.content)
+    ? userMessageContent(item.content, thread.attachmentNames)
+    : undefined;
+  if (message) content = message.text;
   if (kind === "commandExecution")
     content = [text(item.command), text(item.aggregatedOutput)]
       .filter(Boolean)
@@ -190,7 +186,25 @@ export function reduceCodexEvent(thread: CodexThread, event: RpcEvent): void {
   const next: import("../../../shared/codex.js").CodexItem = {
     id,
     kind,
-    text: content || existing?.text || "",
+    ...(kind === "fileChange" && Array.isArray(item.changes)
+      ? {
+          changes: array(item.changes)
+            .map(object)
+            .filter((change) => text(change.path))
+            .map((change) => ({ path: text(change.path), diff: text(change.diff) })),
+        }
+      : existing?.changes
+        ? { changes: existing.changes }
+        : {}),
+    text:
+      kind === "userMessage" && Array.isArray(item.content)
+        ? content
+        : content || existing?.text || "",
+    ...(message
+      ? { attachments: message.attachments }
+      : existing?.attachments
+        ? { attachments: existing.attachments }
+        : {}),
     status: text(item.status) || existing?.status,
     turnId: text(params.turnId) || existing?.turnId || thread.turnId,
     createdAt:

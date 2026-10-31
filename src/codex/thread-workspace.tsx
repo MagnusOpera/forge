@@ -53,6 +53,7 @@ export function ThreadWorkspace({
           repositoryId={repositoryId}
           id={id}
           loading={loading}
+          theme={theme}
           interactionDisabled={interactionDisabled}
           onConfigure={onConfigure}
           quickActions={quickActions}

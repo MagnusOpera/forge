@@ -1,9 +1,12 @@
-import type { CodexItem } from "../../shared/codex";
+import type { CodexFileChange, CodexItem, CodexTurnTiming } from "../../shared/codex";
 export type TranscriptEntry =
   | { type: "message"; item: CodexItem }
   | { type: "activity"; id: string; turnId?: string; items: CodexItem[] };
 
-export function groupTranscript(items: CodexItem[]): TranscriptEntry[] {
+export function groupTranscript(
+  items: CodexItem[],
+  turns: Record<string, CodexTurnTiming> = {},
+): TranscriptEntry[] {
   const result: TranscriptEntry[] = [];
   let pending: CodexItem[] = [];
   const flush = () => {
@@ -45,11 +48,47 @@ export function groupTranscript(items: CodexItem[]): TranscriptEntry[] {
         !laterAnswer)
     ) {
       flush();
+      if (
+        item.kind === "agentMessage" && item.turnId && turns[item.turnId] &&
+        !result.some((entry) => entry.type === "activity" && entry.turnId === item.turnId)
+      )
+        result.push({
+          type: "activity", id: `activity:${item.turnId}`, turnId: item.turnId, items: [],
+        });
       result.push({ type: "message", item });
     } else pending.push(item);
   });
   flush();
   return result;
+}
+
+type EditedFile = CodexFileChange & { additions: number; deletions: number };
+export function editedFiles(items: CodexItem[], turnId: string): EditedFile[] {
+  const files = new Map<string, EditedFile>();
+  for (const item of items) {
+    if (
+      item.turnId !== turnId || item.kind !== "fileChange" ||
+      item.status === "failed" || item.status === "declined"
+    ) continue;
+    for (const change of item.changes ?? []) {
+      const file = files.get(change.path) ?? { ...change, diff: "", additions: 0, deletions: 0 };
+      file.diff += `${file.diff ? "\n" : ""}${change.diff}`;
+      for (const line of change.diff.split("\n")) {
+        if (line.startsWith("+") && !line.startsWith("+++")) file.additions++;
+        if (line.startsWith("-") && !line.startsWith("---")) file.deletions++;
+      }
+      files.set(change.path, file);
+    }
+  }
+  return [...files.values()];
+}
+
+export function recordedPatch(changes: CodexFileChange[]): string {
+  return changes.map(({ path, diff }) => {
+    if (diff.startsWith("diff --git ")) return diff;
+    const header = `diff --git a/${path} b/${path}\n`;
+    return header + (diff.startsWith("--- ") ? diff : `--- a/${path}\n+++ b/${path}\n${diff}`);
+  }).join("\n");
 }
 export function workedDuration(durationMs: number): string {
   const seconds = Math.max(0, Math.floor(durationMs / 1000));

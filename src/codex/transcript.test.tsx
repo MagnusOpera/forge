@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { groupTranscript, workedDuration } from "./transcript";
+import { editedFiles, groupTranscript, recordedPatch, workedDuration } from "./transcript";
 import { TranscriptView } from "./transcript-view";
 import { type CodexItem } from "../../shared/codex";
+import { parsePatchFiles } from "@pierre/diffs";
 const item = (
   id: string,
   kind: string,
@@ -10,6 +11,49 @@ const item = (
   turnId = "turn",
 ): CodexItem => ({ id, kind, phase, turnId, text: id });
 describe("Codex transcript grouping", () => {
+  it("shows the active timer before the first intermediate message arrives", () => {
+    const html = renderToStaticMarkup(<TranscriptView
+      thread={{ id: "t", repositoryId: "r", state: "running", turnId: "turn",
+        turns: { turn: { startedAt: Date.now() - 5000 } },
+        items: [item("prompt", "userMessage")] }}
+      onError={() => {}}
+    />);
+    expect(html).toContain("Working for 5s");
+  });
+  it("shows a timed activity separator even when a turn contains only a final reply", () => {
+    const html = renderToStaticMarkup(<TranscriptView
+      thread={{ id: "t", repositoryId: "r", state: "idle", turns: { turn: { durationMs: 70_000 } },
+        items: [item("prompt", "userMessage"), item("answer", "agentMessage", "final_answer")] }}
+      onError={() => {}}
+    />);
+    expect(html).toContain("Worked for 1m 10s");
+    expect(html.match(/codex-work-activity/g)).toHaveLength(1);
+    expect(html.indexOf("Worked for")).toBeLessThan(html.indexOf('aria-label="Codex reply"'));
+  });
+
+  it("collects edited files by turn, combining repeated edits and excluding failed edits", () => {
+    const items: CodexItem[] = [
+      { ...item("edit1", "fileChange"), changes: [{ path: "src/a.ts", diff: "--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1,2 @@\n-old\n+new\n+line" }] },
+      { ...item("edit2", "fileChange"), changes: [{ path: "src/a.ts", diff: "@@ -1 +1 @@\n-new\n+better" }, { path: "src/b.ts", diff: "@@ -0,0 +1 @@\n+hello" }] },
+      { ...item("failed", "fileChange"), status: "failed", changes: [{ path: "failed.ts", diff: "+no" }] },
+      { ...item("other", "fileChange", undefined, "other-turn"), changes: [{ path: "other.ts", diff: "+other" }] },
+    ];
+    expect(editedFiles(items, "turn")).toEqual([
+      expect.objectContaining({ path: "src/a.ts", additions: 3, deletions: 2 }),
+      expect.objectContaining({ path: "src/b.ts", additions: 1, deletions: 0 }),
+    ]);
+    expect(recordedPatch([{ path: "src/b.ts", diff: "@@ -0,0 +1 @@\n+hello" }]))
+      .toBe("diff --git a/src/b.ts b/src/b.ts\n--- a/src/b.ts\n+++ b/src/b.ts\n@@ -0,0 +1 @@\n+hello");
+  });
+  it("builds recorded patches that the diff viewer recognizes, including filenames with spaces", () => {
+    for (const path of ["src/file.ts", "src/my file.ts"]) {
+      const diff = recordedPatch([{ path, diff: "@@ -1 +1 @@\n-old\n+new\n" }]);
+      const files = parsePatchFiles(diff).flatMap((patch) => patch.files);
+      expect(files).toHaveLength(1);
+      expect(files[0].name).toBe(path);
+      expect(files[0].prevName).toBeUndefined();
+    }
+  });
   it("keeps user messages and final answers visible, grouping intermediate work", () => {
     const items = [
       item("prompt", "userMessage"),

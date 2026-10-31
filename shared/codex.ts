@@ -68,10 +68,15 @@ export type CodexStatus = {
   error?: string;
   version?: string;
 };
+export type CodexFileChange = { path: string; diff: string };
+export type CodexMessageAttachment = { name: string; href: string; kind: "image" | "document" };
 export type CodexItem = {
   id: string;
   kind: string;
   text: string;
+  images?: string[];
+  attachments?: CodexMessageAttachment[];
+  changes?: CodexFileChange[];
   status?: string;
   turnId?: string;
   phase?: "commentary" | "final_answer";
@@ -165,6 +170,7 @@ export type CodexThread = CodexThreadSummary & {
   queuePaused: boolean;
   draft: string;
   draftAttachments: CodexAttachment[];
+  attachmentNames?: Record<string, string>;
 };
 export type CodexThreadPage = { thread: CodexThread; before: number | null };
 export type CodexGitInfo = {
@@ -329,7 +335,7 @@ export type CodexCommands = {
   >;
   attach: Command<ThreadInput & { paths?: string[] }, CodexAttachment[]>;
   outputFile: Command<
-    ThreadInput & { href: string; action: "reveal" | "save" | "image" },
+    ThreadInput & { href: string; action: "reveal" | "save" | "image" | "open" },
     string | null
   >;
   git: Command<ThreadInput, CodexGitInfo>;

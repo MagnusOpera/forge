@@ -6,6 +6,7 @@ import {
   mkdirSync,
   writeFileSync,
   readFileSync,
+  realpathSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -373,6 +374,14 @@ describe("Codex attachment and output IPC", () => {
       action: "reveal",
     });
     expect(shell.showItemInFolder).toHaveBeenCalled();
+    vi.mocked(shell.openPath).mockResolvedValueOnce("");
+    await request("outputFile", { ...args, href: "result.pdf", action: "open" });
+    expect(shell.openPath).toHaveBeenCalledWith(realpathSync(path.join(folder, "result.pdf")));
+    vi.mocked(shell.openPath).mockResolvedValueOnce("No app can open this file");
+    await expect(request("outputFile", { ...args, href: "result.pdf", action: "open" }))
+      .rejects.toThrow("No app can open this file");
+    await expect(request("outputFile", { ...args, href: source, action: "open" }))
+      .rejects.toThrow("working folder");
     await expect(
       request("outputFile", { ...args, href: source, action: "save" }),
     ).rejects.toThrow("working folder");

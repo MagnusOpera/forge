@@ -777,6 +777,11 @@ export function registerCodexIpc(
           shell.showItemInFolder(file);
           return null;
         }
+        if (input.action === "open") {
+          const error = await shell.openPath(file);
+          if (error) throw new Error(error);
+          return null;
+        }
         if (input.action === "save") {
           const result = await dialog.showSaveDialog(target, {
             title: "Save document",

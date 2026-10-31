@@ -1,15 +1,19 @@
-import { useEffect, useState } from "react";
-import { ChevronRight, Copy, Pencil } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronRight, Copy, FileDiff, Pencil } from "lucide-react";
 import {
   codexIsActive,
   latestCodexUserMessage,
   type CodexItem,
   type CodexThread,
   type CodexTurnTiming,
+  type CodexFileChange,
 } from "../../shared/codex";
 import { CodexMarkdown } from "./markdown";
+import { MessageAttachments } from "./message-attachments";
 import { errorMessage } from "./api";
-import { groupTranscript, workedDuration } from "./transcript";
+import { editedFiles, groupTranscript, workedDuration } from "./transcript";
+import { CodexDiffDialog } from "./diff-dialog";
 const labels: Record<string, string> = {
   agentMessage: "Update",
   reasoning: "Thinking summary",
@@ -20,6 +24,39 @@ const labels: Record<string, string> = {
   dynamicToolCall: "Tool call",
   webSearch: "Web search",
 };
+
+function EditedFiles({ files, onOpen }: {
+  files: ReturnType<typeof editedFiles>;
+  onOpen: (filePath?: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!files.length) return null;
+  const additions = files.reduce((sum, file) => sum + file.additions, 0);
+  const deletions = files.reduce((sum, file) => sum + file.deletions, 0);
+  return (
+    <section className="codex-edited-files" aria-label="Edited files">
+      <header>
+        <FileDiff size={20} aria-hidden="true" />
+        <div>
+          <strong>Edited {files.length} {files.length === 1 ? "file" : "files"}</strong>
+          <div><span className="diff-stat positive">+{additions}</span>{" "}<span className="diff-stat negative">-{deletions}</span></div>
+        </div>
+        <button className="ghost-button" onClick={() => onOpen()}>View changes</button>
+      </header>
+      {(expanded ? files : files.slice(0, 3)).map((file) => (
+        <button className="codex-edited-file" key={file.path} onClick={() => onOpen(file.path)}>
+          <span>{file.path}</span>
+          <span><span className="diff-stat positive">+{file.additions}</span>{" "}<span className="diff-stat negative">-{file.deletions}</span></span>
+        </button>
+      ))}
+      {files.length > 3 && (
+        <button className="codex-edited-file codex-edited-toggle" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Show fewer files" : `Show ${files.length - 3} more files`}<ChevronDown size={14} />
+        </button>
+      )}
+    </section>
+  );
+}
 
 function WorkActivity({
   items,
@@ -86,6 +123,7 @@ export function TranscriptView({
   onError,
   onEdit,
   editable = true,
+  theme = "dark",
 }: {
   thread: Pick<
     CodexThread,
@@ -94,8 +132,22 @@ export function TranscriptView({
   onError: (message: string) => void;
   onEdit?: (item: CodexItem) => void;
   editable?: boolean;
+  theme?: "light" | "dark";
 }) {
-  const entries = groupTranscript(thread.items);
+  const entries = groupTranscript(thread.items, thread.turns);
+  if (codexIsActive(thread) && thread.turnId &&
+      !entries.some((entry) => entry.type === "activity" && entry.turnId === thread.turnId)) {
+    entries.push({ type: "activity", id: `activity:${thread.turnId}`, turnId: thread.turnId, items: [] });
+  }
+  const [diff, setDiff] = useState<{ changes: CodexFileChange[]; filePath?: string } | null>(null);
+  useEffect(() => setDiff(null), [thread.repositoryId, thread.id]);
+  const filesByTurn = useMemo(() => new Map(
+    [...new Set(thread.items.map((item) => item.turnId).filter((id): id is string => Boolean(id)))].map((turnId) => [turnId, editedFiles(thread.items, turnId)]),
+  ), [thread.items]);
+  const lastAnswerByTurn = new Map<string, string>();
+  for (const entry of entries)
+    if (entry.type === "message" && entry.item.kind === "agentMessage" && entry.item.turnId)
+      lastAnswerByTurn.set(entry.item.turnId, entry.item.id);
   const latestUser = latestCodexUserMessage(thread.items);
   const lastActivity = entries
     .filter((entry) => entry.type === "activity")
@@ -127,6 +179,9 @@ export function TranscriptView({
             />
           );
         const item = entry.item;
+        const files = item.kind === "agentMessage" && item.turnId &&
+          lastAnswerByTurn.get(item.turnId) === item.id
+          ? filesByTurn.get(item.turnId) ?? [] : [];
         const timing = item.turnId ? thread.turns?.[item.turnId] : undefined;
         const timestamp =
           item.createdAt ??
@@ -147,7 +202,9 @@ export function TranscriptView({
           >
             <div className="markdown-body markdown-block compact">
               {markdown(item.text)}
+              <MessageAttachments item={item} repositoryId={thread.repositoryId} id={thread.id} onError={onError} />
             </div>
+            <EditedFiles files={files} onOpen={(filePath) => setDiff({ changes: files, filePath })} />
             <div className="codex-message-actions">
               {date && Number.isFinite(date.getTime()) && (
                 <time
@@ -187,6 +244,10 @@ export function TranscriptView({
           </article>
         );
       })}
+      {diff && createPortal(
+        <CodexDiffDialog thread={thread} theme={theme} changes={diff.changes} filePath={diff.filePath} onClose={() => setDiff(null)} />,
+        document.querySelector(".app-shell") ?? document.body,
+      )}
     </div>
   );
 }
