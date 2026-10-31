@@ -1,3 +1,4 @@
+import { displayPath, displayPathText } from "../paths";
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { CodexCheckoutPreview, CodexMergeChoice } from "../../shared/codex";
@@ -62,11 +63,11 @@ export function CheckoutDialog({ preview, onConfirm, onReview, onClose }: {
               <label><input type="radio" name="merge-method" value="merge" checked={method === "merge"} onChange={() => setMethod("merge")} /><span><strong>Merge</strong><small>Keep individual commits and create a merge commit when needed.</small></span></label>
             </fieldset>
             {method === "squash" && <label className="codex-field">Commit message<input aria-label="Squash commit message" value={message} maxLength={2000} disabled={busy} onChange={(event) => setMessage(event.target.value)} /></label>}
-            {preview.summary && <details><summary>Source commits</summary><pre className="codex-checkout-summary">{preview.summary}</pre></details>}
+            {preview.summary && <details><summary>Source commits</summary><pre className="codex-checkout-summary">{displayPathText(preview.summary)}</pre></details>}
           </>}
           <p>{merging ? "The changes are prepared and verified before the default checkout is updated. The source branch and chat history are kept; the worktree is removed after successful integration." : "Continue this chat in a fresh, isolated worktree from the current commit."}</p>
           <p className="codex-muted">This chat’s terminal and child jobs will stop. All changes stay local.</p>
-          <details><summary>Checkout folders</summary><p className="codex-path">From: {preview.sourcePath}<br />Continue in: {preview.targetPath}</p></details>
+          <details><summary>Checkout folders</summary><p className="codex-path">From: {displayPath(preview.sourcePath)}<br />Continue in: {displayPath(preview.targetPath)}</p></details>
           {error && <div className="inline-error" role="alert">{error}<button className="ghost-button" disabled={busy} onClick={() => void run(onReview)}>Review again</button></div>}
         </div>
         <footer className="codex-actions">

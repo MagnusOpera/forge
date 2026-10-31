@@ -1,3 +1,4 @@
+import { displayPath, displayPathText } from "./paths";
 import { useThreadWindows } from "./codex/api";
 import { flushThreadDraft } from "./codex/thread-drafts";
 import { ThreadWorkspace } from "./codex/thread-workspace";
@@ -4018,7 +4019,7 @@ function ProjectPane(props: {
           {props.error && (
             <div className="inline-error">
               <AlertCircle size={15} />
-              <span>{props.error}</span>
+              <span>{displayPathText(props.error)}</span>
             </div>
           )}
           {props.focusView === "codex" ? props.codexList : props.focusView === "workflow-runs" ? (
@@ -4757,7 +4758,7 @@ function ContentPane(props: {
         <div className="content-scroll">
           <div className="inline-error large">
             <AlertCircle size={18} />
-            <span>{props.error}</span>
+            <span>{displayPathText(props.error)}</span>
           </div>
         </div>
       ) : !props.repo ? (
@@ -5185,7 +5186,7 @@ function TokenGate(props: {
         {props.error && (
           <div className="inline-error">
             <AlertCircle size={15} />
-            <span>{props.error}</span>
+            <span>{displayPathText(props.error)}</span>
           </div>
         )}
       </form>
@@ -5943,7 +5944,7 @@ function ChangedFilesDiffList({ files, theme }: { files: ChangedFileSummary[]; t
               {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
               <FileCode2 size={15} />
               <span className="changed-file-path">
-                {file.previousPath ? `${file.previousPath} -> ${file.path}` : file.path}
+                {file.previousPath ? `${displayPath(file.previousPath)} -> ${displayPath(file.path)}` : displayPath(file.path)}
               </span>
               <span className="changed-file-type">{file.changeType}</span>
               <span className="diff-stat positive">+{file.additions}</span>
@@ -6058,7 +6059,7 @@ function WorkflowContent(props: {
                 aria-label="Copy workflow path"
                 onClick={copyWorkflowPath}
               >
-                {workflowPath}
+                {displayPath(workflowPath)}
               </button>
               <span className="eyebrow-separator">·</span>
               <span className="detail-eyebrow-value ref">{props.repo.defaultBranch ?? "main"}</span>
@@ -6363,7 +6364,7 @@ function WorkflowJobsList({
                         ) : state?.error ? (
                           <div className="inline-error step-log-body">
                             <AlertCircle size={15} />
-                            <span>{state.error}</span>
+                            <span>{displayPathText(state.error)}</span>
                           </div>
                         ) : logDetail ? (
                           <pre className="terminal-output" aria-label={`${step.name} output`}>
@@ -6604,7 +6605,7 @@ function WorkflowDispatchDialog(props: {
             {props.state.error && (
               <div className="inline-error">
                 <AlertCircle size={15} />
-                <span>{props.state.error}</span>
+                <span>{displayPathText(props.state.error)}</span>
               </div>
             )}
             <div className="workflow-dispatch-fields">

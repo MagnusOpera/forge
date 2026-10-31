@@ -1,3 +1,4 @@
+import { displayPath } from "../paths";
 import { useMemo } from "react";
 import { parsePatchFiles } from "@pierre/diffs";
 import {
@@ -10,10 +11,12 @@ export default function DiffFiles({
   info,
   theme,
   split,
+  remote = false,
 }: {
   info: CodexGitInfo;
   theme: "light" | "dark";
   split: boolean;
+  remote?: boolean;
 }) {
   const parsed = useMemo(() => {
     try {
@@ -41,7 +44,7 @@ export default function DiffFiles({
           open
         >
           <summary className="codex-diff-file-title">
-            {file.prevName ? `${file.prevName} → ${file.name}` : file.name}
+            {file.prevName ? `${displayPath(file.prevName, remote)} → ${displayPath(file.name, remote)}` : displayPath(file.name, remote)}
           </summary>
           <FileDiff
             className="diff-viewer"
@@ -61,7 +64,7 @@ export default function DiffFiles({
       {info.untracked.map((file) => (
         <details className="changed-file-card" key={`new:${file.path}`} open>
           <summary className="codex-diff-file-title">
-            {file.path} · untracked
+            {displayPath(file.path, remote)} · untracked
           </summary>
           {[
             "Binary file",

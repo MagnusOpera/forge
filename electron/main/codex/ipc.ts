@@ -137,8 +137,9 @@ export function registerCodexIpc(
         )
       )
         throw new Error("Untrusted Codex caller.");
-      const input = object(raw),
-        { store, client, manager, terminals } = services();
+      const input = object(raw);
+      if (method === "displayContext") return { homeDirectory: os.homedir(), platform: process.platform };
+      const { store, client, manager, terminals } = services();
       const context = windows.context(event.sender);
       if (
         context &&

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { displayPath } from "../paths";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, Copy, FileDiff, Pencil } from "lucide-react";
 import {
@@ -24,9 +25,10 @@ const labels: Record<string, string> = {
   webSearch: "Web search",
 };
 
-function EditedFiles({ files, onOpen }: {
+function EditedFiles({ files, onOpen, remote }: {
   files: ReturnType<typeof editedFiles>;
   onOpen: (filePath?: string) => void;
+  remote: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (!files.length) return null;
@@ -44,7 +46,7 @@ function EditedFiles({ files, onOpen }: {
       </header>
       {(expanded ? files : files.slice(0, 3)).map((file) => (
         <button className="codex-edited-file" key={file.path} onClick={() => onOpen(file.path)}>
-          <span>{file.path}</span>
+          <span>{displayPath(file.path, remote)}</span>
           <span><span className="diff-stat positive">+{file.additions}</span>{" "}<span className="diff-stat negative">-{file.deletions}</span></span>
         </button>
       ))}
@@ -128,7 +130,7 @@ export function TranscriptView({
 }: {
   thread: Pick<
     CodexThread,
-    "id" | "repositoryId" | "state" | "turnId" | "turns" | "items"
+    "id" | "repositoryId" | "state" | "turnId" | "turns" | "items" | "environment"
   >;
   onError: (message: string) => void;
   onEdit?: (item: CodexItem) => void;
@@ -171,6 +173,7 @@ export function TranscriptView({
       repositoryId={thread.repositoryId}
       id={thread.id}
       onError={onError}
+      remote={Boolean(thread.environment)}
     />
   );
   return (
@@ -213,7 +216,7 @@ export function TranscriptView({
               {markdown(item.text)}
               <MessageAttachments item={item} repositoryId={thread.repositoryId} id={thread.id} onError={onError} />
             </div>
-            <EditedFiles files={files} onOpen={(filePath) => setDiff({ changes: files, filePath })} />
+            <EditedFiles files={files} remote={Boolean(thread.environment)} onOpen={(filePath) => setDiff({ changes: files, filePath })} />
             <div className="codex-message-actions">
               {date && Number.isFinite(date.getTime()) && (
                 <time

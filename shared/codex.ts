@@ -218,6 +218,7 @@ export type CodexThreadWindow = ThreadInput & {
   terminalOpen: boolean;
 };
 export type CodexCommands = {
+  displayContext: Command<Record<string, never>, { homeDirectory: string; platform: string }>;
   openThreadWindow: Command<
     ThreadInput & {
       fullName?: string;

@@ -1,3 +1,4 @@
+import { displayPathText } from "../paths";
 import { useEffect, useState, type CSSProperties } from "react";
 import { TerminalSquare } from "lucide-react";
 import type { CodexThreadWindow } from "../../shared/codex";
@@ -70,7 +71,7 @@ export function ThreadWindow() {
   }, []);
   useEffect(() => {
     if (thread && context)
-      document.title = `${thread.title} · ${context.fullName} · Forge`;
+      document.title = `${displayPathText(thread.title, Boolean(thread.environment))} · ${context.fullName} · Forge`;
   }, [thread?.title, context?.fullName]);
   useEffect(() => {
     if (!context) return;
@@ -122,7 +123,7 @@ export function ThreadWindow() {
       <header className="content-header app-drag thread-window-header">
         <div className="content-header-left">
           <strong title={context?.fullName}>
-            {thread?.title || context?.title || "Codex"}
+            {thread ? displayPathText(thread.title, Boolean(thread.environment)) : context?.title || "Codex"}
           </strong>
         </div>
         <div className="header-actions">

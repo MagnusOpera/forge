@@ -4,6 +4,18 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import DOMPurify from "dompurify";
 import { codexApi, errorMessage } from "./api";
+import { displayPathText } from "../paths";
+
+type MarkdownNode = { type: string; value?: string; children?: MarkdownNode[] };
+function remarkDisplayPaths({ remote = false }: { remote?: boolean }) {
+  return (tree: MarkdownNode) => {
+    const visit = (node: MarkdownNode) => {
+      if (node.type === "text" && node.value) node.value = displayPathText(node.value, remote);
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
+}
 
 export function isLocalFileLink(href: string): boolean {
   return (
@@ -116,6 +128,7 @@ type Context = {
   repositoryId: string;
   id: string;
   onError: (message: string) => void;
+  remote?: boolean;
 };
 function LocalImage({
   href,
@@ -153,7 +166,7 @@ function LocalImage({
     <img src={src} alt={alt} loading="lazy" />
   ) : (
     <span>
-      {failed ? `[Image unavailable: ${alt || href}]` : "Loading image…"}
+      {failed ? `[Image unavailable: ${displayPathText(alt || href, context.remote)}]` : "Loading image…"}
     </span>
   );
 }
@@ -174,7 +187,7 @@ function FileLink({
         href,
         action: value,
       })
-      .catch((error) => context.onError(errorMessage(error)));
+      .catch((error) => context.onError(errorMessage(error, context.remote)));
   return (
     <span className="codex-file-link">
       <a
@@ -204,7 +217,7 @@ export const CodexMarkdown = memo(function CodexMarkdown({
 }: Context & { text: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkBreaks]}
+      remarkPlugins={[remarkGfm, remarkBreaks, [remarkDisplayPaths, { remote: context.remote }]]}
       urlTransform={markdownUrl}
       components={{
         a: ({ href = "", children }) =>
@@ -220,7 +233,7 @@ export const CodexMarkdown = memo(function CodexMarkdown({
                 if (/^https?:\/\//i.test(href))
                   void codexApi()
                     .request("openLink", { url: href })
-                    .catch((error) => context.onError(errorMessage(error)));
+                    .catch((error) => context.onError(errorMessage(error, context.remote)));
               }}
             >
               {children}

@@ -1,3 +1,4 @@
+import { displayPath, displayPathText } from "../paths";
 import { ThreadFilterTabs } from "./thread-filter-tabs";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RefreshCw, X } from "lucide-react";
@@ -133,7 +134,7 @@ export function ExistingCodexDialog({
             This uses your Codex account and configuration. New Forge threads
             keep their separate configuration.
           </p>
-          {home && <p className="codex-path">{home}</p>}
+          {home && <p className="codex-path">{displayPath(home)}</p>}
           <p>
             Finish or stop the thread in Codex before continuing here. Existing
             files and uncommitted changes stay in place. Diffs start from HEAD
@@ -153,9 +154,9 @@ export function ExistingCodexDialog({
           {threads.map((thread) => (
             <div className="codex-existing-row" key={thread.id}>
               <span className="focus-main">
-                <span className="focus-title">{thread.title}</span>
-                <span className="focus-meta" title={thread.cwd}>
-                  {thread.cwd}
+                <span className="focus-title">{displayPathText(thread.title)}</span>
+                <span className="focus-meta" title={displayPath(thread.cwd)}>
+                  {displayPath(thread.cwd)}
                 </span>
                 <small>
                   {thread.updatedAt

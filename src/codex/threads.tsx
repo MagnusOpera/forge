@@ -1,3 +1,4 @@
+import { displayPathText } from "../paths";
 import { createPortal } from "react-dom";
 import { ThreadFilterTabs } from "./thread-filter-tabs";
 import { ExistingCodexDialog } from "./existing-dialog";
@@ -200,7 +201,7 @@ export function CodexThreadList({
               >
                 <MessageSquare size={14} />
                 <span className="focus-main">
-                  <span className="focus-title">{thread.title}</span>
+                  <span className="focus-title">{displayPathText(thread.title, Boolean(thread.environment))}</span>
                   <span className="focus-meta">
                     {thread.settings.mode === "plan" ? "Plan" : "Implement"} ·{" "}
                     {thread.settings.model || "Codex default"}
@@ -220,7 +221,7 @@ export function CodexThreadList({
               <div className="codex-thread-actions">
                 <button
                   className="icon-button"
-                  aria-label={`Rename ${thread.title}`}
+                  aria-label={`Rename ${displayPathText(thread.title, Boolean(thread.environment))}`}
                   title="Rename thread"
                   onClick={() => {
                     setRenaming(thread.id);
@@ -232,7 +233,7 @@ export function CodexThreadList({
                 <button
                   className="icon-button"
                   disabled={codexIsActive(thread) || busy}
-                  aria-label={`${thread.archived ? "Restore" : "Archive"} ${thread.title}`}
+                  aria-label={`${thread.archived ? "Restore" : "Archive"} ${displayPathText(thread.title, Boolean(thread.environment))}`}
                   title={thread.archived ? "Restore thread" : "Archive thread"}
                   onClick={() =>
                     void run(async () => {

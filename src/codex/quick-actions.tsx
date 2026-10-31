@@ -1,3 +1,4 @@
+import { displayPath, displayPathText } from "../paths";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -104,7 +105,7 @@ export function CodexQuickActions({
                 type="button"
                 className={`icon-button codex-checkout-label underline-action ${copied ? "invoked" : ""}`}
                 aria-label="Copy checkout location"
-                title={`${thread.worktree}\nClick to copy path`}
+                title={`${displayPath(thread.worktree, Boolean(thread.environment))}\nClick to copy path`}
                 onClick={() => {
                   void navigator.clipboard
                     .writeText(thread.worktree)
@@ -241,8 +242,8 @@ export function CodexQuickActions({
         {(error || mergeConflict) && (
           <div className="codex-action-error" role="alert">
             <span>
-              {error || (mergeConflict && <span className="codex-conflict-resolution">
-                <span>Changes conflict with {mergeConflict.defaultBranch} in: {mergeConflict.files.join(", ")}. Codex can resolve them in this worktree before you retry the merge.</span>
+              {displayPathText(error) || (mergeConflict && <span className="codex-conflict-resolution">
+                <span>Changes conflict with {mergeConflict.defaultBranch} in: {mergeConflict.files.map(file => displayPath(file)).join(", ")}. Codex can resolve them in this worktree before you retry the merge.</span>
                 <button
                   className="ghost-button"
                   disabled={busy || Boolean(unavailable)}

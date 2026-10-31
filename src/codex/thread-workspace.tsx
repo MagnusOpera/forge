@@ -1,3 +1,4 @@
+import { displayPathText } from "../paths";
 import type { ReactNode } from "react";
 import type { CodexThreadSummary } from "../../shared/codex";
 import { CodexConversation } from "./conversation";
@@ -37,7 +38,7 @@ export function ThreadWorkspace({
     <div className="codex-workspace">
       {error && (
         <p role="alert" className="inline-error">
-          {error}
+          {displayPathText(error)}
         </p>
       )}
       {detached ? (

@@ -80,6 +80,10 @@ afterEach(() => {
   rmSync(mock.root, { recursive: true, force: true });
 });
 describe("Codex preload IPC handlers", () => {
+  it("provides the real display home and platform without accepting a renderer-supplied home", async () => {
+    expect(await request("displayContext", { homeDirectory: "/forged" }))
+      .toEqual({ homeDirectory: os.homedir(), platform: process.platform });
+  });
   it("rejects other windows and a renderer navigated away from Forge", async () => {
     await expect(request("configuration", {}, {})).rejects.toThrow("Untrusted");
     frame.url = "https://example.invalid/";

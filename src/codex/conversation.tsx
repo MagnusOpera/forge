@@ -4,6 +4,7 @@ import codexLogo from "../../assets/codex-colored.svg";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ImagePlus, Loader2, Send, Square, X } from "lucide-react";
 import { TranscriptView } from "./transcript-view";
+import { displayPath, displayPathText } from "../paths";
 import { ComposerEditor } from "./composer-editor";
 import {
   codexIsActive,
@@ -25,11 +26,13 @@ function RequestCard({
   answer,
   allowApproval,
   preview,
+  remote = false,
 }: {
   request: CodexPendingRequest;
   disabled: boolean;
   allowApproval: boolean;
   preview?: string;
+  remote?: boolean;
   answer: (answers?: Record<string, string>, approve?: boolean) => void;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -63,7 +66,7 @@ function RequestCard({
             <fieldset key={q.id}>
               <legend>
                 {q.header ? `${q.header}: ` : ""}
-                {q.question}
+                {displayPathText(q.question, remote)}
               </legend>
               <div className="codex-answer-options">
                 {q.options.map((o) => (
@@ -115,9 +118,9 @@ function RequestCard({
         <>
           <h3>Approval required</h3>
           <p>
-            {String(
+            {displayPathText(String(
               request.params.reason ?? "Codex needs permission to continue.",
-            )}
+            ), remote)}
           </p>
           <pre>
             {[
@@ -125,7 +128,7 @@ function RequestCard({
                 ? request.params.command
                 : preview || "Grant the requested access",
               Object.keys(permissionDetails).length
-                ? JSON.stringify(permissionDetails, null, 2)
+                ? displayPathText(JSON.stringify(permissionDetails, null, 2), remote)
                 : "",
             ]
               .filter(Boolean)
@@ -487,14 +490,14 @@ export function CodexConversation({
         {thread.sourceHome && (
           <p className="codex-external-note">
             Continuing the original Codex thread in{" "}
-            <code>{thread.worktree}</code>. Uses your Codex app/CLI account;
+            <code>{displayPath(thread.worktree, Boolean(thread.environment))}</code>. Uses your Codex app/CLI account;
             Forge's selected model and permissions apply to new turns. This
             folder may be shared with other threads. Finish or stop work in
             Codex before sending here.
           </p>
         )}
         {thread.historyWarning && (
-          <p className="codex-external-note">{thread.historyWarning}</p>
+          <p className="codex-external-note">{displayPathText(thread.historyWarning, Boolean(thread.environment))}</p>
         )}
         {page.before !== null && (
           <button
@@ -587,6 +590,7 @@ export function CodexConversation({
         />
         {thread.requests.map((request) => (
           <RequestCard
+            remote={Boolean(thread.environment)}
             key={request.id}
             request={request}
             disabled={busy}
@@ -614,7 +618,7 @@ export function CodexConversation({
         ))}
         {(thread.error || error) && (
           <div className="inline-error" role="alert">
-            {error || thread.error}
+            {errorMessage(error || thread.error, Boolean(thread.environment))}
           </div>
         )}
       </div>

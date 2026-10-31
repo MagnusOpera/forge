@@ -1,3 +1,4 @@
+import { displayPath, displayPathText, expandDisplayPath } from "../paths";
 import { EnvironmentsEditor, ProjectEnvironments } from "./environments";
 import { Combobox } from "../components/combobox";
 import { useEffect, useRef, useState } from "react";
@@ -173,7 +174,7 @@ export function CodexSettingsDialog({
       if (change.auth) {
         setWaitingLogin(false);
         if (!change.auth.success)
-          setError(change.auth.error || "ChatGPT sign-in failed.");
+          setError(displayPathText(change.auth.error || "ChatGPT sign-in failed."));
       }
       refreshStatus();
     });
@@ -368,7 +369,7 @@ export function CodexSettingsDialog({
                       ? "Not signed in"
                       : "Codex unavailable"}
                 </p>
-                {status?.error && <p className="codex-muted">{status.error}</p>}
+                {status?.error && <p className="codex-muted">{displayPathText(status.error)}</p>}
                 {status?.version && <small>{status.version}</small>}
                 <div className="codex-actions">
                   <button
@@ -468,8 +469,8 @@ export function CodexSettingsDialog({
             {project && section === "checkouts" && (
               <section>
                 <h3>Local Git folder</h3>
-                <p className="codex-path" title={binding?.path}>
-                  {homeRelativePath || binding?.path || "No folder selected"}
+                <p className="codex-path" title={displayPath(binding?.path ?? "")}>
+                  {homeRelativePath || displayPath(binding?.path ?? "") || "No folder selected"}
                 </p>
                 <button
                   className="ghost-button"
@@ -488,7 +489,7 @@ export function CodexSettingsDialog({
                   <FolderOpen size={14} />
                   Choose folder
                 </button>
-                {binding?.warning && <p role="note">{binding.warning}</p>}
+                {binding?.warning && <p role="note">{displayPathText(binding.warning)}</p>}
                 <p className="codex-muted">
                   New threads start from committed HEAD in a separate worktree.
                   Uncommitted checkout changes are excluded. Existing threads
@@ -555,8 +556,8 @@ export function CodexSettingsDialog({
                   <div className="codex-field-control">
                     <input
                       aria-label="Text editor application"
-                      value={editor}
-                      onChange={(event) => setEditor(event.target.value)}
+                      value={displayPath(editor)}
+                      onChange={(event) => setEditor(expandDisplayPath(event.target.value))}
                       placeholder={DEFAULT_TEXT_EDITOR}
                       spellCheck={false}
                     />
@@ -593,8 +594,8 @@ export function CodexSettingsDialog({
                 <label className="codex-field">
                   <span>Executable path</span>
                   <input
-                    value={executable}
-                    onChange={(event) => setExecutable(event.target.value)}
+                    value={displayPath(executable)}
+                    onChange={(event) => setExecutable(expandDisplayPath(event.target.value))}
                     placeholder="Automatic discovery"
                     spellCheck={false}
                   />

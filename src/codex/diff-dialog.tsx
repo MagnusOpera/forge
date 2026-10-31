@@ -1,3 +1,4 @@
+import { displayPath } from "../paths";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Columns2, List, Loader2, RefreshCw, X } from "lucide-react";
 import type { CodexFileChange, CodexGitInfo, CodexThreadSummary } from "../../shared/codex";
@@ -96,7 +97,7 @@ export function CodexDiffDialog({
         aria-labelledby="codex-diff-title"
       >
         <header>
-          <h2 id="codex-diff-title">{changes ? filePath ?? "Edited files" : "Worktree changes"}</h2>
+          <h2 id="codex-diff-title">{changes ? filePath ? displayPath(filePath, Boolean(thread.environment)) : "Edited files" : "Worktree changes"}</h2>
           <div className="codex-actions">
             <button
               className={`icon-button ${!split ? "active" : ""}`}
@@ -137,7 +138,7 @@ export function CodexDiffDialog({
           {!changes && <p className="codex-path">
             {thread.branch}
             <br />
-            {thread.worktree}
+            {displayPath(thread.worktree ?? "", Boolean(thread.environment))}
             <br />
             Compared with {thread.baseCommit?.slice(0, 12)}
           </p>}
@@ -159,7 +160,7 @@ export function CodexDiffDialog({
                 <Suspense
                   fallback={<p className="codex-muted">Loading diff…</p>}
                 >
-                  <DiffFiles info={info} theme={theme} split={split} />
+                  <DiffFiles info={info} theme={theme} split={split} remote={Boolean(thread.environment)} />
                 </Suspense>
               </>
             )

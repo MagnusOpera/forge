@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { displayPathText } from "../paths";
 import type {
   CodexApi,
   CodexThreadSummary,
@@ -9,9 +10,9 @@ export function codexApi(): CodexApi {
     throw new Error("Codex requires the Forge desktop app.");
   return window.forgeCodex;
 }
-export const errorMessage = (error: unknown): string =>
-  (error instanceof Error ? error.message : String(error))
-    .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*(?:Error:\s*)?/, "");
+export const errorMessage = (error: unknown, remote = false): string =>
+  displayPathText((error instanceof Error ? error.message : String(error))
+    .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*(?:Error:\s*)?/, ""), remote);
 export function useCodexThreads(repositoryId?: string): {
   threads: CodexThreadSummary[];
   error: string;

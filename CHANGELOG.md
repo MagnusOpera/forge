@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Shorten home-directory paths to ~ throughout macOS and Linux displays while retaining absolute file-operation paths.
 ## [0.10.3]
 
 

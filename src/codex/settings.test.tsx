@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CodexSettingsDialog } from "./settings";
+import { initializeDisplayPaths } from "../paths";
 import {
   defaultCodexPreferences,
   type CodexApi,
@@ -65,10 +66,11 @@ beforeEach(() => {
     onTerminalEvent: () => () => {},
   } as CodexApi;
 });
-afterEach(() => {
+afterEach(async () => {
   act(() => root.unmount());
   container.remove();
   delete window.forgeCodex;
+  await initializeDisplayPaths();
 });
 it("keeps environment definitions global and edits existing checkout mappings only in the selected project", async () => {
   const props = {
@@ -229,6 +231,23 @@ async function navigate(label: string) {
       .click(),
   );
 }
+it("shows tildified local executable and editor fields but saves absolute paths", async () => {
+  const config = { ...configuration, editor: "/Users/alice/Applications/Editor.app", executable: "/Users/alice/bin/codex" };
+  request.mockImplementation(async (method) => method === "displayContext"
+    ? { homeDirectory: "/Users/alice", platform: "darwin" }
+    : method === "models" ? [] : method === "status" ? { connected: false, authenticated: false } : config);
+  await initializeDisplayPaths();
+  await act(async () => root.render(<CodexSettingsDialog {...props} />));
+  await navigate("General");
+  const editor = container.querySelector<HTMLInputElement>('[aria-label="Text editor application"]')!;
+  expect(editor.value).toBe("~/Applications/Editor.app");
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  act(() => { setValue.call(editor, "~/Applications/Other.app"); editor.dispatchEvent(new Event("input", { bubbles: true })); });
+  await navigate("Codex");
+  expect([...container.querySelectorAll("input")].some(input => input.value === "~/bin/codex")).toBe(true);
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Save configuration")!.click());
+  expect(request).toHaveBeenCalledWith("saveConfiguration", expect.objectContaining({ editor: "/Users/alice/Applications/Other.app", executable: "/Users/alice/bin/codex" }));
+});
 it("places GitHub token controls in GitHub and account controls in Codex", async () => {
   await act(async () => root.render(<CodexSettingsDialog {...props} />));
   await navigate("GitHub");
