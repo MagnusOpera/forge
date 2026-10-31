@@ -4,7 +4,13 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.4]
+
+
 - Shorten home-directory paths to ~ throughout macOS and Linux displays while retaining absolute file-operation paths.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.10.3...0.10.4
+
 ## [0.10.3]
 
 
