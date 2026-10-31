@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Forge is a focused native GitHub client for moving quickly through pull requests, issues, workflows, and repositories."
+      content="Forge brings GitHub and Codex together on macOS. Work through pull requests, issues, and workflows, then plan, implement, and review changes with Codex."
     />
-    <title>Forge — GitHub, focused</title>
+    <title>Forge — GitHub and Codex, focused</title>
     <link rel="icon" href="assets/forge-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/forge-icon.png" />
     <link rel="stylesheet" href="styles.css" />
@@ -73,11 +73,11 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow hero-eyebrow"><span></span>Native GitHub client for macOS</p>
-          <h1>Move through GitHub<br /><em>at full speed.</em></h1>
+          <p class="eyebrow hero-eyebrow"><span></span>GitHub + Codex for macOS</p>
+          <h1>From GitHub context<br /><em>to working code.</em></h1>
           <p class="lead">
-            Pull requests, issues, workflows, and repositories in one focused desktop app.
-            No tab maze. No context switching. Just the work that matters.
+            Your repositories, pull requests, issues, and workflows, with Codex built in.
+            Plan a change, implement it in a dedicated worktree, and review the diff—all in one focused desktop app.
           </p>
           <div class="actions hero-actions">
             <a class="primary-action" href="install.html">
@@ -90,20 +90,20 @@
               <span>View on GitHub</span><span aria-hidden="true">↗</span>
             </a>
           </div>
-          <p class="hero-note">Apple Silicon · Local-only · Open source</p>
+          <p class="hero-note">Apple Silicon · Open source · No Forge backend</p>
         </div>
 
         <figure class="preview" aria-labelledby="preview-title">
           <div class="preview-bar">
             <div class="window-controls" aria-hidden="true"><span></span><span></span><span></span></div>
             <span id="preview-title">Forge · <strong data-preview-theme>dark</strong> mode</span>
-            <span class="preview-caption">Your GitHub work, in focus</span>
+            <span class="preview-caption">Sample Codex workspace</span>
           </div>
           <div class="preview-image-window">
             <img
               data-preview-image
               src="screenshots/forge-dark.png"
-              alt="Forge desktop app screenshot showing repositories, work lists, and repository details."
+              alt="Forge desktop app showing repository navigation, Codex threads, and a conversation with a change summary and edited files."
             />
           </div>
         </figure>
@@ -114,7 +114,7 @@
           <h2>See the whole picture.</h2>
           <p>
             Repositories, pull requests, issues, checks, and workflows stay connected
-            in a permanent three-pane workspace built for flow.
+            alongside your Codex threads in a permanent three-pane workspace built for flow.
           </p>
         </article>
         <article>
@@ -127,10 +127,36 @@
         <article>
           <h2>Your machine. Your token.</h2>
           <p>
-            Forge is local-only. Your GitHub token stays protected by macOS secure
-            storage, with no Forge account or backend in between.
+            Your GitHub token stays protected by macOS secure storage. Forge has no
+            backend: GitHub requests go to GitHub, and Codex uses OpenAI for inference.
           </p>
         </article>
+      </section>
+
+      <section class="codex-section" id="codex" aria-labelledby="codex-title">
+        <div class="codex-intro">
+          <p class="eyebrow">Codex, inside Forge</p>
+          <h2 id="codex-title">Keep the context.<br />Build the change.</h2>
+          <p>Go from understanding a repository to working on it without leaving your workspace.
+            Each new local Codex thread starts in its own branch and worktree, keeping your original checkout untouched.</p>
+          <a class="secondary-action" href="https://github.com/MagnusOpera/forge#codex-workspace">Set up Codex <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="codex-features">
+          <article>
+            <h3>Plan, then implement.</h3>
+            <p>Choose Plan or Implement mode, adjust model and reasoning settings, and answer questions or approval requests in the conversation.</p>
+          </article>
+          <article>
+            <h3>Review what changed.</h3>
+            <p>Follow command output and file changes, inspect unified or split diffs, and open the worktree in your editor. Use Git quick actions when you’re ready to commit, push, or create a pull request.</p>
+          </article>
+          <article>
+            <h3>A terminal for every thread.</h3>
+            <p>Open an integrated terminal in the thread’s checkout. For work on another machine, connect Codex to your own environment over SSH.</p>
+          </article>
+        </div>
+        <p class="codex-setup">Requires a separately installed, compatible Codex CLI and ChatGPT sign-in.
+          Conversations and project settings are stored on your machine; Codex uses OpenAI for inference.</p>
       </section>
 
       <section class="closing-cta" aria-labelledby="closing-title">

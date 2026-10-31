@@ -1005,3 +1005,22 @@ footer a {
     font-size: 27px;
   }
 }
+
+/* Codex follows the site's existing surfaces, type, and accent. */
+.codex-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 36px 64px;
+  padding: 64px 0;
+}
+.codex-intro h2 { margin: 12px 0 20px; font-size: clamp(30px, 4vw, 48px); line-height: 1.12; letter-spacing: -0.04em; }
+.codex-section p { color: var(--muted); line-height: 1.7; }
+.codex-intro .secondary-action { margin-top: 12px; }
+.codex-features article { padding: 20px 0; border-bottom: 1px solid var(--border); }
+.codex-features article:first-child { padding-top: 0; }
+.codex-features h3 { margin: 0 0 8px; font-size: 18px; }
+.codex-features p { margin: 0; }
+.codex-setup { grid-column: 1 / -1; margin: 0; font-size: 13px; }
+@media (max-width: 760px) {
+  .codex-section { grid-template-columns: 1fr; gap: 28px; padding: 40px 0; }
+}

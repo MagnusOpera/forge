@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Introduce Codex on the homepage and refresh the light and dark app previews.
+
 ## [0.10.1]
 
 
