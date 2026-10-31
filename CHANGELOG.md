@@ -4,6 +4,10 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Center the access dropdown over its button while keeping it inside the window.
+
+- Center model and access controls above the input, with Git actions on the left and chat status on the right.
+
 - Return the checkout path, Finder, editor, and diff actions to the third-pane header toolbar.
 
 ## [0.5.0]

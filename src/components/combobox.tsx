@@ -39,6 +39,10 @@ export function Combobox<Value extends string>({
     const rect = trigger.current?.getBoundingClientRect();
     if (!rect || !panel.current) return;
     const width = Math.min(Math.max(rect.width, 220), window.innerWidth - 16);
+    const left =
+      variant === "toolbar"
+        ? rect.left + rect.width / 2 - width / 2
+        : rect.left;
     const height = Math.min(options.length * 34 + 12, 260);
     const above =
       variant === "toolbar"
@@ -47,7 +51,7 @@ export function Combobox<Value extends string>({
           rect.top > window.innerHeight - rect.bottom;
     Object.assign(panel.current.style, {
       width: `${width}px`,
-      left: `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`,
+      left: `${Math.max(8, Math.min(left, window.innerWidth - width - 8))}px`,
       top: above ? "auto" : `${rect.bottom + 6}px`,
       bottom: above ? `${window.innerHeight - rect.top + 6}px` : "auto",
       maxHeight: `${Math.max(40, Math.min(260, (above ? rect.top : window.innerHeight - rect.bottom) - 14))}px`,

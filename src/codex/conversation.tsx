@@ -655,25 +655,22 @@ export function CodexConversation({
           }}
         >
           <div className="codex-composer-tools">
-            {quickActions}
-            <ModelPicker
-              key={thread.id}
-              value={thread.settings}
-              models={models}
-              disabled={busy}
-              onChange={(settings) =>
-                void run(async () => {
-                  await codexApi().request("update", { ...args, settings });
-                })
-              }
-            />
+            <div className="codex-composer-git">{quickActions}</div>
             <div
-              className="codex-composer-status"
-              aria-label="Thread status and access"
+              className="codex-composer-preferences"
+              aria-label="Model and access"
             >
-              <span className={`codex-state ${thread.state}`}>
-                {thread.state === "waiting" ? "Needs input" : thread.state}
-              </span>
+              <ModelPicker
+                key={thread.id}
+                value={thread.settings}
+                models={models}
+                disabled={busy}
+                onChange={(settings) =>
+                  void run(async () => {
+                    await codexApi().request("update", { ...args, settings });
+                  })
+                }
+              />
               <AccessPicker
                 value={
                   activeSettings?.permissions ?? thread.settings.permissions
@@ -691,6 +688,11 @@ export function CodexConversation({
                   })
                 }
               />
+            </div>
+            <div className="codex-composer-status" aria-label="Thread status">
+              <span className={`codex-state ${thread.state}`}>
+                {thread.state === "waiting" ? "Needs input" : thread.state}
+              </span>
             </div>
           </div>
           {editingMessage && thread.replacement && !busy && (

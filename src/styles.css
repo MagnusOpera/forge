@@ -3622,7 +3622,7 @@ code {
 .codex-thread-actions .icon-button { width: 24px; height: 26px; }
 .codex-thread-row form { display: flex; gap: 4px; padding: 6px; width: 100%; }
 .codex-conversation { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
-.codex-composer-status { display: flex; align-items: center; gap: 12px; margin-left: auto; font-size: 11px; flex-shrink: 0; }
+.codex-composer-status { justify-self: end; font-size: 11px; white-space: nowrap; }
 .codex-transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; }
 .codex-item { padding: 12px 0; border-bottom: 1px solid var(--border-soft); overflow-wrap: anywhere; }
 .codex-item-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 11px; color: var(--text-muted); }
@@ -3639,8 +3639,16 @@ code {
 .codex-answer-options button small { display: block; color: var(--text-muted); margin-top: 4px; }
 .codex-answer-options .active { border: 1px solid var(--accent); color: var(--accent); }
 .codex-conversation textarea { resize: vertical; min-height: 70px; font-size: 13px; line-height: 1.6; }
-.codex-composer { margin: 0 16px 14px; padding: 10px; border: 1px solid var(--control-border); border-radius: 7px; flex-shrink: 0; }
-.codex-composer-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; }
+.codex-composer { container-type: inline-size; margin: 0 16px 14px; padding: 10px; border: 1px solid var(--control-border); border-radius: 7px; flex-shrink: 0; }
+.codex-composer-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.codex-composer-git { min-width: 0; }
+.codex-composer-preferences { display: flex; align-items: center; justify-self: center; gap: 6px; min-width: 0; }
+@container (max-width: 520px) {
+  .codex-composer-tools { grid-template-columns: minmax(0, 1fr) auto; }
+  .codex-composer-git { grid-column: 1; grid-row: 1; }
+  .codex-composer-status { grid-column: 2; grid-row: 1; }
+  .codex-composer-preferences { grid-column: 1 / -1; grid-row: 2; flex-wrap: wrap; justify-content: center; }
+}
 .codex-composer-tools + .codex-input .codex-markdown-editor { margin-top: 0; }
 .codex-composer-tools .codex-quick-actions { flex-wrap: wrap; }
 .codex-composer-tools .codex-action-error { top: auto; bottom: calc(100% + 8px); left: 0; right: auto; }

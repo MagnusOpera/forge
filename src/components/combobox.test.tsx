@@ -122,3 +122,30 @@ it("keeps menus inside the viewport and respects disabled controls", () => {
   expect(change).not.toHaveBeenCalled();
   expect(trigger.disabled).toBe(true);
 });
+
+it("centers toolbar menus over their buttons and clamps them at either window edge", () => {
+  act(() =>
+    root.render(
+      <Combobox
+        label="Access type"
+        variant="toolbar"
+        value="full"
+        options={[{ value: "full", label: "Full access" }]}
+        onChange={() => {}}
+      />,
+    ),
+  );
+  const trigger =
+    container.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+  const bounds = vi.spyOn(trigger, "getBoundingClientRect");
+  const menu = container.querySelector<HTMLElement>('[role="listbox"]')!;
+  for (const [left, width, expected] of [
+    [300, 100, 240],
+    [0, 100, 8],
+    [window.innerWidth - 80, 80, window.innerWidth - 228],
+  ]) {
+    bounds.mockReturnValue({ left, width, top: 500, bottom: 530 } as DOMRect);
+    act(() => trigger.click());
+    expect(menu.style.left).toBe(`${expected}px`);
+  }
+});
