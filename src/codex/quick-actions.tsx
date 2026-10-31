@@ -108,8 +108,14 @@ export function CodexQuickActions({
               type="button"
               className="icon-button"
               aria-label="Open checkout in Finder"
-              title="Open checkout in Finder"
-              disabled={!thread?.worktree || busy}
+              title={
+                thread?.environment
+                  ? "Finder is unavailable for remote threads"
+                  : "Open checkout in Finder"
+              }
+              disabled={
+                !thread?.worktree || Boolean(thread.environment) || busy
+              }
               onClick={() => {
                 if (thread)
                   void execute(async () => {
@@ -125,8 +131,14 @@ export function CodexQuickActions({
             <button
               className="icon-button"
               aria-label="Open checkout in text editor"
-              title="Open checkout in text editor"
-              disabled={!thread?.worktree || busy}
+              title={
+                thread?.environment
+                  ? "Local editors cannot open remote checkouts"
+                  : "Open checkout in text editor"
+              }
+              disabled={
+                !thread?.worktree || Boolean(thread.environment) || busy
+              }
               onClick={() => {
                 if (thread)
                   void execute(async () => {
@@ -142,8 +154,12 @@ export function CodexQuickActions({
             <button
               className="icon-button"
               aria-label="Diff checkout changes"
-              title="Diff checkout changes"
-              disabled={!thread?.worktree}
+              title={
+                thread?.environment
+                  ? "Diff is unavailable for remote threads"
+                  : "Diff checkout changes"
+              }
+              disabled={!thread?.worktree || Boolean(thread.environment)}
               onClick={() => setDiff(true)}
             >
               <FileDiff size={16} />

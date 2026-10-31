@@ -3,6 +3,8 @@ export type CodexQuickAction = "sync" | "commit" | "push" | "create-pr";
 export function codexQuickActionUnavailable(
   thread?: CodexThreadSummary,
 ): string | undefined {
+  if (thread?.environment)
+    return "Forge Git actions are unavailable for remote threads. Use Codex or the remote terminal.";
   if (!thread?.worktree) return "Send the first message to create a worktree.";
   if (thread.archived) return "Restore this thread before running Git actions.";
   if (codexIsActive(thread))

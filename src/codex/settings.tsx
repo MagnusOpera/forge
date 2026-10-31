@@ -1,3 +1,4 @@
+import { EnvironmentsEditor, ProjectEnvironments } from "./environments";
 import { Combobox } from "../components/combobox";
 import { useEffect, useRef, useState } from "react";
 import { FolderOpen, RefreshCw, X } from "lucide-react";
@@ -27,6 +28,9 @@ export function CodexSettingsDialog({
   onRemoveGithub: () => void;
   onOpenUrl: (url: string) => void;
 }) {
+  const [section, setSection] = useState(project ? "local" : "general");
+  const [homeRelativePath, setHomeRelativePath] = useState<string | null>(null);
+  const [remotePaths, setRemotePaths] = useState<Record<string, string>>({});
   const [configuration, setConfiguration] = useState<CodexConfiguration | null>(
     null,
   );
@@ -89,6 +93,7 @@ export function CodexSettingsDialog({
   }, []);
   useEffect(() => {
     let active = true;
+    setSection(project ? "local" : "general");
     if (!window.forgeCodex) {
       setError("Codex requires the Forge desktop app.");
       return;
@@ -98,6 +103,9 @@ export function CodexSettingsDialog({
       .then((c) => {
         if (!active) return;
         setConfiguration(c);
+        setRemotePaths(
+          project ? (c.projects[project.id]?.remotePaths ?? {}) : {},
+        );
         setExecutable(c.executable);
         setEditor(c.editor ?? DEFAULT_TEXT_EDITOR);
         setSendShortcut(c.sendShortcut ?? "enter");
@@ -122,6 +130,7 @@ export function CodexSettingsDialog({
         });
     if (!project) refreshStatus();
     const unsubscribe = codexApi().onChanged((change) => {
+      if (change.environmentId) return;
       if (!change.threadId && !project) {
         if (change.connectionError) {
           setStatus({
@@ -146,6 +155,34 @@ export function CodexSettingsDialog({
     };
   }, [project?.id]);
   const binding = project ? configuration?.projects[project.id] : undefined;
+  useEffect(() => {
+    setHomeRelativePath(null);
+    if (!project || !binding?.path) return;
+    let active = true;
+    void codexApi()
+      .request("inferRemotePath", { repositoryId: project.id })
+      .then((suggested) => {
+        if (active)
+          setHomeRelativePath(typeof suggested === "string" ? suggested : null);
+      })
+      .catch((error) => {
+        if (active) setError(errorMessage(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [project?.id, binding?.path]);
+  useEffect(() => {
+    if (section !== "environments" || !homeRelativePath) return;
+    setRemotePaths((current) => {
+      const next = { ...current };
+      for (const environment of configuration?.environments ?? []) {
+        next[environment.id] ??= homeRelativePath;
+      }
+      return next;
+    });
+  }, [section, homeRelativePath, configuration?.environments]);
+
   return (
     <div
       className="modal-backdrop codex-modal-backdrop"
@@ -172,312 +209,358 @@ export function CodexSettingsDialog({
             <X size={17} />
           </button>
         </header>
-        <div className="codex-settings-scroll">
-          {!project && (
-            <section>
-              <h3>GitHub account</h3>
-              <p>
-                {auth?.configured
-                  ? `Connected${auth.viewerLogin ? ` as ${auth.viewerLogin}` : ""}`
-                  : "No GitHub token configured"}
-              </p>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void operation(async () => {
-                    await onSaveGithub(token.trim());
-                    setToken("");
-                  });
-                }}
+        <div className="codex-settings-body">
+          <nav
+            className="codex-settings-nav"
+            aria-label="Configuration sections"
+          >
+            {(project
+              ? [
+                  ["local", "Local checkout"],
+                  ["environments", "Remote checkouts"],
+                  ["codex", "Codex overrides"],
+                ]
+              : [
+                  ["general", "General"],
+                  ["accounts", "Accounts"],
+                  ["environments", "Environments"],
+                  ["codex", "Codex"],
+                ]
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                className={`ghost-button ${section === id ? "active" : ""}`}
+                aria-current={section === id ? "page" : undefined}
+                onClick={() => setSection(id)}
               >
-                <label className="codex-field">
-                  <span>
-                    {auth?.configured
-                      ? "Replace classic personal access token"
-                      : "Classic personal access token"}
-                  </span>
-                  <input
-                    type="password"
-                    value={token}
-                    onChange={(event) => setToken(event.target.value)}
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="ghp_…"
-                  />
-                </label>
-                <div className="codex-actions">
-                  <button
-                    type="submit"
-                    className="ghost-button"
-                    disabled={busy || !token.trim()}
-                  >
-                    Save token
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => onOpenUrl(CLASSIC_TOKEN_SETTINGS_URL)}
-                  >
-                    GitHub token settings
-                  </button>
-                  {auth?.configured && (
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="codex-settings-scroll">
+            {!project && section === "environments" && configuration && (
+              <EnvironmentsEditor
+                configuration={configuration}
+                onChange={setConfiguration}
+              />
+            )}
+            {project && section === "environments" && configuration && (
+              <ProjectEnvironments
+                configuration={configuration}
+                paths={remotePaths}
+                onChange={setRemotePaths}
+              />
+            )}
+            {!project && section === "accounts" && (
+              <section>
+                <h3>GitHub account</h3>
+                <p>
+                  {auth?.configured
+                    ? `Connected${auth.viewerLogin ? ` as ${auth.viewerLogin}` : ""}`
+                    : "No GitHub token configured"}
+                </p>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void operation(async () => {
+                      await onSaveGithub(token.trim());
+                      setToken("");
+                    });
+                  }}
+                >
+                  <label className="codex-field">
+                    <span>
+                      {auth?.configured
+                        ? "Replace classic personal access token"
+                        : "Classic personal access token"}
+                    </span>
+                    <input
+                      type="password"
+                      value={token}
+                      onChange={(event) => setToken(event.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="ghp_…"
+                    />
+                  </label>
+                  <div className="codex-actions">
+                    <button
+                      type="submit"
+                      className="ghost-button"
+                      disabled={busy || !token.trim()}
+                    >
+                      Save token
+                    </button>
                     <button
                       type="button"
                       className="ghost-button"
-                      onClick={onRemoveGithub}
+                      onClick={() => onOpenUrl(CLASSIC_TOKEN_SETTINGS_URL)}
                     >
-                      Remove token
+                      GitHub token settings
                     </button>
-                  )}
-                </div>
-              </form>
-              <p className="codex-muted">
-                The token stays encrypted in Forge's main process.
-              </p>
-            </section>
-          )}
-          {!project && (
-            <section>
-              <h3>Codex account</h3>
-              <p>
-                {status?.authenticated
-                  ? `Signed in${status.email ? ` as ${status.email}` : ""}${status.plan ? ` · ${status.plan}` : ""}`
-                  : status?.connected
-                    ? "Not signed in"
-                    : "Codex unavailable"}
-              </p>
-              {status?.error && <p className="codex-muted">{status.error}</p>}
-              {status?.version && <small>{status.version}</small>}
-              <div className="codex-actions">
-                <button
-                  className="ghost-button"
-                  disabled={busy}
-                  onClick={() =>
-                    void operation(async () => {
-                      setStatus(await codexApi().request("status", {}));
-                    })
-                  }
-                >
-                  <RefreshCw size={13} />
-                  Refresh
-                </button>
-                {status?.authenticated ? (
+                    {auth?.configured && (
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={onRemoveGithub}
+                      >
+                        Remove token
+                      </button>
+                    )}
+                  </div>
+                </form>
+                <p className="codex-muted">
+                  The token stays encrypted in Forge's main process.
+                </p>
+              </section>
+            )}
+            {!project && section === "accounts" && (
+              <section>
+                <h3>Codex account</h3>
+                <p>
+                  {status?.authenticated
+                    ? `Signed in${status.email ? ` as ${status.email}` : ""}${status.plan ? ` · ${status.plan}` : ""}`
+                    : status?.connected
+                      ? "Not signed in"
+                      : "Codex unavailable"}
+                </p>
+                {status?.error && <p className="codex-muted">{status.error}</p>}
+                {status?.version && <small>{status.version}</small>}
+                <div className="codex-actions">
                   <button
                     className="ghost-button"
                     disabled={busy}
                     onClick={() =>
                       void operation(async () => {
-                        await codexApi().request("logout", {});
                         setStatus(await codexApi().request("status", {}));
                       })
                     }
                   >
-                    Sign out
+                    <RefreshCw size={13} />
+                    Refresh
                   </button>
-                ) : (
+                  {status?.authenticated ? (
+                    <button
+                      className="ghost-button"
+                      disabled={busy}
+                      onClick={() =>
+                        void operation(async () => {
+                          await codexApi().request("logout", {});
+                          setStatus(await codexApi().request("status", {}));
+                        })
+                      }
+                    >
+                      Sign out
+                    </button>
+                  ) : (
+                    <button
+                      className="ghost-button"
+                      disabled={busy || waitingLogin || !status?.connected}
+                      onClick={() =>
+                        void operation(async () => {
+                          await codexApi().request("login", {});
+                          setWaitingLogin(true);
+                        })
+                      }
+                    >
+                      {waitingLogin
+                        ? "Waiting for browser sign-in"
+                        : "Sign in with ChatGPT"}
+                    </button>
+                  )}
+                </div>
+                {waitingLogin && (
                   <button
                     className="ghost-button"
-                    disabled={busy || waitingLogin || !status?.connected}
+                    disabled={busy}
                     onClick={() =>
                       void operation(async () => {
-                        await codexApi().request("login", {});
-                        setWaitingLogin(true);
+                        await codexApi().request("cancelLogin", {});
+                        setWaitingLogin(false);
                       })
                     }
                   >
-                    {waitingLogin
-                      ? "Waiting for browser sign-in"
-                      : "Sign in with ChatGPT"}
+                    Cancel sign-in
                   </button>
                 )}
-              </div>
-              {waitingLogin && (
+                <p className="codex-muted">
+                  This account belongs to Forge. Other Codex apps and CLI
+                  credentials are separate.
+                </p>
+              </section>
+            )}
+            {project && section === "local" && (
+              <section>
+                <h3>Local Git folder</h3>
+                <p className="codex-path" title={binding?.path}>
+                  {homeRelativePath || binding?.path || "No folder selected"}
+                </p>
                 <button
                   className="ghost-button"
                   disabled={busy}
                   onClick={() =>
                     void operation(async () => {
-                      await codexApi().request("cancelLogin", {});
-                      setWaitingLogin(false);
+                      setConfiguration(
+                        await codexApi().request("pickFolder", {
+                          repositoryId: project.id,
+                          fullName: project.fullName,
+                        }),
+                      );
                     })
                   }
                 >
-                  Cancel sign-in
+                  <FolderOpen size={14} />
+                  Choose folder
                 </button>
-              )}
-              <p className="codex-muted">
-                This account belongs to Forge. Other Codex apps and CLI
-                credentials are separate.
-              </p>
-            </section>
-          )}
-          {project && (
-            <section>
-              <h3>Local Git folder</h3>
-              <p className="codex-path">
-                {binding?.path || "No folder selected"}
-              </p>
-              <button
-                className="ghost-button"
-                disabled={busy}
-                onClick={() =>
-                  void operation(async () => {
-                    setConfiguration(
-                      await codexApi().request("pickFolder", {
-                        repositoryId: project.id,
-                        fullName: project.fullName,
-                      }),
-                    );
-                  })
-                }
-              >
-                <FolderOpen size={14} />
-                Choose folder
-              </button>
-              {binding?.warning && <p role="note">{binding.warning}</p>}
-              <p className="codex-muted">
-                New threads start from committed HEAD in a separate worktree.
-                Uncommitted checkout changes are excluded. Existing threads
-                retain their original folder.
-              </p>
-            </section>
-          )}
-          {configuration && (
-            <section>
-              <h3>{project ? "Codex overrides" : "Codex defaults"}</h3>
-              <p className="codex-muted">
-                {project
-                  ? "Each setting inherits the global value until overridden."
-                  : "Defaults apply to new threads. Existing threads keep their settings."}
-              </p>
-              <PreferencesEditor
-                value={preferences}
-                inherited={project ? configuration.defaults : undefined}
-                models={models}
-                onChange={setPreferences}
-              />
-              {modelsError && (
+                {binding?.warning && <p role="note">{binding.warning}</p>}
                 <p className="codex-muted">
-                  Model catalog unavailable. {modelsError}
+                  New threads start from committed HEAD in a separate worktree.
+                  Uncommitted checkout changes are excluded. Existing threads
+                  retain their original folder.
                 </p>
-              )}
-            </section>
-          )}
-          {!project && (
-            <section>
-              <h3>Message input</h3>
-              <div className="codex-field">
-                <span>Send message with</span>
-                <Combobox
-                  label="Send message with"
-                  value={sendShortcut}
-                  options={[
-                    { value: "enter", label: "Enter" },
-                    { value: "command-enter", label: "⌘Enter / Ctrl+Enter" },
-                  ]}
-                  onChange={setSendShortcut}
+              </section>
+            )}
+            {configuration && section === "codex" && (
+              <section>
+                <h3>{project ? "Codex overrides" : "Codex defaults"}</h3>
+                <p className="codex-muted">
+                  {project
+                    ? "Each setting inherits the global value until overridden."
+                    : "Defaults apply to new threads. Existing threads keep their settings."}
+                </p>
+                <PreferencesEditor
+                  value={preferences}
+                  inherited={project ? configuration.defaults : undefined}
+                  models={models}
+                  onChange={setPreferences}
                 />
-              </div>
-              <p className="codex-muted">
-                With ⌘Enter / Ctrl+Enter selected, Enter inserts a new line.
-                Shift+Enter always inserts a new line. Inside code blocks, Enter
-                inserts a new line and ⌘Enter / Ctrl+Enter sends. Applies to all
-                chats.
-              </p>
-            </section>
-          )}
-          {!project && (
-            <section>
-              <h3>Text editor</h3>
-              <div className="codex-field">
-                <span>Application name or .app path</span>
-                <div className="codex-field-control">
+                {modelsError && (
+                  <p className="codex-muted">
+                    Model catalog unavailable. {modelsError}
+                  </p>
+                )}
+              </section>
+            )}
+            {!project && section === "general" && (
+              <section>
+                <h3>Message input</h3>
+                <div className="codex-field">
+                  <span>Send message with</span>
+                  <Combobox
+                    label="Send message with"
+                    value={sendShortcut}
+                    options={[
+                      { value: "enter", label: "Enter" },
+                      { value: "command-enter", label: "⌘Enter / Ctrl+Enter" },
+                    ]}
+                    onChange={setSendShortcut}
+                  />
+                </div>
+                <p className="codex-muted">
+                  With ⌘Enter / Ctrl+Enter selected, Enter inserts a new line.
+                  Shift+Enter always inserts a new line. Inside code blocks,
+                  Enter inserts a new line and ⌘Enter / Ctrl+Enter sends.
+                  Applies to all chats.
+                </p>
+              </section>
+            )}
+            {!project && section === "general" && (
+              <section>
+                <h3>Text editor</h3>
+                <div className="codex-field">
+                  <span>Application name or .app path</span>
+                  <div className="codex-field-control">
+                    <input
+                      aria-label="Text editor application"
+                      value={editor}
+                      onChange={(event) => setEditor(event.target.value)}
+                      placeholder={DEFAULT_TEXT_EDITOR}
+                      spellCheck={false}
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Choose text editor application"
+                      title="Choose application"
+                      disabled={busy}
+                      onClick={() =>
+                        void operation(async () => {
+                          const selected = await codexApi().request(
+                            "pickEditor",
+                            {},
+                          );
+                          if (selected) setEditor(selected);
+                        })
+                      }
+                    >
+                      <FolderOpen size={16} />
+                    </button>
+                  </div>
+                </div>
+                <p className="codex-muted">
+                  The editor button beside Finder opens the selected chat's
+                  worktree. Defaults to Visual Studio Code; no command-line
+                  launcher is required.
+                </p>
+              </section>
+            )}
+            {!project && section === "codex" && (
+              <section>
+                <h3>Codex runtime</h3>
+                <label className="codex-field">
+                  <span>Executable path</span>
                   <input
-                    aria-label="Text editor application"
-                    value={editor}
-                    onChange={(event) => setEditor(event.target.value)}
-                    placeholder={DEFAULT_TEXT_EDITOR}
+                    value={executable}
+                    onChange={(event) => setExecutable(event.target.value)}
+                    placeholder="Automatic discovery"
                     spellCheck={false}
                   />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Choose text editor application"
-                    title="Choose application"
-                    disabled={busy}
-                    onClick={() =>
-                      void operation(async () => {
-                        const selected = await codexApi().request(
-                          "pickEditor",
-                          {},
-                        );
-                        if (selected) setEditor(selected);
-                      })
-                    }
-                  >
-                    <FolderOpen size={16} />
-                  </button>
-                </div>
-              </div>
-              <p className="codex-muted">
-                The editor button beside Finder opens the selected chat's
-                worktree. Defaults to Visual Studio Code; no command-line
-                launcher is required.
+                </label>
+                <p className="codex-muted">
+                  Install Codex CLI locally. Leave blank to search PATH and
+                  common macOS locations. Save a new path, then refresh the
+                  account status.
+                </p>
+              </section>
+            )}
+            {error && (
+              <p className="inline-error" role="alert">
+                {error}
               </p>
-            </section>
-          )}
-          {!project && (
-            <section>
-              <h3>Codex runtime</h3>
-              <label className="codex-field">
-                <span>Executable path</span>
-                <input
-                  value={executable}
-                  onChange={(event) => setExecutable(event.target.value)}
-                  placeholder="Automatic discovery"
-                  spellCheck={false}
-                />
-              </label>
-              <p className="codex-muted">
-                Install Codex CLI locally. Leave blank to search PATH and common
-                macOS locations. Save a new path, then refresh the account
-                status.
-              </p>
-            </section>
-          )}
-          {error && (
-            <p className="inline-error" role="alert">
-              {error}
-            </p>
-          )}
+            )}
+          </div>
         </div>
         <footer>
           <button className="ghost-button" onClick={onClose} disabled={busy}>
             Close
           </button>
-          <button
-            className="ghost-button"
-            disabled={busy || !configuration}
-            onClick={() =>
-              void operation(async () => {
-                const next = project
-                  ? await codexApi().request("saveProject", {
-                      repositoryId: project.id,
-                      overrides: preferences,
-                    })
-                  : await codexApi().request("saveConfiguration", {
-                      defaults: preferences as CodexPreferences,
-                      executable,
-                      editor,
-                      sendShortcut,
-                    });
-                setConfiguration(next);
-                onClose();
-              })
-            }
-          >
-            {busy ? "Saving…" : "Save configuration"}
-          </button>
+          {(project || ["general", "codex"].includes(section)) && (
+            <button
+              className="ghost-button"
+              disabled={busy || !configuration}
+              onClick={() =>
+                void operation(async () => {
+                  const next = project
+                    ? await codexApi().request("saveProject", {
+                        repositoryId: project.id,
+                        fullName: project.fullName,
+                        overrides: preferences,
+                        remotePaths,
+                      })
+                    : await codexApi().request("saveConfiguration", {
+                        defaults: preferences as CodexPreferences,
+                        executable,
+                        editor,
+                        sendShortcut,
+                      });
+                  setConfiguration(next);
+                  onClose();
+                })
+              }
+            >
+              {busy ? "Saving…" : "Save configuration"}
+            </button>
+          )}
         </footer>
       </div>
     </div>

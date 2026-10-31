@@ -111,6 +111,7 @@ export function mapModels(value: unknown): CodexModel[] {
 export class CodexRpcError extends Error {}
 export class CodexClient implements CodexTransport {
   private child: ChildProcessWithoutNullStreams | null = null;
+  private sendMessage: ((message: JsonObject) => void) | null = null;
   private starting: Promise<void> | null = null;
   private nextId = 1;
   private pending = new Map<
@@ -122,7 +123,7 @@ export class CodexClient implements CodexTransport {
     }
   >();
   private serverRequests = new Set<string | number>();
-  private version = "";
+  protected version = "";
   onEvent: (event: RpcEvent) => void = () => undefined;
   constructor(
     private home: string,
@@ -143,7 +144,7 @@ export class CodexClient implements CodexTransport {
       });
     return this.starting;
   }
-  private async launch(): Promise<void> {
+  protected async launch(): Promise<void> {
     const executable = resolveCodexExecutable(this.executable());
     const schemaDir = mkdtempSync(path.join(os.tmpdir(), "forge-codex-"));
     try {
@@ -205,11 +206,37 @@ export class CodexClient implements CodexTransport {
         },
       },
     );
+    await this.connect(child);
+  }
+  protected async connect(
+    child: ChildProcessWithoutNullStreams,
+    label = "Codex app-server",
+    wire?: {
+      send: (message: JsonObject) => void;
+      subscribe: (listener: (line: string) => void) => void;
+    },
+  ): Promise<void> {
     this.child = child;
-    readline.createInterface({ input: child.stdout }).on("line", (line) => {
+    this.sendMessage =
+      wire?.send ??
+      ((message) => {
+        child.stdin.write(`${JSON.stringify(message)}\n`);
+      });
+    const receive = (line: string) => {
       if (this.child === child) this.onLine(line);
+    };
+    if (wire) wire.subscribe(receive);
+    else readline.createInterface({ input: child.stdout }).on("line", receive);
+    child.stdin.on("error", (error: Error) => {
+      if (this.child !== child) return;
+      this.child = null;
+      child.kill();
+      this.fail(error);
     });
-    child.stderr.on("data", () => undefined);
+    let diagnostic = "";
+    child.stderr.on("data", (data: Buffer) => {
+      diagnostic = (diagnostic + data.toString()).slice(-4096);
+    });
     child.once("error", (error) => {
       if (this.child === child) {
         this.child = null;
@@ -221,7 +248,7 @@ export class CodexClient implements CodexTransport {
         this.child = null;
         this.fail(
           new Error(
-            `Codex app-server exited (${code ?? "signal"}). Resume the thread to reconnect.`,
+            `${label} exited (${code ?? "signal"}). ${diagnostic.trim() || "Resume the thread to reconnect."}`,
           ),
         );
       }
@@ -234,7 +261,7 @@ export class CodexClient implements CodexTransport {
   }
   private write(message: JsonObject): void {
     if (!this.child) throw new Error("Codex is disconnected.");
-    this.child.stdin.write(`${JSON.stringify(message)}\n`);
+    this.sendMessage!(message);
   }
   // Public for focused protocol tests; input is always decoded as untrusted JSON.
   onLine(line: string): void {

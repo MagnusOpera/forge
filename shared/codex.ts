@@ -15,16 +15,33 @@ export const defaultCodexPreferences: CodexPreferences = {
   followUp: "steer",
   permissions: "ask",
 };
+export type CodexEnvironment = {
+  id: string;
+  name: string;
+  host: string;
+  executable: string;
+  tmux: boolean;
+};
+export type CodexEnvironmentCheck = {
+  ready: boolean;
+  message: string;
+  version?: string;
+  tmux?: boolean;
+};
 export type CodexProject = {
   repositoryId: string;
+  name?: string;
   path: string;
   overrides: Partial<CodexPreferences>;
+  remotePaths?: Record<string, string>;
   warning?: string;
   dirty?: boolean;
 };
 export const DEFAULT_TEXT_EDITOR = "Visual Studio Code";
 export type CodexSendShortcut = "enter" | "command-enter";
 export type CodexConfiguration = {
+  version?: number;
+  environments?: CodexEnvironment[];
   sendShortcut?: CodexSendShortcut;
   editor: string;
   defaults: CodexPreferences;
@@ -121,6 +138,7 @@ export type CodexThreadSummary = {
     targetPath: string;
     commit: string;
   };
+  environment?: CodexEnvironment;
   sourceHome?: string;
   historyWarning?: string;
 };
@@ -165,6 +183,16 @@ type ThreadInput = { repositoryId: string; id: string };
 export type CodexCommands = {
   openLink: Command<{ url: string }, void>;
   configuration: Command<Record<string, never>, CodexConfiguration>;
+  saveEnvironments: Command<
+    { environments: CodexEnvironment[] },
+    CodexConfiguration
+  >;
+  checkEnvironment: Command<
+    { environment: CodexEnvironment; repositoryPath?: string },
+    CodexEnvironmentCheck
+  >;
+  inferRemotePath: Command<{ repositoryId: string }, string | null>;
+  setEnvironment: Command<ThreadInput & { environmentId: string }, void>;
   saveConfiguration: Command<
     {
       defaults: CodexPreferences;
@@ -175,7 +203,12 @@ export type CodexCommands = {
     CodexConfiguration
   >;
   saveProject: Command<
-    { repositoryId: string; overrides: Partial<CodexPreferences> },
+    {
+      repositoryId: string;
+      overrides: Partial<CodexPreferences>;
+      remotePaths?: Record<string, string>;
+      fullName?: string;
+    },
     CodexConfiguration
   >;
   pickFolder: Command<
@@ -246,6 +279,7 @@ export type CodexCommands = {
     void
   >;
   terminalClose: Command<ThreadInput & { sessionId: string }, void>;
+  reconnect: Command<ThreadInput, void>;
   stop: Command<ThreadInput, void>;
   answer: Command<
     ThreadInput & {
@@ -275,6 +309,7 @@ export type CodexCommands = {
 };
 export type CodexChange = {
   connectionError?: string;
+  environmentId?: string;
   repositoryId?: string;
   threadId?: string;
   auth?: { success: boolean; error?: string };

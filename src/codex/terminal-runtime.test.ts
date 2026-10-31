@@ -381,3 +381,38 @@ it("discards the shell and retained output on archive, then starts fresh after r
   expect(fresh.data).toBe("");
   expect(spawn).toHaveBeenCalledTimes(2);
 });
+
+it("opens remote terminals through SSH, reattaches after disconnect, and never treats a remote path as local cwd", async () => {
+  const { thread } = await setup();
+  thread.environment = {
+    id: "remote",
+    name: "Linux",
+    host: "dev@host",
+    executable: "codex",
+    tmux: true,
+  };
+  thread.worktree = "/remote/path with ' quotes";
+  const first = new FakePty(),
+    second = new FakePty();
+  const spawn = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+  const validate = vi.fn(async () => {});
+  const manager = new TerminalManager(vi.fn(), spawn, validate);
+  managers.push(manager);
+  const opened = await manager.open(thread, 80, 24);
+  expect(validate).toHaveBeenCalledWith(thread);
+  expect(spawn.mock.calls[0][0]).toBe("/usr/bin/ssh");
+  expect(spawn.mock.calls[0][1]).toContain("-tt");
+  expect(spawn.mock.calls[0][1]).toContain("dev@host");
+  expect(spawn.mock.calls[0][1].at(-1)).toContain(
+    `tmux new-session -A -s 'forge-${thread.id}'`,
+  );
+  expect(spawn.mock.calls[0][2].cwd).toBe(os.homedir());
+  first.end(255);
+  const reattached = await manager.open(thread, 100, 30);
+  expect(reattached.sessionId).not.toBe(opened.sessionId);
+  expect(reattached.exited).toBe(false);
+  expect(spawn).toHaveBeenCalledTimes(2);
+  expect(spawn.mock.calls[1][1].at(-1)).toBe(spawn.mock.calls[0][1].at(-1));
+  manager.detach(thread, reattached.sessionId);
+  expect(second.kill).not.toHaveBeenCalled();
+});

@@ -4,6 +4,10 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Run Codex threads on remote SSH environments with isolated worktrees and optional persistent terminals.
+- Configure environments and project checkout paths locally, with home-relative path suggestions and automatic validation.
+- Navigate global and project configuration with sidebars, repository-style selection highlights, and stable window-relative sizing.
+
 ## [0.7.0]
 
 

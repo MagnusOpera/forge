@@ -172,7 +172,11 @@ export function CodexThreadList({
                   <span className="focus-meta">
                     {thread.settings.mode === "plan" ? "Plan" : "Implement"} ·{" "}
                     {thread.settings.model || "Codex default"}
-                    {thread.sourceHome ? " · Codex app/CLI" : ""}
+                    {thread.environment
+                      ? ` · ${thread.environment.name}`
+                      : thread.sourceHome
+                        ? " · Codex app/CLI"
+                        : ""}
                   </span>
                 </span>
                 <span
@@ -225,8 +229,8 @@ export function CodexThreadList({
           <p>{archived ? "No archived threads" : "No Codex threads yet"}</p>
           {!archived && (
             <p>
-              Choose a local Git folder in project configuration, then create a
-              thread.
+              Configure a local or remote Git checkout in project configuration,
+              then create a thread.
             </p>
           )}
         </div>

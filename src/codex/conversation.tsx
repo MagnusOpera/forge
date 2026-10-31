@@ -1,3 +1,4 @@
+import { EnvironmentPicker } from "./environment-picker";
 import codexLogo from "../../assets/codex-colored.svg";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ImagePlus, Loader2, Send, Square, X } from "lucide-react";
@@ -201,7 +202,11 @@ export function CodexConversation({
   const composer = useRef<HTMLDivElement>(null);
   const [editingQueue, setEditingQueue] = useState<string | null>(null),
     [queueText, setQueueText] = useState("");
-  const { models } = useCodexModels(repositoryId, id);
+  const { models } = useCodexModels(
+    repositoryId,
+    id,
+    page?.thread.environment?.id,
+  );
   const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -372,6 +377,8 @@ export function CodexConversation({
   const addFiles = (files: File[]) => {
     if (!files.length || busy || !id || thread?.archived) return;
     void run(async () => {
+      if (thread?.environment)
+        throw new Error("File transfer is unavailable for remote threads.");
       if (attachments.length + files.length > 20)
         throw new Error("Attach up to 20 files per message.");
       const api = codexApi();
@@ -409,6 +416,10 @@ export function CodexConversation({
     );
   return (
     <div className="codex-conversation">
+      <EnvironmentPicker
+        thread={thread}
+        onChange={async () => setPage(await codexApi().request("thread", args))}
+      />
       <div
         className="codex-transcript"
         ref={scroll}
@@ -703,10 +714,17 @@ export function CodexConversation({
           <div className="codex-input">
             <button
               className="icon-button codex-attach-button"
-              title="Attach documents or images"
+              title={
+                thread.environment
+                  ? "File transfer is unavailable for remote threads"
+                  : "Attach documents or images"
+              }
               aria-label="Attach documents or images"
               disabled={
-                busy || Boolean(thread.replacement) || attachments.length >= 20
+                busy ||
+                Boolean(thread.environment) ||
+                Boolean(thread.replacement) ||
+                attachments.length >= 20
               }
               onClick={() =>
                 void run(async () => {

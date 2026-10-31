@@ -12,6 +12,12 @@ import os from "node:os";
 import { openInTextEditor, validateEditor } from "./editor.js";
 import { ExistingThreads } from "./existing.js";
 import { CodexClient, object, text } from "./client.js";
+import {
+  checkEnvironment,
+  remoteCheckoutPath,
+  inferRemoteCheckoutPath,
+  validateEnvironment,
+} from "./remote.js";
 import { CodexStore } from "./store.js";
 import { terminalDimensions } from "../../../shared/terminal.js";
 import { TerminalManager } from "./terminal.js";
@@ -88,8 +94,10 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         },
       );
       existing = new ExistingThreads(manager, sourceHome);
-      terminals = new TerminalManager((event) =>
-        window()?.webContents.send("codex:terminal", event),
+      terminals = new TerminalManager(
+        (event) => window()?.webContents.send("codex:terminal", event),
+        undefined,
+        (thread) => manager!.validateCheckout(thread),
       );
     }
     return { store, client: client!, manager: manager!, terminals: terminals! };
@@ -163,6 +171,39 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         changed({});
         return store.configuration;
       }
+      if (method === "checkEnvironment") {
+        return checkEnvironment(
+          validateEnvironment(input.environment),
+          input.repositoryPath === undefined
+            ? undefined
+            : remoteCheckoutPath(input.repositoryPath),
+        );
+      }
+      if (method === "saveEnvironments") {
+        if (
+          !Array.isArray(input.environments) ||
+          input.environments.length > 100
+        )
+          throw new Error("Invalid environments.");
+        const environments = input.environments.map(validateEnvironment);
+        if (
+          new Set(environments.map((entry) => entry.id)).size !==
+          environments.length
+        )
+          throw new Error("Environment IDs must be unique.");
+        store.configuration.environments = environments;
+        for (const project of Object.values(store.configuration.projects)) {
+          if (project.remotePaths)
+            project.remotePaths = Object.fromEntries(
+              Object.entries(project.remotePaths).filter(([id]) =>
+                environments.some((entry) => entry.id === id),
+              ),
+            );
+        }
+        store.saveConfiguration();
+        changed({});
+        return store.configuration;
+      }
       if (method === "pickEditor") {
         const result = await dialog.showOpenDialog(target, {
           title: "Choose text editor application",
@@ -230,13 +271,38 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         return;
       }
       const projectId = repositoryId(input.repositoryId);
+      if (method === "inferRemotePath")
+        return inferRemoteCheckoutPath(
+          store.configuration.projects[projectId]?.path,
+          os.homedir(),
+        );
       if (method === "saveProject") {
-        const project = store.configuration.projects[projectId] ?? {
-          repositoryId: projectId,
-          path: "",
-          overrides: {},
+        const project = {
+          ...(store.configuration.projects[projectId] ?? {
+            repositoryId: projectId,
+            path: "",
+            overrides: {},
+          }),
         };
+        if (input.fullName !== undefined)
+          project.name = string(input.fullName, "GitHub repository name");
         project.overrides = validatePreferences(input.overrides, true);
+        if (input.remotePaths !== undefined) {
+          const placements: Record<string, string> = {};
+          for (const [id, folder] of Object.entries(
+            object(input.remotePaths),
+          )) {
+            if (
+              !store.configuration.environments?.some(
+                (entry) => entry.id === id,
+              )
+            )
+              throw new Error("Unknown environment in project placement.");
+            if (folder === "") continue;
+            placements[id] = remoteCheckoutPath(folder);
+          }
+          project.remotePaths = placements;
+        }
         store.configuration.projects[projectId] = project;
         store.saveConfiguration();
         changed({ repositoryId: projectId });
@@ -256,7 +322,9 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         const previous = store.configuration.projects[projectId];
         store.configuration.projects[projectId] = {
           repositoryId: projectId,
+          name: fullName,
           overrides: previous?.overrides ?? {},
+          remotePaths: previous?.remotePaths,
           ...inspected,
         };
         store.saveConfiguration();
@@ -286,6 +354,28 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
       if (method === "create") return manager.create(projectId);
       const id = string(input.id, "thread ID");
       const thread = store.get(projectId, id);
+      if (
+        thread.environment &&
+        [
+          "git",
+          "checkout",
+          "quickAction",
+          "openFolder",
+          "openEditor",
+          "outputFile",
+          "attach",
+        ].includes(String(method))
+      ) {
+        throw new Error(
+          "This action is unavailable for remote threads. Use Codex or the remote terminal.",
+        );
+      }
+      if (method === "setEnvironment")
+        return manager.setEnvironment(
+          thread,
+          string(input.environmentId, "environment ID"),
+        );
+      if (method === "reconnect") return manager.reconnect(thread);
       if (method === "thread") {
         if (
           input.before !== undefined &&
@@ -296,6 +386,8 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         return manager.page(thread, input.before as number | undefined);
       }
       const attachments = (value: unknown): CodexAttachment[] => {
+        if (thread.environment && Array.isArray(value) && value.length)
+          throw new Error("Attachments are unavailable for remote threads.");
         if (!Array.isArray(value) || value.length > 20)
           throw new Error("Invalid attachments.");
         return value.map((entry) => {
@@ -389,7 +481,7 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
             sessionId,
             string(input.attachmentId, "terminal attachment ID"),
           );
-        return terminals.close(thread, sessionId);
+        return terminals.terminate(thread, sessionId);
       }
       if (method === "quickAction") {
         if (

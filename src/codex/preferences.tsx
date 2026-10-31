@@ -16,7 +16,11 @@ const labels: Record<keyof CodexPreferences, string> = {
   followUp: "Follow-up behavior",
   permissions: "Permissions",
 };
-export function useCodexModels(repositoryId?: string, id?: string) {
+export function useCodexModels(
+  repositoryId?: string,
+  id?: string,
+  environmentId?: string,
+) {
   const [models, setModels] = useState<CodexModel[]>([]),
     [error, setError] = useState("");
   useEffect(() => {
@@ -38,6 +42,8 @@ export function useCodexModels(repositoryId?: string, id?: string) {
         });
     refresh();
     const unsubscribe = codexApi().onChanged((change) => {
+      if (change.environmentId && change.environmentId !== environmentId)
+        return;
       if (change.connectionError) {
         setError(change.connectionError);
         return;
@@ -48,7 +54,7 @@ export function useCodexModels(repositoryId?: string, id?: string) {
       active = false;
       unsubscribe();
     };
-  }, [repositoryId, id]);
+  }, [repositoryId, id, environmentId]);
   return { models, error };
 }
 export function PreferencesEditor({

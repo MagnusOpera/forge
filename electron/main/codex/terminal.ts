@@ -1,3 +1,6 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { sshArgs, remoteTerminalCommand, shellQuote } from "./remote.js";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -55,6 +58,7 @@ export class TerminalManager {
     private emit: (event: TerminalEvent) => void,
     private spawn: PtyFactory = async (...args) =>
       (await import("node-pty")).spawn(...args),
+    private validate: (thread: CodexThread) => Promise<void> = assertWorktree,
   ) {}
   has(id: string): boolean {
     return this.sessions.has(id) || this.opening.has(id);
@@ -164,11 +168,15 @@ export class TerminalManager {
     this.opening.add(thread.id);
     this.cancelledOpening.delete(thread.id);
     try {
-      await assertWorktree(thread);
+      await this.validate(thread);
       if (this.cancelledOpening.has(thread.id) || this.shuttingDown)
         throw new Error("Terminal start cancelled.");
       let session = this.sessions.get(thread.id);
-      if (session && session.cwd !== thread.worktree) {
+      if (
+        session &&
+        (session.cwd !== thread.worktree ||
+          (session.exited && thread.environment))
+      ) {
         this.close(thread, session.sessionId);
         session = undefined;
       }
@@ -192,13 +200,22 @@ export class TerminalManager {
       const cwd = thread.worktree;
       const preferred = os.userInfo().shell || process.env.SHELL || "/bin/zsh";
       const shell = path.isAbsolute(preferred) ? preferred : "/bin/zsh";
-      const pty = await this.spawn(shell, ["-l"], {
-        cwd,
-        cols: size.cols,
-        rows: size.rows,
-        name: "xterm-256color",
-        env: terminalEnvironment(process.env),
-      });
+      const pty = await this.spawn(
+        thread.environment ? "/usr/bin/ssh" : shell,
+        thread.environment
+          ? [
+              ...sshArgs(thread.environment.host, true),
+              remoteTerminalCommand(thread),
+            ]
+          : ["-l"],
+        {
+          cwd: thread.environment ? os.homedir() : cwd,
+          cols: size.cols,
+          rows: size.rows,
+          name: "xterm-256color",
+          env: terminalEnvironment(process.env),
+        },
+      );
       if (
         this.cancelledOpening.has(thread.id) ||
         this.shuttingDown ||
@@ -260,6 +277,20 @@ export class TerminalManager {
       this.opening.delete(thread.id);
       this.cancelledOpening.delete(thread.id);
     }
+  }
+  async terminate(thread: CodexThread, sessionId: string): Promise<void> {
+    this.get(thread, sessionId);
+    if (thread.environment?.tmux) {
+      await promisify(execFile)(
+        "/usr/bin/ssh",
+        [
+          ...sshArgs(thread.environment.host),
+          `tmux kill-session -t ${shellQuote(`forge-${thread.id}`)}`,
+        ],
+        { timeout: 20_000 },
+      );
+    }
+    this.close(thread, sessionId);
   }
   write(thread: CodexThread, sessionId: string, data: unknown) {
     if (typeof data !== "string" || data.length > 64 * 1024)

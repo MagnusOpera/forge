@@ -72,3 +72,37 @@ it("separates checkout header actions from composer Git actions", () => {
   expect(composer).not.toContain('aria-label="Copy checkout location"');
   expect(composer).not.toContain('aria-label="Diff checkout changes"');
 });
+
+it("disables remote desktop and Git actions in both themes", () => {
+  for (const theme of ["light", "dark"] as const) {
+    const html = renderToStaticMarkup(
+      <CodexQuickActions
+        thread={{
+          ...thread,
+          environment: {
+            id: "remote",
+            name: "Linux",
+            host: "dev",
+            executable: "codex",
+            tmux: false,
+          },
+        }}
+        theme={theme}
+      />,
+    );
+    for (const label of [
+      "Open checkout in Finder",
+      "Open checkout in text editor",
+      "Diff checkout changes",
+      "Commit",
+      "Push",
+      "Create PR",
+      "Merge into default branch",
+    ]) {
+      const button = html.match(
+        new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`),
+      )?.[0];
+      expect(button).toContain("disabled");
+    }
+  }
+});

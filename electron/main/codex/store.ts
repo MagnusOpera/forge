@@ -69,6 +69,7 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
     checkout,
     worktreeGeneration,
     mergedInto,
+    environment,
     sourceHome,
     historyWarning,
   } = thread;
@@ -88,6 +89,7 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
     checkout,
     worktreeGeneration,
     mergedInto,
+    environment,
     sourceHome,
     historyWarning,
   };
@@ -108,6 +110,8 @@ export class CodexStore {
           editor: DEFAULT_TEXT_EDITOR,
           projects: {},
         };
+    this.configuration.version ??= 1;
+    this.configuration.environments ??= [];
     this.configuration.editor ??= DEFAULT_TEXT_EDITOR;
     this.configuration.sendShortcut ??= "enter";
     const directory = path.join(root, "threads");

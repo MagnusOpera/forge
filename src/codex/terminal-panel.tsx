@@ -408,7 +408,17 @@ export function TerminalPanel({
       />
       <header>
         <TerminalSquare size={13} />
-        <span>Terminal</span>
+        <span
+          title={
+            thread.environment
+              ? "Remote shell under the SSH user, outside Codex's sandbox. Hiding keeps the session; ending terminates it."
+              : undefined
+          }
+        >
+          {thread.environment
+            ? `Terminal · ${thread.environment.host}${thread.environment.tmux ? " · tmux" : " · no persistence after disconnect"}`
+            : "Terminal"}
+        </span>
         {exited && (
           <span className="codex-muted">
             Exited{exitCode !== undefined ? ` (${exitCode})` : ""}
@@ -420,7 +430,10 @@ export function TerminalPanel({
               className="icon-button"
               title="Restart terminal"
               aria-label="Restart terminal"
-              onClick={() => void endSession(true)}
+              onClick={() => {
+                if (thread.environment) setGeneration((value) => value + 1);
+                else void endSession(true);
+              }}
             >
               <RotateCcw size={14} />
             </button>

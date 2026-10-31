@@ -605,3 +605,43 @@ it("ends the terminal only after archiving succeeds, and does not revive it on r
   await request("update", { ...args, archived: false });
   expect(close).toHaveBeenCalledTimes(1);
 });
+
+it("stores remote environments and placements, snapshots targets, and rejects remote desktop operations at IPC", async () => {
+  const environment = { id: "linux", name: "Linux", host: "build-box", executable: "codex", tmux: false };
+  await request("saveEnvironments", { environments: [environment] });
+  await request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "/srv/repo" } });
+  const summary = await request("create", { repositoryId: "R_123" }) as { id: string };
+  const args = { repositoryId: "R_123", id: summary.id };
+  await request("setEnvironment", { ...args, environmentId: "linux" });
+  for (const method of ["git", "checkout", "quickAction", "openFolder", "openEditor", "outputFile", "attach"]) {
+    await expect(request(method, args)).rejects.toThrow("unavailable for remote");
+  }
+  await expect(request("send", { ...args, text: "hello", attachments: [{ id: "anything", name: "notes" }] })).rejects.toThrow("Attachments");
+  await request("saveEnvironments", { environments: [] });
+  const configuration = await request("configuration") as { projects: Record<string, { remotePaths: Record<string, string> }> };
+  expect(configuration.projects.R_123.remotePaths).toEqual({});
+  const page = await request("thread", args) as { thread: CodexThread };
+  expect(page.thread.environment).toEqual(environment);
+  expect(page.thread.repositoryPath).toBe("/srv/repo");
+});
+
+it("rejects injected environment hosts and invalid or unknown checkout placements", async () => {
+  const environment = { id: "linux", name: "Linux", host: "-oProxyCommand=evil", executable: "codex", tmux: false };
+  await expect(request("saveEnvironments", { environments: [environment] })).rejects.toThrow("SSH host alias");
+  environment.host = "build-box";
+  await expect(request("saveEnvironments", { environments: [environment, environment] })).rejects.toThrow("unique");
+  await request("saveEnvironments", { environments: [environment] });
+  await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "~other/repo" } })).rejects.toThrow("~/");
+  await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { unknown: "/repo" } })).rejects.toThrow("Unknown environment");
+});
+
+it("infers a checkout from the local home and saves remote paths in home-relative form", async () => {
+  const store = new CodexStore(path.join(mock.root, "codex"));
+  store.configuration.projects.R_123 = { repositoryId: "R_123", path: path.join(os.homedir(), "src", "forge"), overrides: {} };
+  store.saveConfiguration();
+  expect(await request("inferRemotePath", { repositoryId: "R_123" })).toBe("~/src/forge");
+  await request("saveEnvironments", { environments: [{ id: "linux", name: "Linux", host: "dev@host", executable: "codex", tmux: false }] });
+  const configuration = await request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "src/forge" } }) as { projects: Record<string, { remotePaths: Record<string, string> }> };
+  expect(configuration.projects.R_123.remotePaths.linux).toBe("~/src/forge");
+  await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "~/../elsewhere" } })).rejects.toThrow("inside the remote home");
+});
