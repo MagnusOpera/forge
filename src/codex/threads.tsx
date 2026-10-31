@@ -12,6 +12,12 @@ import {
 } from "lucide-react";
 import { codexIsActive, type CodexThreadSummary } from "../../shared/codex";
 import { codexApi, errorMessage } from "./api";
+function checkoutSetupMessage(error: string): string | undefined {
+  if (error.includes("Choose a local Git folder or configure a remote project placement first."))
+    return "To start a thread, open project configuration and choose a local Git checkout or set up a remote checkout.";
+  if (error.includes("Configure the default environment's checkout in project configuration before creating a thread."))
+    return "To start a thread, open project configuration and set up a checkout for your default environment.";
+}
 export function CodexThreadList({
   repositoryId,
   loading,
@@ -19,6 +25,7 @@ export function CodexThreadList({
   selectedId,
   onSelect,
   onConfigure,
+  configurationOpen = false,
   error: loadError,
 }: {
   repositoryId: string;
@@ -27,6 +34,7 @@ export function CodexThreadList({
   selectedId?: string;
   onSelect: (id: string) => void;
   onConfigure: () => void;
+  configurationOpen?: boolean;
   error: string;
 }) {
   const [archived, setArchived] = useState(false),
@@ -36,6 +44,30 @@ export function CodexThreadList({
     [title, setTitle] = useState("");
   const [existing, setExisting] = useState(false);
   useEffect(() => setExisting(false), [repositoryId]);
+  useEffect(() => {
+    if (configurationOpen || !checkoutSetupMessage(error)) return;
+    let active = true;
+    void (async () => {
+      const configuration = await codexApi().request("configuration", {});
+      const project = configuration.projects[repositoryId];
+      if (!active || !project) return;
+      const environmentId = project.defaultEnvironment ?? "local";
+      // Creation also permits choosing a remote target later, when only remote
+      // placements are configured and no default has been selected yet.
+      const target = environmentId === "local" && !project.path
+        ? Object.keys(project.remotePaths ?? {}).find((id) => project.remotePaths?.[id])
+        : environmentId;
+      if (!target) return;
+      const result = await codexApi().request("checkProjectCheckout", {
+        repositoryId, environmentId: target,
+      });
+      if (active && result.ready) setError("");
+    })().catch(() => {
+      // Keep the original error if the repaired checkout cannot be confirmed.
+    });
+    return () => { active = false; };
+  }, [configurationOpen, error, repositoryId]);
+  const setupMessage = checkoutSetupMessage(error || loadError);
   const visible = threads.filter((t) => t.archived === archived);
   const run = async (action: () => Promise<void>) => {
     setError("");
@@ -120,10 +152,10 @@ export function CodexThreadList({
           document.querySelector(".app-shell") ?? document.body,
         )}
       {(error || loadError) && (
-        <div className="inline-error" role="alert">
-          {error || loadError}
+        <div className={setupMessage ? "codex-setup-notice" : "inline-error"} role={setupMessage ? "status" : "alert"}>
+          {setupMessage ?? (error || loadError)}
           <button className="ghost-button" onClick={onConfigure}>
-            Configure
+            {setupMessage ? "Open configuration" : "Configure"}
           </button>
         </div>
       )}

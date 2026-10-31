@@ -10,7 +10,8 @@ export function codexApi(): CodexApi {
   return window.forgeCodex;
 }
 export const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+  (error instanceof Error ? error.message : String(error))
+    .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*(?:Error:\s*)?/, "");
 export function useCodexThreads(repositoryId?: string): {
   threads: CodexThreadSummary[];
   error: string;

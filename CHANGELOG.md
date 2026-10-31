@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Recheck Codex checkout errors after closing configuration and clear them once the checkout is ready.
+- Guide users to configure missing Codex checkouts with a calm setup prompt and hide technical IPC error prefixes.
+
 ## [0.10.0]
 
 

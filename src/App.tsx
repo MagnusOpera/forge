@@ -3384,6 +3384,7 @@ export function App() {
             selectedId={selection.kind === "codex" ? selection.threadId : undefined}
             onSelect={(threadId) => setSelection({ kind: "codex", threadId })}
             onConfigure={() => setSettingsScope("project")}
+            configurationOpen={settingsScope !== null}
             error={codexThreads.error}
           />
         ) : null}
