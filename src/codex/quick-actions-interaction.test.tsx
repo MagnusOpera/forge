@@ -106,3 +106,26 @@ it("offers Codex resolution for verified merge conflicts and submits only the ow
     delete window.forgeCodex;
   }
 });
+
+it("completes a successful merge without any cleanup popup", async () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const request = vi.fn().mockResolvedValue(undefined);
+  window.forgeCodex = { request } as unknown as CodexApi;
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const thread: CodexThreadSummary = { id: "t", repositoryId: "r", title: "Test", archived: false, createdAt: "", updatedAt: "", settings: defaultCodexPreferences, state: "idle", worktree: "/repo/old-worktree", branch: "codex/task", baseCommit: "base", checkout: "worktree" };
+  try {
+    await act(async () => root.render(<CodexQuickActions thread={thread} theme="light" defaultBranch="main" group="git" />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Merge into main"]')!.click());
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => root.render(<CodexQuickActions thread={{ ...thread, checkout: "default", branch: "main", worktree: "/repo" }} theme="light" defaultBranch="main" group="git" />));
+    expect(container.querySelector('[aria-label="Start worktree"]')).not.toBeNull();
+    expect(container.querySelector('[role="status"]')).toBeNull();
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+    delete window.forgeCodex;
+  }
+});

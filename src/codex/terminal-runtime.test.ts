@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, statSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -9,6 +10,8 @@ import {
   terminalEnvironment,
 } from "../../electron/main/codex/terminal";
 import { git } from "../../electron/main/codex/git";
+import { shellQuote } from "../../electron/main/codex/remote";
+import { terminalDescendants } from "../../electron/main/codex/terminal-processes";
 import { defaultCodexPreferences, type CodexThread } from "../../shared/codex";
 import {
   terminalDimensions,
@@ -91,6 +94,55 @@ async function setup(factory?: (...args: any[]) => Promise<IPty> | IPty) {
   managers.push(manager);
   return { root, thread, manager, pty, emit, spawn };
 }
+it("finds only the owned shell's descendants, with children before their parents", () => {
+  expect(terminalDescendants("100 1\n101 100\n102 101\n200 1\n201 200\n", 100))
+    .toEqual([102, 101]);
+});
+
+it("waits for terminal process termination before completing a checkout shutdown", async () => {
+  const { thread, pty } = await setup();
+  let stopped!: () => void;
+  const stop = vi.fn(() => new Promise<void>((resolve) => { stopped = resolve; }));
+  const manager = new TerminalManager(vi.fn(), () => pty as unknown as IPty, async () => {}, stop);
+  managers.push(manager);
+  await manager.open(thread, 80, 24);
+  let completed = false;
+  const closing = manager.closeForCheckout(thread).then(() => { completed = true; });
+  await Promise.resolve();
+  expect(stop).toHaveBeenCalledWith(pty.pid);
+  expect(completed).toBe(false);
+  expect(pty.kill).not.toHaveBeenCalled();
+  stopped();
+  await closing;
+  expect(completed).toBe(true);
+  expect(manager.has(thread.id)).toBe(false);
+});
+
+it("stops a real shell's background writer, including a child that ignores termination signals", async () => {
+  const { thread, root } = await setup();
+  const manager = new TerminalManager(() => {});
+  managers.push(manager);
+  const marker = path.join(root, "writer.pid"), output = path.join(root, "writer.log");
+  const snapshot = await manager.open(thread, 80, 24);
+  const script = `const fs=require('node:fs');process.on('SIGTERM',()=>{});process.on('SIGHUP',()=>{});fs.writeFileSync(${JSON.stringify(marker)},String(process.pid));setInterval(()=>fs.appendFileSync(${JSON.stringify(output)},'.'),20);`;
+  manager.write(thread, snapshot.sessionId, `${shellQuote(process.execPath)} -e ${shellQuote(script)} &\r`);
+  let child: number | undefined;
+  try {
+    const deadline = Date.now() + 3000;
+    while ((!existsSync(marker) || !existsSync(output)) && Date.now() < deadline) await delay(20);
+    expect(existsSync(marker)).toBe(true);
+    child = Number(readFileSync(marker, "utf8"));
+    await manager.closeForCheckout(thread);
+    const size = statSync(output).size;
+    await delay(100);
+    expect(statSync(output).size).toBe(size);
+    expect(manager.has(thread.id)).toBe(false);
+  } finally {
+    if (child && child !== process.pid) {
+      try { process.kill(child, "SIGKILL"); } catch {}
+    }
+  }
+});
 it("starts in the chat checkout and keeps the same shell and output when hidden", async () => {
   const { thread, manager, pty, spawn, emit } = await setup();
   const first = await manager.open(thread, 80, 24, "first");

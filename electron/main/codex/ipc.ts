@@ -716,7 +716,7 @@ export function registerCodexIpc(
             cancelId: 0,
             noLink: true,
           });
-          if (result.response === 1) terminals.close(thread);
+          if (result.response === 1) await terminals.closeForCheckout(thread);
           return result.response === 1;
         });
       }

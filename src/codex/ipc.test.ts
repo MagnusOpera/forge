@@ -428,8 +428,8 @@ it("requires a native, cancel-by-default confirmation for both checkout directio
   const decisions: boolean[] = [];
   vi.spyOn(TerminalManager.prototype, "has").mockReturnValue(true);
   const endTerminal = vi
-    .spyOn(TerminalManager.prototype, "close")
-    .mockImplementation(() => {});
+    .spyOn(TerminalManager.prototype, "closeForCheckout")
+    .mockResolvedValue();
   vi.spyOn(ThreadManager.prototype, "checkout").mockImplementation(
     async (_thread, _action, confirm) => {
       decisions.push(await confirm("Move checkout?", "Review destination"));

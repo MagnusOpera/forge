@@ -7,11 +7,13 @@ import {
   existsSync,
   rmSync,
   readFileSync,
+  symlinkSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { git, createWorktree } from "../../electron/main/codex/git";
+import * as gitCommands from "../../electron/main/codex/git";
 import { ThreadManager } from "../../electron/main/codex/threads";
 import { CodexStore } from "../../electron/main/codex/store";
 import type { CodexTransport } from "../../electron/main/codex/client";
@@ -20,8 +22,10 @@ import {
   prepareWorktreeMerge,
   executeWorktreeMerge,
   mergeConflictFiles,
+  cleanupMergedWorktreeDirectory,
 } from "../../electron/main/codex/merge";
 const roots: string[] = [];
+afterEach(() => vi.restoreAllMocks());
 afterEach(() =>
   roots
     .splice(0)
@@ -38,6 +42,7 @@ async function setup() {
   await git(repo, ["config", "user.name", "Test"]);
   await git(repo, ["config", "user.email", "test@example.com"]);
   writeFileSync(path.join(repo, "initial"), "base");
+  writeFileSync(path.join(repo, ".gitignore"), "node_modules/\n.DS_Store\n");
   await git(repo, ["add", "."]);
   await git(repo, ["commit", "-m", "initial"]);
   const origin = path.join(root, "origin.git");
@@ -351,4 +356,112 @@ it("recovers the current default checkout after interruption between worktree re
   expect(thread.worktree).toBe(repo);
   expect(thread.mergedInto).toBeUndefined();
   expect(thread.serverId).toBe("same-server-thread");
+});
+
+it("continues on the default branch when removal unregisters the worktree but leaves files behind", async () => {
+  const { repo, store, thread, manager, commit } = await setup();
+  await commit();
+  const source = thread.worktree;
+  const runGit = gitCommands.git;
+  vi.spyOn(gitCommands, "git").mockImplementation(async (cwd, args) => {
+    const output = await runGit(cwd, args);
+    if (args[0] === "worktree" && args[1] === "remove") {
+      mkdirSync(source, { recursive: true });
+      writeFileSync(path.join(source, "initial"), "base");
+      mkdirSync(path.join(source, "node_modules"));
+      writeFileSync(path.join(source, "node_modules/cache"), "generated cache");
+      throw new Error("Directory not empty");
+    }
+    return output;
+  });
+  const result = await manager.checkout(thread, "merge", async () => true);
+  expect(result).toBeUndefined();
+  expect(thread.checkout).toBe("default");
+  expect(thread.worktree).toBe(repo);
+  expect(thread.error).toBeUndefined();
+  expect(thread.mergedInto).toBeUndefined();
+  expect(thread.draft).toBe("keep draft");
+  expect(new CodexStore(store.root).get(thread.repositoryId, thread.id).worktree).toBe(repo);
+  expect(existsSync(source)).toBe(false);
+  await manager.checkout(thread, "worktree", async () => true);
+  expect(thread.worktree).toBe(`${source}-1`);
+  expect(existsSync(source)).toBe(false);
+  await commit("second feature");
+  // New generation paths also pass the managed-worktree validation.
+  expect(await prepareWorktreeMerge(thread, store.root)).toMatchObject({ worktree: `${source}-1` });
+});
+
+it("recovers a previously merged chat when its old directory exists without a registered checkout", async () => {
+  const { repo, store, thread, manager, commit } = await setup();
+  await commit();
+  const source = thread.worktree;
+  const sourceCommit = (await git(source, ["rev-parse", "HEAD"])).trim();
+  await git(repo, ["merge", "--ff-only", thread.branch]);
+  thread.mergedInto = { branch: "trunk", sourceCommit, targetPath: repo, commit: sourceCommit };
+  thread.error = "Merged into trunk, but cleanup failed: Directory not empty";
+  store.saveThread(thread);
+  await git(repo, ["worktree", "remove", source]);
+  mkdirSync(source);
+  writeFileSync(path.join(source, ".git"), "gitdir: /missing/worktree/metadata\n");
+  writeFileSync(path.join(source, "initial"), "base");
+  const confirm = vi.fn(async () => true);
+  const result = await manager.checkout(thread, "merge", confirm);
+  expect(confirm).not.toHaveBeenCalled();
+  expect(result).toBeUndefined();
+  expect(thread.worktree).toBe(repo);
+  expect(thread.checkout).toBe("default");
+  expect(thread.error).toBeUndefined();
+  expect(thread.mergedInto).toBeUndefined();
+  expect(existsSync(source)).toBe(false);
+});
+
+it("does not recover onto the default branch if the registered source has newer commits", async () => {
+  const { repo, thread, manager, commit } = await setup();
+  await commit();
+  const source = thread.worktree;
+  const sourceCommit = (await git(source, ["rev-parse", "HEAD"])).trim();
+  await git(repo, ["merge", "--ff-only", thread.branch]);
+  thread.mergedInto = { branch: "trunk", sourceCommit, targetPath: repo, commit: sourceCommit };
+  await commit("new work after merge");
+  await expect(manager.checkout(thread, "merge", async () => true)).rejects.toThrow("not in the merged default branch");
+  expect(thread.worktree).toBe(source);
+  expect(thread.mergedInto).toBeDefined();
+  expect(existsSync(source)).toBe(true);
+});
+
+it.each(["notes.txt", "initial"])("preserves new or changed source data during partial cleanup: %s", async (name) => {
+  const { repo, store, thread, commit } = await setup();
+  await commit();
+  const sourceCommit = (await git(thread.worktree, ["rev-parse", "HEAD"])).trim();
+  await git(repo, ["merge", "--ff-only", thread.branch]);
+  thread.mergedInto = { branch: "trunk", sourceCommit, targetPath: repo, commit: sourceCommit };
+  await git(repo, ["worktree", "remove", thread.worktree]);
+  mkdirSync(thread.worktree);
+  writeFileSync(path.join(thread.worktree, name), "new unsaved work");
+  await expect(cleanupMergedWorktreeDirectory(thread, store.root)).rejects.toThrow("new or modified file");
+  expect(readFileSync(path.join(thread.worktree, name), "utf8")).toBe("new unsaved work");
+});
+
+it("automatically removes a verified merged folder and its leftover registration", async () => {
+  const { repo, root, thread, manager, commit } = await setup();
+  const outside = path.join(root, "outside.txt");
+  writeFileSync(outside, "do not touch the symlink target");
+  symlinkSync(outside, path.join(thread.worktree, "link"));
+  await commit();
+  const source = thread.worktree;
+  const runGit = gitCommands.git;
+  let failed = false;
+  vi.spyOn(gitCommands, "git").mockImplementation(async (cwd, args) => {
+    if (args[0] === "worktree" && args[1] === "remove" && !failed) {
+      failed = true;
+      throw new Error("Directory not empty");
+    }
+    return runGit(cwd, args);
+  });
+  expect(await manager.checkout(thread, "merge", async () => true)).toBeUndefined();
+  expect(failed).toBe(true);
+  expect(thread.worktree).toBe(repo);
+  expect(existsSync(source)).toBe(false);
+  expect((await git(repo, ["worktree", "list", "--porcelain"]))).not.toContain(source);
+  expect(readFileSync(outside, "utf8")).toBe("do not touch the symlink target");
 });

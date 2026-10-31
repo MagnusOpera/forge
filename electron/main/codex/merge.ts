@@ -1,4 +1,5 @@
-import { access, mkdir, realpath } from "node:fs/promises";
+import { access, mkdir, readdir, readlink, realpath, rm, lstat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import type { CodexMergeConflict, CodexThread } from "../../../shared/codex.js";
 import { assertWorktree, git } from "./git.js";
@@ -21,7 +22,6 @@ export type WorktreeMergeResult = {
   branch: string;
   commit: string;
   worktreeRemoved: boolean;
-  warning?: string;
 };
 export class WorktreeMergeConflict extends Error {
   constructor(readonly conflict: CodexMergeConflict) {
@@ -77,7 +77,7 @@ export async function cleanCheckout(cwd: string): Promise<void> {
       );
   }
 }
-export async function assertManagedWorktree(
+async function assertManagedWorktreePath(
   thread: CodexThread,
   storeRoot: string,
 ): Promise<void> {
@@ -90,10 +90,16 @@ export async function assertManagedWorktree(
     throw new Error(
       "Only worktrees created by Forge can be merged and discarded here.",
     );
-  await assertWorktree(thread);
   const root = await realpath(path.join(storeRoot, "worktrees"));
-  if ((await realpath(thread.worktree)) !== path.join(root, thread.id))
+  const allowed = [path.join(root, thread.id)];
+  if (thread.worktreeGeneration)
+    allowed.push(path.join(root, `${thread.id}-${thread.worktreeGeneration}`));
+  if (!allowed.includes(await realpath(thread.worktree)))
     throw new Error("This is not the thread's managed Forge worktree.");
+}
+export async function assertManagedWorktree(thread: CodexThread, storeRoot: string): Promise<void> {
+  await assertWorktree(thread);
+  await assertManagedWorktreePath(thread, storeRoot);
 }
 export function parseWorktreeBranches(
   output: string,
@@ -242,7 +248,7 @@ export function sameMergePlan(
   return JSON.stringify(first) === JSON.stringify(second);
 }
 
-export async function discardMergedWorktree(
+async function assertMergedWorktree(
   thread: CodexThread,
   storeRoot: string,
 ): Promise<void> {
@@ -264,12 +270,88 @@ export async function discardMergedWorktree(
     throw new Error(
       "The worktree contains commits that are not in the merged default branch. It was kept.",
     );
-  await git(thread.repositoryPath, [
-    "worktree",
-    "remove",
-    "--",
-    thread.worktree,
-  ]);
+}
+export async function discardMergedWorktree(thread: CodexThread, storeRoot: string): Promise<void> {
+  await assertMergedWorktree(thread, storeRoot);
+  try {
+    await git(thread.repositoryPath, ["worktree", "remove", "--", thread.worktree]);
+  } catch {
+    await cleanupMergedWorktreeDirectory(thread, storeRoot);
+    // Some Git failures leave the registration as well as the directory.
+    const registered = parseWorktreeBranches(await git(thread.repositoryPath, ["worktree", "list", "--porcelain", "-z"]));
+    if (registered.some((entry) => path.resolve(entry.path) === path.resolve(thread.worktree)))
+      await git(thread.repositoryPath, ["worktree", "remove", "--force", "--", thread.worktree]);
+  }
+}
+
+/** Finish a partially removed, already merged checkout without deleting new work. */
+export async function cleanupMergedWorktreeDirectory(thread: CodexThread, storeRoot: string): Promise<void> {
+  if (!(await exists(thread.worktree))) return;
+  await assertManagedWorktreePath(thread, storeRoot);
+  const merged = thread.mergedInto;
+  if (!merged || !(await isAncestor(thread.repositoryPath, merged.sourceCommit, `refs/heads/${merged.branch}`)))
+    throw new Error("Worktree cleanup requires verified merged commits.");
+  if (!(await lstat(thread.worktree)).isDirectory())
+    throw new Error("The worktree folder was replaced. It was kept.");
+  const tree = new Map<string, { mode: string; hash: string }>();
+  for (const record of (await git(thread.repositoryPath, ["ls-tree", "-r", "-z", merged.sourceCommit])).split("\0")) {
+    if (!record) continue;
+    const tab = record.indexOf("\t");
+    const [mode, , hash] = record.slice(0, tab).split(" ");
+    tree.set(record.slice(tab + 1), { mode, hash });
+  }
+  const objectFormat = (await git(thread.repositoryPath, ["rev-parse", "--show-object-format"])).trim();
+  const ignored = async (relative: string) => git(thread.repositoryPath, ["check-ignore", "--quiet", "--no-index", "--", relative]).then(
+    () => true,
+    (error: { code?: number }) => { if (error.code === 1) return false; throw error; },
+  );
+  const verify = async (relative: string): Promise<void> => {
+    const folder = path.join(thread.worktree, relative);
+    for (const entry of await readdir(folder, { withFileTypes: true })) {
+      const name = relative ? `${relative}/${entry.name}` : entry.name;
+      const file = path.join(folder, entry.name);
+      if (name === ".git" && entry.isFile()) continue;
+      const expected = tree.get(name);
+      if (!expected && await ignored(name)) continue;
+      if (entry.isDirectory()) {
+        if (expected) throw new Error(`Worktree cleanup kept an unexpected directory or submodule: ${name}`);
+        await verify(name);
+        continue;
+      }
+      let hash = "";
+      if (expected?.mode === "120000" && entry.isSymbolicLink()) {
+        const contents = Buffer.from(await readlink(file));
+        hash = createHash(objectFormat).update(`blob ${contents.length}\0`).update(contents).digest("hex");
+      } else if (expected && expected.mode !== "120000" && entry.isFile()) {
+        hash = (await git(thread.repositoryPath, ["hash-object", `--path=${name}`, "--", file])).trim();
+      }
+      if (!expected || expected.hash !== hash)
+        throw new Error(`Worktree cleanup preserved a new or modified file: ${name}`);
+    }
+  };
+  // Check every remaining source file before removal. Ignored caches and build
+  // outputs are part of the already-confirmed worktree deletion.
+  await verify("");
+  await rm(thread.worktree, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+export async function recoverMergedWorktree(thread: CodexThread, storeRoot: string): Promise<void> {
+  const merged = thread.mergedInto;
+  if (!merged) throw new Error("The worktree has not been merged.");
+  await assertWorktree({ ...thread, worktree: merged.targetPath, branch: merged.branch });
+  if (!(await isAncestor(merged.targetPath, merged.sourceCommit, "HEAD")))
+    throw new Error("The recorded changes are no longer in the default branch. The worktree was kept.");
+  const canonical = (folder: string) => realpath(folder).catch(() => path.resolve(folder));
+  const source = await canonical(thread.worktree);
+  const registered = parseWorktreeBranches(await git(thread.repositoryPath, ["worktree", "list", "--porcelain", "-z"]));
+  const paths = await Promise.all(registered.map((entry) => canonical(entry.path)));
+  if (paths.includes(source)) {
+    // Never abandon newer commits or unsaved source changes while recovering.
+    await assertMergedWorktree(thread, storeRoot);
+    await discardMergedWorktree(thread, storeRoot);
+  } else {
+    await cleanupMergedWorktreeDirectory(thread, storeRoot);
+  }
 }
 export async function executeWorktreeMerge(
   thread: CodexThread,
@@ -334,12 +416,8 @@ export async function executeWorktreeMerge(
   };
   // Persist the successful merge before deleting anything, so cleanup can be retried.
   recordMerge(result);
-  try {
-    await discardMergedWorktree(thread, storeRoot);
-    result.worktreeRemoved = true;
-  } catch (error) {
-    result.warning = `Merged into ${plan.defaultBranch}, but the worktree was kept: ${error instanceof Error ? error.message : String(error)}`;
-  }
+  await discardMergedWorktree(thread, storeRoot);
+  result.worktreeRemoved = true;
 
   return result;
 }

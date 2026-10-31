@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Automatically finish merged worktree cleanup and continue on the default branch without cleanup popups or extra user actions.
+- Wait for the terminal shell and its child jobs to stop before merging or changing checkout.
 - Introduce Codex on the homepage and refresh the light and dark app previews.
 
 ## [0.10.2]

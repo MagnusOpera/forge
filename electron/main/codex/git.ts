@@ -48,7 +48,7 @@ export async function createWorktree(
     await git(repository, ["rev-parse", "--verify", "HEAD^{commit}"])
   ).trim();
   const branch = `codex/forge-${id}${generation ? `-${generation}` : ""}`,
-    worktree = path.join(root, id);
+    worktree = path.join(root, generation ? `${id}-${generation}` : id);
   await mkdir(root, { recursive: true, mode: 0o700 });
   await git(repository, [
     "worktree",

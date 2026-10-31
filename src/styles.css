@@ -3685,7 +3685,7 @@ code {
 .codex-quick-actions { position: relative; display: flex; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
 .codex-checkout-label { display: inline-flex; width: auto; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 11px; padding-inline: 4px; }
 .codex-action-error { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(360px, 70vw); padding: 10px; display: flex; align-items: flex-start; gap: 6px; background: var(--content-bg); border: 1px solid var(--control-border); border-radius: 6px; box-shadow: 0 8px 24px var(--modal-shadow); font-size: 12px; line-height: 1.5; }
-.codex-action-error > span { flex: 1; }
+.codex-action-error > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .codex-conflict-resolution { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; overflow-wrap: anywhere; }
 .codex-diff-dialog { width: min(1200px, calc(100vw - 48px)); height: min(900px, calc(100vh - 60px)); }
 .codex-diff-scroll { overflow: auto; min-height: 0; padding: 0 16px 16px; }

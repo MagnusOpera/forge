@@ -12,6 +12,7 @@ import {
   type TerminalSnapshot,
 } from "../../../shared/terminal.js";
 import { assertWorktree } from "./git.js";
+import { terminateTerminalProcesses } from "./terminal-processes.js";
 export type PtyFactory = (
   shell: string,
   args: string[],
@@ -59,6 +60,7 @@ export class TerminalManager {
     private spawn: PtyFactory = async (...args) =>
       (await import("node-pty")).spawn(...args),
     private validate: (thread: CodexThread) => Promise<void> = assertWorktree,
+    private stopProcesses: (pid: number) => Promise<void> = terminateTerminalProcesses,
   ) {}
   has(id: string): boolean {
     return this.sessions.has(id) || this.opening.has(id);
@@ -348,6 +350,14 @@ export class TerminalManager {
     session.attached = false;
     this.flush(session);
     this.flow(session);
+  }
+  async closeForCheckout(thread: CodexThread): Promise<void> {
+    if (this.opening.has(thread.id)) this.cancelledOpening.add(thread.id);
+    await this.pendingOpen.get(thread.id)?.catch(() => undefined);
+    const session = this.sessions.get(thread.id);
+    if (!session) return;
+    if (!session.exited) await this.stopProcesses(session.pty.pid);
+    this.close(thread);
   }
   close(thread: CodexThread, sessionId?: string) {
     if (!sessionId && this.opening.has(thread.id))

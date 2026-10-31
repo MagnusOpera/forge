@@ -5,7 +5,6 @@ import {
   codexResolveMergePrompt,
   type CodexQuickAction,
 } from "../../../shared/codexActions.js";
-import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -18,6 +17,7 @@ import {
   type CodexMessage,
   type CodexModel,
   type CodexMergeConflict,
+  type CodexCheckoutResult,
   type CodexPreferences,
   type CodexThread,
   type CodexThreadPage,
@@ -43,6 +43,7 @@ import {
   executeWorktreeMerge,
   cleanCheckout,
   WorktreeMergeConflict,
+  recoverMergedWorktree,
 } from "./merge.js";
 import { assertWorktree, createWorktree, git } from "./git.js";
 import { hydrateCodexTurn, reduceCodexEvent, turnPolicy } from "./events.js";
@@ -772,26 +773,16 @@ export class ThreadManager {
     thread: CodexThread,
     action: "merge" | "worktree",
     confirm: (title: string, detail: string) => Promise<boolean>,
-  ): Promise<{ conflict: CodexMergeConflict } | void> {
+  ): Promise<CodexCheckoutResult | void> {
     this.assertCheckoutAvailable(thread);
     this.checkoutLocks.add(thread.repositoryPath);
     try {
       if (action === "merge") {
         if (thread.checkout === "default")
           throw new Error("This chat is already on the default branch.");
-        if (thread.mergedInto && !existsSync(thread.worktree)) {
+        if (thread.mergedInto) {
           const merged = thread.mergedInto;
-          await assertWorktree({
-            ...thread,
-            worktree: merged.targetPath,
-            branch: merged.branch,
-          });
-          await git(merged.targetPath, [
-            "merge-base",
-            "--is-ancestor",
-            merged.sourceCommit,
-            "HEAD",
-          ]);
+          await recoverMergedWorktree(thread, this.store.root);
           thread.checkout = "default";
           thread.worktree = merged.targetPath;
           thread.branch = merged.branch;
@@ -824,16 +815,13 @@ export class ThreadManager {
             this.publish(thread, true);
           },
         );
-        if (result.worktreeRemoved) {
-          thread.checkout = "default";
-          thread.worktree = plan.targetPath;
-          thread.branch = result.branch;
-          thread.baseCommit = result.commit;
-          thread.mergedInto = undefined;
-        }
-        thread.error = result.warning;
+        thread.checkout = "default";
+        thread.worktree = plan.targetPath;
+        thread.branch = result.branch;
+        thread.baseCommit = result.commit;
+        thread.mergedInto = undefined;
+        thread.error = undefined;
         this.publish(thread, true);
-        if (result.warning) throw new Error(result.warning);
       } else {
         if (thread.checkout !== "default")
           throw new Error("Merge this worktree into the default branch first.");
