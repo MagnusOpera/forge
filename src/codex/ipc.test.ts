@@ -38,6 +38,7 @@ vi.mock("electron", () => ({
   },
 }));
 import { shell, dialog } from "electron";
+import * as remoteChecks from "../../electron/main/codex/remote";
 import * as editorLauncher from "../../electron/main/codex/editor";
 import { CodexStore } from "../../electron/main/codex/store";
 import { git } from "../../electron/main/codex/git";
@@ -644,4 +645,117 @@ it("infers a checkout from the local home and saves remote paths in home-relativ
   const configuration = await request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "src/forge" } }) as { projects: Record<string, { remotePaths: Record<string, string> }> };
   expect(configuration.projects.R_123.remotePaths.linux).toBe("~/src/forge");
   await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "~/../elsewhere" } })).rejects.toThrow("inside the remote home");
+});
+
+it("isolates project account homes, login state and completion events from the global account", async () => {
+  vi.spyOn(CodexClient.prototype, "start").mockResolvedValue();
+  const clients = new Map<string, CodexClient>();
+  const rpc = vi.spyOn(CodexClient.prototype, "request").mockImplementation(async function (this: CodexClient, method) {
+    const home = (this as unknown as { home: string }).home;
+    clients.set(home, this);
+    if (method === "account/read") return { account: { type: "chatgpt", email: home.endsWith("home") ? "global@example.invalid" : "project@example.invalid" } };
+    if (method === "account/login/start") return { loginId: "project-login", authUrl: "https://auth.openai.com/authorize" };
+    return {};
+  });
+  expect(await request("status")).toMatchObject({ email: "global@example.invalid", loginPending: false });
+  expect(await request("status", { repositoryId: "R_123" })).toMatchObject({ email: "project@example.invalid", loginPending: false });
+  expect([...clients.keys()]).toEqual([path.join(mock.root, "codex", "home"), path.join(mock.root, "codex", "accounts", "R_123")]);
+  await request("login", { repositoryId: "R_123" });
+  expect(await request("status")).toMatchObject({ loginPending: false });
+  expect(await request("status", { repositoryId: "R_123" })).toMatchObject({ loginPending: true });
+  await expect(request("login")).rejects.toThrow("Complete or cancel");
+  const global = clients.get(path.join(mock.root, "codex", "home"))!;
+  global.onEvent({ method: "account/login/completed", params: { success: true } });
+  expect(await request("status", { repositoryId: "R_123" })).toMatchObject({ loginPending: true });
+  const project = clients.get(path.join(mock.root, "codex", "accounts", "R_123"))!;
+  project.onEvent({ method: "account/login/completed", params: { success: true } });
+  expect(contents.send).toHaveBeenCalledWith("codex:changed", expect.objectContaining({ accountId: "R_123", auth: { success: true, error: undefined } }));
+  expect(await request("status", { repositoryId: "R_123" })).toMatchObject({ loginPending: false });
+  await request("login", { repositoryId: "R_123" });
+  await request("cancelLogin", { repositoryId: "R_123" });
+  expect(rpc).toHaveBeenLastCalledWith("account/login/cancel", { loginId: "project-login" });
+  expect(rpc.mock.contexts.at(-1)).toBe(project);
+  await request("logout", { repositoryId: "R_123" });
+  expect(rpc.mock.contexts.at(-1)).toBe(project);
+  expect(rpc).toHaveBeenLastCalledWith("account/logout", {});
+  await expect(request("status", { repositoryId: "../../home" })).rejects.toThrow("repository ID");
+});
+
+it("persists and validates the account override when editing or replacing the local checkout", async () => {
+  const saved = await request("saveProject", { repositoryId: "R_123", overrides: {}, accountOverride: true });
+  expect(saved).toMatchObject({ projects: { R_123: { accountOverride: true } } });
+  const reloaded = new CodexStore(path.join(mock.root, "codex"));
+  expect(reloaded.configuration.projects.R_123.accountOverride).toBe(true);
+  const repo = path.join(mock.root, "repo");
+  mkdirSync(repo);
+  await git(repo, ["init", "-b", "main"]);
+  await git(repo, ["-c", "user.name=Forge test", "-c", "user.email=forge@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"]);
+  vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: false, filePaths: [repo] });
+  expect(await request("pickFolder", { repositoryId: "R_123", fullName: "owner/repo" })).toMatchObject({ projects: { R_123: { accountOverride: true } } });
+  await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, accountOverride: "yes" })).rejects.toThrow("account override");
+  expect(await request("saveProject", { repositoryId: "R_123", overrides: {}, accountOverride: false })).toMatchObject({ projects: { R_123: { accountOverride: false } } });
+});
+
+it("checks the selected account's active threads before sign-in and sign-out", async () => {
+  const active = vi.spyOn(ThreadManager.prototype, "hasActiveAccount").mockImplementation(id => id === "R_123");
+  vi.spyOn(CodexClient.prototype, "start").mockResolvedValue();
+  vi.spyOn(CodexClient.prototype, "request").mockResolvedValue({});
+  for (const method of ["login", "logout"]) {
+    await expect(request(method, { repositoryId: "R_123" })).rejects.toThrow("Stop threads using this Codex account");
+    expect(active).toHaveBeenLastCalledWith("R_123");
+  }
+  await request("logout");
+  expect(active).toHaveBeenLastCalledWith(undefined);
+});
+
+it("checks configured local repositories before directing users to project configuration", async () => {
+  const store = new CodexStore(path.join(mock.root, "codex"));
+  const repo = path.join(mock.root, "checkout");
+  mkdirSync(repo);
+  await git(repo, ["init", "-b", "main"]);
+  await git(repo, ["-c", "user.name=Forge test", "-c", "user.email=forge@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"]);
+  store.configuration.projects.R_123 = { repositoryId: "R_123", path: repo, overrides: {} };
+  store.configuration.projects.missing = { repositoryId: "missing", path: path.join(mock.root, "moved"), overrides: {} };
+  store.saveConfiguration();
+  expect(await request("checkProjectCheckout", { repositoryId: "R_123", environmentId: "local" })).toMatchObject({ ready: true });
+  expect(await request("checkProjectCheckout", { repositoryId: "missing", environmentId: "local" })).toMatchObject({ ready: false });
+  expect(await request("checkProjectCheckout", { repositoryId: "unconfigured", environmentId: "local" })).toMatchObject({ ready: false, message: expect.stringContaining("project configuration") });
+  expect(await request("checkProjectCheckout", { repositoryId: "R_123", environmentId: "unconfigured" })).toMatchObject({ ready: false, message: expect.stringContaining("project configuration") });
+});
+
+
+it("validates a remote project's configured checkout on its selected environment", async () => {
+  const store = new CodexStore(path.join(mock.root, "codex"));
+  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex", tmux: false };
+  store.configuration.environments = [environment];
+  store.configuration.projects.R_123 = { repositoryId: "R_123", path: "", overrides: {}, remotePaths: { linux: "~/src/repo" } };
+  store.saveConfiguration();
+  const check = vi.spyOn(remoteChecks, "checkEnvironment").mockResolvedValue({ ready: true, message: "Ready" });
+  expect(await request("checkProjectCheckout", { repositoryId: "R_123", environmentId: "linux" })).toMatchObject({ ready: true });
+  expect(check).toHaveBeenCalledExactlyOnceWith(environment, "~/src/repo");
+  check.mockResolvedValue({ ready: false, message: "Checkout is missing" });
+  expect(await request("checkProjectCheckout", { repositoryId: "R_123", environmentId: "linux" })).toMatchObject({ ready: false, message: "Checkout is missing" });
+});
+
+it("persists a project default, applies it only to new threads, and resets it when the environment is removed", async () => {
+  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex", tmux: false };
+  await request("saveEnvironments", { environments: [environment] });
+  const store = new CodexStore(path.join(mock.root, "codex"));
+  // Configure through IPC before services read the project settings.
+  await request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "~/src/repo" } });
+  const before = await request("create", { repositoryId: "R_123" }) as { id: string; environment?: unknown };
+  expect(before.environment).toBeUndefined();
+  expect(await request("saveProject", { repositoryId: "R_123", overrides: {}, defaultEnvironment: "linux" })).toMatchObject({ projects: { R_123: { defaultEnvironment: "linux" } } });
+  expect(new CodexStore(store.root).configuration.projects.R_123.defaultEnvironment).toBe("linux");
+  const after = await request("create", { repositoryId: "R_123" }) as { id: string; environment?: unknown };
+  expect(after.environment).toEqual(environment);
+  const original = await request("thread", { repositoryId: "R_123", id: before.id }) as { thread: CodexThread };
+  expect(original.thread.environment).toBeUndefined();
+  const created = await request("thread", { repositoryId: "R_123", id: after.id }) as { thread: CodexThread };
+  expect(created.thread.repositoryPath).toBe("~/src/repo");
+  await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, defaultEnvironment: "unknown" })).rejects.toThrow("checkout for the default");
+  await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: {} })).rejects.toThrow("Choose another default");
+  await request("saveEnvironments", { environments: [] });
+  expect(await request("configuration")).toMatchObject({ projects: { R_123: { defaultEnvironment: "local" } } });
+  expect((await request("thread", { repositoryId: "R_123", id: after.id }) as { thread: CodexThread }).thread.environment).toEqual(environment);
 });

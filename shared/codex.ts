@@ -34,6 +34,8 @@ export type CodexProject = {
   path: string;
   overrides: Partial<CodexPreferences>;
   remotePaths?: Record<string, string>;
+  accountOverride?: boolean;
+  defaultEnvironment?: string;
   warning?: string;
   dirty?: boolean;
 };
@@ -140,6 +142,7 @@ export type CodexThreadSummary = {
   };
   environment?: CodexEnvironment;
   sourceHome?: string;
+  accountId?: string;
   historyWarning?: string;
 };
 export type CodexThread = CodexThreadSummary & {
@@ -191,6 +194,10 @@ export type CodexCommands = {
     { environment: CodexEnvironment; repositoryPath?: string },
     CodexEnvironmentCheck
   >;
+  checkProjectCheckout: Command<
+    { repositoryId: string; environmentId: string },
+    CodexEnvironmentCheck
+  >;
   inferRemotePath: Command<{ repositoryId: string }, string | null>;
   setEnvironment: Command<ThreadInput & { environmentId: string }, void>;
   saveConfiguration: Command<
@@ -207,6 +214,8 @@ export type CodexCommands = {
       repositoryId: string;
       overrides: Partial<CodexPreferences>;
       remotePaths?: Record<string, string>;
+      accountOverride?: boolean;
+      defaultEnvironment?: string;
       fullName?: string;
     },
     CodexConfiguration
@@ -215,11 +224,14 @@ export type CodexCommands = {
     { repositoryId: string; fullName: string },
     CodexConfiguration
   >;
-  status: Command<Record<string, never>, CodexStatus>;
-  login: Command<Record<string, never>, void>;
-  logout: Command<Record<string, never>, void>;
-  cancelLogin: Command<Record<string, never>, void>;
-  models: Command<{ repositoryId?: string; id?: string }, CodexModel[]>;
+  status: Command<{ repositoryId?: string }, CodexStatus>;
+  login: Command<{ repositoryId?: string }, void>;
+  logout: Command<{ repositoryId?: string }, void>;
+  cancelLogin: Command<{ repositoryId?: string }, void>;
+  models: Command<
+    { repositoryId?: string; id?: string; accountOverride?: boolean },
+    CodexModel[]
+  >;
   existing: Command<
     { repositoryId: string; cursor?: string; archived?: boolean },
     { home: string; threads: CodexExistingThread[]; nextCursor: string | null }
@@ -310,6 +322,7 @@ export type CodexCommands = {
 export type CodexChange = {
   connectionError?: string;
   environmentId?: string;
+  accountId?: string;
   repositoryId?: string;
   threadId?: string;
   auth?: { success: boolean; error?: string };

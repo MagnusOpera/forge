@@ -206,6 +206,8 @@ export function CodexConversation({
     repositoryId,
     id,
     page?.thread.environment?.id,
+    undefined,
+    page?.thread.accountId,
   );
   const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -416,10 +418,15 @@ export function CodexConversation({
     );
   return (
     <div className="codex-conversation">
-      <EnvironmentPicker
-        thread={thread}
-        onChange={async () => setPage(await codexApi().request("thread", args))}
-      />
+      {thread.items.length > 0 && (
+        <EnvironmentPicker
+          thread={thread}
+          onConfigure={onConfigure}
+          onChange={async () =>
+            setPage(await codexApi().request("thread", args))
+          }
+        />
+      )}
       <div
         className="codex-transcript"
         ref={scroll}
@@ -495,6 +502,13 @@ export function CodexConversation({
                   ? "Send a message to work with Codex in this chat’s checkout."
                   : "A separate worktree will be created from committed HEAD when you send the first message. Uncommitted changes in the configured checkout are excluded."}
             </p>
+            <EnvironmentPicker
+              thread={thread}
+              onConfigure={onConfigure}
+              onChange={async () =>
+                setPage(await codexApi().request("thread", args))
+              }
+            />
           </div>
         )}
         <TranscriptView

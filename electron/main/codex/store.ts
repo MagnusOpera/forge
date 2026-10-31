@@ -71,6 +71,7 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
     mergedInto,
     environment,
     sourceHome,
+    accountId,
     historyWarning,
   } = thread;
   return {
@@ -91,6 +92,7 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
     mergedInto,
     environment,
     sourceHome,
+    accountId,
     historyWarning,
   };
 }

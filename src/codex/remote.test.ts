@@ -246,6 +246,38 @@ describe("remote worktree commands", () => {
   });
 });
 describe("target selection and remote reconnect", () => {
+  it("uses a snapshotted project default without starting local Codex and rejects a broken default", async () => {
+    const store = new CodexStore(directory());
+    store.configuration.environments = [{ ...environment }];
+    store.configuration.projects.repo = { repositoryId: "repo", path: "", overrides: {}, remotePaths: { linux: "~/src/repo" }, defaultEnvironment: "linux" };
+    const models = vi.fn(async () => []);
+    const manager = new ThreadManager(store, new LocalCommandTransport(), models, () => {}, () => "");
+    managers.push(manager);
+    const created = await manager.create("repo");
+    expect(created.environment).toEqual(environment);
+    expect(store.get("repo", created.id).repositoryPath).toBe("~/src/repo");
+    expect(models).not.toHaveBeenCalled();
+    store.configuration.environments[0].host = "changed-host";
+    expect(created.environment?.host).toBe(environment.host);
+    store.configuration.projects.repo.defaultEnvironment = "missing";
+    await expect(manager.create("repo")).rejects.toThrow("default environment's checkout");
+    expect(store.get("repo", created.id).environment?.host).toBe(environment.host);
+  });
+  it("rejects environment changes for an empty archived thread until it is restored", () => {
+    const store = new CodexStore(directory());
+    store.configuration.projects.repo = { repositoryId: "repo", path: "/local/repo", overrides: {} };
+    const manager = new ThreadManager(store, new LocalCommandTransport(), async () => [], () => {}, () => "");
+    managers.push(manager);
+    const item = thread("/remote/repo");
+    item.archived = true;
+    expect(() => manager.setEnvironment(item, "local")).toThrow("Restore this thread");
+    expect(item.environment).toEqual(environment);
+    expect(item.repositoryPath).toBe("/remote/repo");
+    item.archived = false;
+    manager.setEnvironment(item, "local");
+    expect(item.environment).toBeUndefined();
+    expect(item.repositoryPath).toBe("/local/repo");
+  });
   it("allows remote-only projects without starting local Codex, snapshots the target, and locks selection after setup", async () => {
     const store = new CodexStore(directory());
     store.configuration.environments = [{ ...environment }];

@@ -54,6 +54,10 @@ const activeIds = (thread: CodexThread, params: JsonObject): boolean => {
   return !turnId || !thread.turnId || turnId === thread.turnId;
 };
 export class ThreadManager {
+  private accountClients = new Map<
+    string,
+    { client: CodexTransport; models: () => Promise<CodexModel[]> }
+  >();
   private remoteClients = new Map<string, RemoteCodexClient>();
   private timers = new Map<string, NodeJS.Timeout>();
   private metadataAttempts = new Set<string>();
@@ -76,6 +80,10 @@ export class ThreadManager {
     private changed: (change: CodexChange) => void,
     private attachmentPath: (attachment: CodexAttachment) => string,
     private externalRuntime?: (home: string) => {
+      client: CodexTransport;
+      models: () => Promise<CodexModel[]>;
+    },
+    private projectRuntime?: (repositoryId: string) => {
       client: CodexTransport;
       models: () => Promise<CodexModel[]>;
     },
@@ -102,6 +110,33 @@ export class ThreadManager {
     }
     return runtime;
   }
+  accountRuntime(repositoryId: string) {
+    let runtime = this.accountClients.get(repositoryId);
+    if (!runtime) {
+      if (!this.projectRuntime)
+        throw new Error("Project account runtime is unavailable.");
+      runtime = this.projectRuntime(repositoryId);
+      this.accountClients.set(repositoryId, runtime);
+      this.bind(runtime.client);
+    }
+    return runtime;
+  }
+  private accountId(client: CodexTransport): string | undefined {
+    return [...this.accountClients].find(
+      ([, runtime]) => runtime.client === client,
+    )?.[0];
+  }
+  hasActiveAccount(repositoryId?: string): boolean {
+    return [...this.store.threads.values()].some(
+      (thread) =>
+        !thread.environment &&
+        !thread.sourceHome &&
+        thread.accountId === repositoryId &&
+        (codexIsActive(thread) ||
+          this.locks.has(thread.id) ||
+          this.checkoutLocks.has(thread.repositoryPath)),
+    );
+  }
   private remoteRuntime(
     environment: NonNullable<CodexThread["environment"]>,
   ): RemoteCodexClient {
@@ -118,14 +153,18 @@ export class ThreadManager {
     if (thread.environment) return this.remoteRuntime(thread.environment);
     return thread.sourceHome
       ? this.runtime(thread.sourceHome).client
-      : this.client;
+      : thread.accountId
+        ? this.accountRuntime(thread.accountId).client
+        : this.client;
   }
   threadModels(thread: CodexThread): Promise<CodexModel[]> {
     if (thread.environment)
       return this.remoteRuntime(thread.environment).models();
     return thread.sourceHome
       ? this.runtime(thread.sourceHome).models()
-      : this.models();
+      : thread.accountId
+        ? this.accountRuntime(thread.accountId).models()
+        : this.models();
   }
   private publish(thread: CodexThread, immediate = false): void {
     thread.updatedAt = new Date().toISOString();
@@ -195,26 +234,50 @@ export class ThreadManager {
       throw new Error(
         "Choose a local Git folder or configure a remote project placement first.",
       );
+    const defaultEnvironment = project.defaultEnvironment ?? "local";
+    const environment =
+      defaultEnvironment === "local"
+        ? undefined
+        : this.store.configuration.environments?.find(
+            (entry) => entry.id === defaultEnvironment,
+          );
+    if (
+      defaultEnvironment !== "local" &&
+      (!environment || !project.remotePaths?.[defaultEnvironment])
+    )
+      throw new Error(
+        "Configure the default environment's checkout in project configuration before creating a thread.",
+      );
     // Resolve against the selected target's catalog when execution starts.
     const defaults = effectiveCodexPreferences(
       this.store.configuration.defaults,
       project.overrides,
     );
+    const accountId = project.accountOverride ? repositoryId : undefined;
     const settings = Object.values(project.remotePaths ?? {}).some(Boolean)
       ? defaults
-      : resolveModelPreferences(defaults, await this.models());
+      : resolveModelPreferences(
+          defaults,
+          await (accountId
+            ? this.accountRuntime(accountId).models()
+            : this.models()),
+        );
     const id = randomUUID(),
       now = new Date().toISOString();
     const thread: CodexThread = {
       id,
       repositoryId,
+      accountId,
       title: "New thread",
       archived: false,
       settings,
       state: "idle",
       createdAt: now,
       updatedAt: now,
-      repositoryPath: project.path || "",
+      environment: environment ? { ...environment } : undefined,
+      repositoryPath: environment
+        ? remoteCheckoutPath(project.remotePaths![environment.id])
+        : project.path || "",
       serverId: "",
       worktree: "",
       branch: "",
@@ -231,6 +294,8 @@ export class ThreadManager {
     return threadSummary(thread);
   }
   setEnvironment(thread: CodexThread, environmentId: string): void {
+    if (thread.archived)
+      throw new Error("Restore this thread before changing its environment.");
     if (
       thread.worktree ||
       thread.serverId ||
@@ -836,7 +901,9 @@ export class ThreadManager {
             ? "Sign in on the remote host using codex login --device-auth."
             : thread.sourceHome
               ? "Sign in through the Codex app or CLI before resuming this external thread."
-              : "Sign in with ChatGPT in global configuration first.",
+              : thread.accountId
+                ? "Sign in with ChatGPT in this project's Codex configuration first."
+                : "Sign in with ChatGPT in global configuration first.",
         );
       const models = await this.threadModels(thread);
       check();
@@ -1173,7 +1240,8 @@ export class ThreadManager {
   }
   event(event: RpcEvent, client: CodexTransport = this.client): void {
     if (event.method.startsWith("account/")) {
-      if (client !== this.client) {
+      const accountId = this.accountId(client);
+      if (client !== this.client && !accountId) {
         if (event.requestId !== undefined)
           client.rejectRequest(event.requestId);
         return;
@@ -1182,6 +1250,7 @@ export class ThreadManager {
       this.changed(
         event.method === "account/login/completed"
           ? {
+              accountId,
               auth: {
                 success: event.params.success === true,
                 error:
@@ -1190,7 +1259,7 @@ export class ThreadManager {
                     : text(event.params.error) || "ChatGPT sign-in failed.",
               },
             }
-          : {},
+          : { accountId },
       );
       return;
     }
@@ -1212,6 +1281,7 @@ export class ThreadManager {
         ...(client instanceof RemoteCodexClient
           ? { environmentId: client.environment.id }
           : {}),
+        accountId: this.accountId(client),
         connectionError: text(event.params.message) || "Codex disconnected.",
       });
       return;
@@ -1239,6 +1309,7 @@ export class ThreadManager {
   }
   stopExternalRuntimes(): void {
     for (const runtime of this.externalClients.values()) runtime.client.stop();
+    for (const runtime of this.accountClients.values()) runtime.client.stop();
   }
   flush(): void {
     this.closing = true;
@@ -1259,6 +1330,7 @@ export class ThreadManager {
     }
     this.client.stop();
     for (const runtime of this.externalClients.values()) runtime.client.stop();
+    for (const runtime of this.accountClients.values()) runtime.client.stop();
     for (const client of this.remoteClients.values()) client.stop();
   }
   hasActive(): boolean {

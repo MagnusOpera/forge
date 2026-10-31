@@ -83,18 +83,14 @@ it("keeps environment definitions global and edits existing checkout mappings on
     [...container.querySelectorAll("nav button")].map(
       (button) => button.textContent,
     );
-  expect(labels()).toEqual(["General", "Accounts", "Environments", "Codex"]);
+  expect(labels()).toEqual(["General", "Environments", "GitHub", "Codex"]);
   await act(async () =>
     root.render(<CodexSettingsDialog {...props} project={project} />),
   );
-  expect(labels()).toEqual([
-    "Local checkout",
-    "Remote checkouts",
-    "Codex overrides",
-  ]);
+  expect(labels()).toEqual(["Checkouts", "Codex overrides"]);
   const remote = [
     ...container.querySelectorAll<HTMLButtonElement>("nav button"),
-  ].find((button) => button.textContent === "Remote checkouts")!;
+  ].find((button) => button.textContent === "Checkouts")!;
   await act(async () => remote.click());
   expect(
     container.querySelector<HTMLInputElement>(
@@ -110,6 +106,8 @@ it("keeps environment definitions global and edits existing checkout mappings on
     fullName: "owner/forge",
     overrides: {},
     remotePaths: { ghoulix: "/srv/forge" },
+    accountOverride: false,
+    defaultEnvironment: "local",
   });
   expect(props.onClose).toHaveBeenCalledOnce();
 });
@@ -142,7 +140,7 @@ it("suggests the local home-relative layout for unmapped environments and shows 
   );
   const remote = [
     ...container.querySelectorAll<HTMLButtonElement>("nav button"),
-  ].find((button) => button.textContent === "Remote checkouts")!;
+  ].find((button) => button.textContent === "Checkouts")!;
   await act(async () => remote.click());
   expect(
     container.querySelector<HTMLInputElement>(
@@ -179,7 +177,7 @@ it("requires a local checkout before suggesting a remote layout", async () => {
   );
   const remote = [
     ...container.querySelectorAll<HTMLButtonElement>("nav button"),
-  ].find((button) => button.textContent === "Remote checkouts")!;
+  ].find((button) => button.textContent === "Checkouts")!;
   await act(async () => remote.click());
   expect(
     container.querySelector<HTMLInputElement>(
@@ -215,4 +213,163 @@ it("displays the local checkout with ~ while retaining its absolute operational 
   expect(displayed.textContent).toBe("~/src/forge");
   expect(displayed.title).toBe("/local/forge");
   expect(configuration.projects.repo.path).toBe("/local/forge");
+});
+
+const props = {
+  auth: null,
+  onClose: vi.fn(),
+  onSaveGithub: vi.fn(async () => {}),
+  onRemoveGithub: vi.fn(),
+  onOpenUrl: vi.fn(),
+};
+async function navigate(label: string) {
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("nav button")]
+      .find((b) => b.textContent === label)!
+      .click(),
+  );
+}
+it("places GitHub token controls in GitHub and account controls in Codex", async () => {
+  await act(async () => root.render(<CodexSettingsDialog {...props} />));
+  await navigate("GitHub");
+  expect(container.querySelector('input[type="password"]')).not.toBeNull();
+  expect(container.textContent).not.toContain("Codex account");
+  await navigate("Codex");
+  expect(container.querySelector('input[type="password"]')).toBeNull();
+  expect(container.textContent).toContain("Codex account");
+  expect(container.textContent).toContain("Codex defaults");
+});
+it("signs in to a project account separately and saves its override", async () => {
+  request.mockImplementation(async (method, input) =>
+    method === "models"
+      ? []
+      : method === "status"
+        ? {
+            connected: true,
+            authenticated: false,
+            email: input.repositoryId
+              ? "project@example.invalid"
+              : "global@example.invalid",
+          }
+        : configuration,
+  );
+  await act(async () =>
+    root.render(<CodexSettingsDialog {...props} project={project} />),
+  );
+  await navigate("Codex overrides");
+  expect(container.textContent).toContain("the global account");
+  expect(container.textContent).not.toContain("Sign in with ChatGPT");
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+      .click(),
+  );
+  expect(request).toHaveBeenCalledWith("status", { repositoryId: "repo" });
+  expect(request).toHaveBeenCalledWith("models", {
+    repositoryId: "repo",
+    accountOverride: true,
+  });
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent === "Sign in with ChatGPT")!
+      .click(),
+  );
+  expect(request).toHaveBeenCalledWith("login", { repositoryId: "repo" });
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent === "Cancel sign-in")!
+      .click(),
+  );
+  expect(request).toHaveBeenCalledWith("cancelLogin", { repositoryId: "repo" });
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent === "Save configuration")!
+      .click(),
+  );
+  expect(request).toHaveBeenCalledWith(
+    "saveProject",
+    expect.objectContaining({ repositoryId: "repo", accountOverride: true }),
+  );
+});
+it("restores a saved account override and routes project sign-out correctly", async () => {
+  const config = {
+    ...configuration,
+    projects: {
+      repo: { ...configuration.projects.repo, accountOverride: true },
+    },
+  };
+  request.mockImplementation(async (method) =>
+    method === "models"
+      ? []
+      : method === "status"
+        ? {
+            connected: true,
+            authenticated: true,
+            email: "project@example.invalid",
+          }
+        : config,
+  );
+  await act(async () =>
+    root.render(<CodexSettingsDialog {...props} project={project} />),
+  );
+  await navigate("Codex overrides");
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+      .checked,
+  ).toBe(true);
+  expect(container.textContent).toContain("project@example.invalid");
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent === "Sign out")!
+      .click(),
+  );
+  expect(request).toHaveBeenCalledWith("logout", { repositoryId: "repo" });
+});
+
+it("groups local and remote checkouts and saves the project's selected default environment", async () => {
+  const config = {
+    ...configuration,
+    projects: {
+      repo: { ...configuration.projects.repo, defaultEnvironment: "ghoulix" },
+    },
+  };
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (method, input) =>
+    method === "configuration" ? config : original(method, input),
+  );
+  await act(async () =>
+    root.render(<CodexSettingsDialog {...props} project={project} />),
+  );
+  expect(
+    [...container.querySelectorAll("nav button")].map(
+      (button) => button.textContent,
+    ),
+  ).toEqual(["Checkouts", "Codex overrides"]);
+  expect(container.textContent).toContain("Local Git folder");
+  expect(
+    container.querySelector('[aria-label="Ghoulix checkout path"]'),
+  ).not.toBeNull();
+  const selector = container
+    .querySelector('[aria-label="Default environment"]')!
+    .closest(".combobox")!;
+  expect(selector.querySelector('[role="combobox"]')?.textContent).toBe(
+    "Ghoulix",
+  );
+  await act(async () =>
+    [...selector.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((option) => option.textContent === "Local")!
+      .click(),
+  );
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Save configuration")!
+      .click(),
+  );
+  expect(request).toHaveBeenCalledWith(
+    "saveProject",
+    expect.objectContaining({
+      repositoryId: "repo",
+      defaultEnvironment: "local",
+    }),
+  );
 });

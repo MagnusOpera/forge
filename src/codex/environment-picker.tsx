@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { Settings } from "lucide-react";
 import { Combobox } from "../components/combobox";
 import {
   codexIsActive,
   type CodexConfiguration,
+  type CodexEnvironmentCheck,
   type CodexThread,
 } from "../../shared/codex";
 import { codexApi, errorMessage } from "./api";
@@ -10,15 +12,21 @@ import { codexApi, errorMessage } from "./api";
 export function EnvironmentPicker({
   thread,
   onChange,
+  onConfigure,
 }: {
   thread: CodexThread;
   onChange: () => Promise<void>;
+  onConfigure: () => void;
 }) {
   const [configuration, setConfiguration] = useState<CodexConfiguration | null>(
     null,
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [checkout, setCheckout] = useState<{
+    key: string;
+    result: CodexEnvironmentCheck;
+  } | null>(null);
   useEffect(() => {
     let active = true;
     const refresh = () =>
@@ -40,6 +48,7 @@ export function EnvironmentPicker({
     };
   }, []);
   const fixed = Boolean(
+    thread.archived ||
     thread.worktree ||
     thread.serverId ||
     thread.items.length ||
@@ -57,10 +66,55 @@ export function EnvironmentPicker({
       .filter((entry) => Boolean(binding?.remotePaths?.[entry.id]))
       .map((entry) => ({
         value: entry.id,
-        label: `${entry.name} · ${entry.host}`,
+        label: entry.name,
       })),
   ];
   const selected = thread.environment?.id ?? "local";
+  const hasCheckout = thread.environment
+    ? Boolean(binding?.remotePaths?.[selected])
+    : Boolean(binding?.path);
+  const validationKey = JSON.stringify({
+    repositoryId: thread.repositoryId,
+    selected,
+    path:
+      selected === "local" ? binding?.path : binding?.remotePaths?.[selected],
+    environment: thread.environment
+      ? configuration?.environments?.find((entry) => entry.id === selected)
+      : undefined,
+  });
+  useEffect(() => {
+    if (!configuration || fixed || !hasCheckout) return;
+    setCheckout(null);
+    let active = true;
+    void codexApi()
+      .request("checkProjectCheckout", {
+        repositoryId: thread.repositoryId,
+        environmentId: selected,
+      })
+      .then((result) => {
+        if (active) setCheckout({ key: validationKey, result });
+      })
+      .catch((error) => {
+        if (active)
+          setCheckout({
+            key: validationKey,
+            result: { ready: false, message: errorMessage(error) },
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    configuration,
+    fixed,
+    hasCheckout,
+    thread.repositoryId,
+    selected,
+    validationKey,
+  ]);
+  const needsConfiguration =
+    !hasCheckout ||
+    (checkout?.key === validationKey && checkout.result?.ready === false);
   if (!options.some((entry) => entry.value === selected))
     options.push({
       value: selected,
@@ -72,7 +126,7 @@ export function EnvironmentPicker({
       {fixed ? (
         <strong>
           {thread.environment
-            ? `${thread.environment.name} · ${thread.environment.host}`
+            ? thread.environment.name
             : "Local"}
         </strong>
       ) : (
@@ -96,11 +150,21 @@ export function EnvironmentPicker({
           }}
         />
       )}
-      <code title={thread.worktree || thread.repositoryPath}>
-        {thread.worktree ||
-          thread.repositoryPath ||
-          "Choose a configured environment"}
-      </code>
+      {configuration && !fixed && needsConfiguration && (
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Open project configuration"
+          onClick={onConfigure}
+          title={`Open project configuration. ${
+            checkout?.key === validationKey
+              ? (checkout.result?.message ?? "Checkout validation failed.")
+              : "Checkout has not passed validation."
+          }`}
+        >
+          <Settings size={16} aria-hidden="true" />
+        </button>
+      )}
       {thread.environment && thread.serverId && !codexIsActive(thread) && (
         <button
           className="ghost-button"

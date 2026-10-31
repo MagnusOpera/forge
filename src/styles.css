@@ -3630,6 +3630,7 @@ code {
 .codex-conversation .markdown-body { font-size: 13px; line-height: 1.65; }
 .codex-conversation pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 4px; font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .codex-conversation details summary { cursor: pointer; font-size: 12px; line-height: 1.6; color: var(--text-muted); }
+.codex-start-note .codex-environment-header { flex-wrap: nowrap; padding: 12px 0 0; border-bottom: 0; }
 .codex-start-note { margin: 24px auto; max-width: 420px; font-size: 12px; color: var(--text-muted); line-height: 1.7; }
 .codex-request { margin: 16px 0; border: 1px solid var(--accent); border-radius: 6px; padding: 12px; font-size: 12px; }
 .codex-request fieldset { border: 0; margin: 0 0 12px; padding: 0; }
@@ -3833,6 +3834,8 @@ code {
   content: "";
   pointer-events: none;
 }
+.codex-environment-runtime { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 180px); align-items: start; gap: 12px; }
+.codex-environment-selector { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .codex-environment-fields { display: grid; gap: 10px; padding: 12px 0; }
 .codex-project-checkout-row { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; gap: 8px; }
 .icon-button.codex-checkout-check.good, .icon-button.codex-checkout-check.good:hover { color: var(--good-text); }
@@ -3841,5 +3844,4 @@ code {
 .codex-project-checkout-field > span { overflow-wrap: anywhere; }
 .codex-environment-fields details { font-size: 12px; line-height: 1.6; }
 .codex-environment-header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; flex-shrink: 0; }
-.codex-environment-header > code { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-basis: 100%; }
-.codex-environment-header .combobox { max-width: 320px; }
+.codex-environment-header .combobox { flex: 1; min-width: 0; }

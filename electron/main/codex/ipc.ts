@@ -55,9 +55,11 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
   const sourceHome = path.resolve(
     process.env.CODEX_HOME || path.join(os.homedir(), ".codex"),
   );
-  let loginId: string | null = null;
+  const logins = new Map<string, string>();
+  let loginStarting = false;
   const changed = (change: CodexChange) => {
-    if (change.auth) loginId = null;
+    if (change.auth || (change.connectionError && !change.environmentId))
+      logins.delete(change.accountId ?? "");
     window()?.webContents.send("codex:changed", change);
   };
   const attachmentPath = (attachment: CodexAttachment): string => {
@@ -91,6 +93,13 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
             true,
           );
           return { client: external, models: () => external.models() };
+        },
+        (repositoryId) => {
+          const account = new CodexClient(
+            path.join(store!.root, "accounts", repositoryId),
+            () => store!.configuration.executable,
+          );
+          return { client: account, models: () => account.models() };
         },
       );
       existing = new ExistingThreads(manager, sourceHome);
@@ -193,6 +202,14 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           throw new Error("Environment IDs must be unique.");
         store.configuration.environments = environments;
         for (const project of Object.values(store.configuration.projects)) {
+          if (
+            project.defaultEnvironment &&
+            project.defaultEnvironment !== "local" &&
+            !environments.some(
+              (entry) => entry.id === project.defaultEnvironment,
+            )
+          )
+            project.defaultEnvironment = "local";
           if (project.remotePaths)
             project.remotePaths = Object.fromEntries(
               Object.entries(project.remotePaths).filter(([id]) =>
@@ -221,12 +238,26 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           throw new Error("Choose a macOS text editor application (.app).");
         return validateEditor(selected);
       }
+      const accountMethods = ["status", "login", "logout", "cancelLogin"];
+      const accountId =
+        accountMethods.includes(String(method)) &&
+        input.repositoryId !== undefined
+          ? repositoryId(input.repositoryId)
+          : undefined;
+      const account = accountId
+        ? (manager.accountRuntime(accountId).client as CodexClient)
+        : client;
+      const loginKey = accountId ?? "";
       if (method === "status")
-        return { ...(await client.status()), loginPending: Boolean(loginId) };
+        return {
+          ...(await account.status()),
+          loginPending: logins.has(loginKey),
+        };
       if (method === "cancelLogin") {
-        if (loginId) await client.request("account/login/cancel", { loginId });
-        loginId = null;
-        changed({});
+        const loginId = logins.get(loginKey);
+        if (loginId) await account.request("account/login/cancel", { loginId });
+        logins.delete(loginKey);
+        changed({ accountId });
         return;
       }
       if (method === "models") {
@@ -237,40 +268,104 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
               string(input.id, "thread ID"),
             ),
           );
-        return client.models();
+        return input.repositoryId !== undefined &&
+          (input.accountOverride === true ||
+            (input.accountOverride === undefined &&
+              store.configuration.projects[repositoryId(input.repositoryId)]
+                ?.accountOverride))
+          ? manager.accountRuntime(repositoryId(input.repositoryId)).models()
+          : client.models();
       }
       if (method === "login") {
-        await client.start();
-        const result = object(
-          await client.request("account/login/start", {
-            type: "chatgpt",
-            appBrand: "codex",
-          }),
-        );
-        loginId = text(result.loginId) || null;
-        const url = new URL(text(result.authUrl));
-        if (
-          url.protocol !== "https:" ||
-          !(
-            url.hostname === "openai.com" ||
-            url.hostname.endsWith(".openai.com") ||
-            url.hostname === "chatgpt.com" ||
-            url.hostname.endsWith(".chatgpt.com")
+        if (manager.hasActiveAccount(accountId))
+          throw new Error(
+            "Stop threads using this Codex account before signing in.",
+          );
+        if (logins.size || loginStarting)
+          throw new Error(
+            "Complete or cancel the current Codex sign-in first.",
+          );
+        loginStarting = true;
+        let loginId = "";
+        try {
+          await account.start();
+          const result = object(
+            await account.request("account/login/start", {
+              type: "chatgpt",
+              appBrand: "codex",
+            }),
+          );
+          loginId = text(result.loginId);
+          const url = new URL(text(result.authUrl));
+          if (
+            url.protocol !== "https:" ||
+            url.username ||
+            url.password ||
+            !(
+              url.hostname === "openai.com" ||
+              url.hostname.endsWith(".openai.com") ||
+              url.hostname === "chatgpt.com" ||
+              url.hostname.endsWith(".chatgpt.com")
+            )
           )
-        )
-          throw new Error("Codex returned an invalid sign-in URL.");
-        await shell.openExternal(url.toString());
+            throw new Error("Codex returned an invalid sign-in URL.");
+          if (loginId) logins.set(loginKey, loginId);
+          await shell.openExternal(url.toString());
+        } catch (error) {
+          logins.delete(loginKey);
+          if (loginId)
+            await account
+              .request("account/login/cancel", { loginId })
+              .catch(() => undefined);
+          throw error;
+        } finally {
+          loginStarting = false;
+        }
         return;
       }
       if (method === "logout") {
-        if (manager.hasActive())
-          throw new Error("Stop active Codex threads before signing out.");
-        await client.start();
-        await client.request("account/logout", {});
-        changed({});
+        if (manager.hasActiveAccount(accountId))
+          throw new Error(
+            "Stop threads using this Codex account before signing out.",
+          );
+        await account.start();
+        await account.request("account/logout", {});
+        logins.delete(loginKey);
+        changed({ accountId });
         return;
       }
       const projectId = repositoryId(input.repositoryId);
+      if (method === "checkProjectCheckout") {
+        const project = store.configuration.projects[projectId];
+        const environmentId = string(input.environmentId, "environment ID");
+        try {
+          if (environmentId === "local") {
+            if (!project?.path)
+              return {
+                ready: false,
+                message: "Choose a local checkout in project configuration.",
+              };
+            await inspectRepository(project.path, project.name ?? "");
+            return { ready: true, message: "Local checkout is ready." };
+          }
+          const environment = store.configuration.environments?.find(
+            (entry) => entry.id === environmentId,
+          );
+          const folder = project?.remotePaths?.[environmentId];
+          if (!environment || !folder)
+            return {
+              ready: false,
+              message:
+                "Configure this environment's checkout in project configuration.",
+            };
+          return await checkEnvironment(environment, folder);
+        } catch (error) {
+          return {
+            ready: false,
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
       if (method === "inferRemotePath")
         return inferRemoteCheckoutPath(
           store.configuration.projects[projectId]?.path,
@@ -287,6 +382,11 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         if (input.fullName !== undefined)
           project.name = string(input.fullName, "GitHub repository name");
         project.overrides = validatePreferences(input.overrides, true);
+        if (input.accountOverride !== undefined) {
+          if (typeof input.accountOverride !== "boolean")
+            throw new Error("Invalid Codex account override.");
+          project.accountOverride = input.accountOverride;
+        }
         if (input.remotePaths !== undefined) {
           const placements: Record<string, string> = {};
           for (const [id, folder] of Object.entries(
@@ -303,6 +403,28 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           }
           project.remotePaths = placements;
         }
+        if (input.defaultEnvironment !== undefined) {
+          const id = string(input.defaultEnvironment, "default environment");
+          if (
+            id !== "local" &&
+            (!store.configuration.environments?.some(
+              (entry) => entry.id === id,
+            ) ||
+              !project.remotePaths?.[id])
+          )
+            throw new Error(
+              "Configure a checkout for the default environment first.",
+            );
+          project.defaultEnvironment = id;
+        }
+        if (
+          project.defaultEnvironment &&
+          project.defaultEnvironment !== "local" &&
+          !project.remotePaths?.[project.defaultEnvironment]
+        )
+          throw new Error(
+            "Choose another default environment before removing its checkout.",
+          );
         store.configuration.projects[projectId] = project;
         store.saveConfiguration();
         changed({ repositoryId: projectId });
@@ -325,6 +447,8 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
           name: fullName,
           overrides: previous?.overrides ?? {},
           remotePaths: previous?.remotePaths,
+          accountOverride: previous?.accountOverride,
+          defaultEnvironment: previous?.defaultEnvironment,
           ...inspected,
         };
         store.saveConfiguration();

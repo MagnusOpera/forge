@@ -68,23 +68,27 @@ it("creates and selects a new draft from the selector without replacing an exist
     "New environment",
   );
   expect(request).not.toHaveBeenCalled();
-  const save = [
-    ...container.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((button) => button.textContent === "Save environments")!;
-  await act(async () => save.click());
+  expect(container.textContent).not.toContain("Save environments");
+  // An incomplete new environment stays a draft until its host is supplied.
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  expect(request).not.toHaveBeenCalled();
+  await fillHost("new-host");
+  await act(async () => vi.advanceTimersByTimeAsync(600));
   expect(request).toHaveBeenCalledWith("saveEnvironments", {
     environments: [
       configuration.environments![0],
       expect.objectContaining({
         id: expect.any(String),
         name: "New environment",
-        host: "",
+        host: "new-host",
         executable: "codex",
         tmux: false,
       }),
     ],
   });
-  const saved = request.mock.calls[0][1].environments;
+  const saved = request.mock.calls.find(
+    ([method]) => method === "saveEnvironments",
+  )![1].environments;
   expect(saved[1].id).not.toBe("__create_environment__");
   expect(changed).toHaveBeenCalledOnce();
 });
@@ -101,9 +105,9 @@ it("keeps creation available when no environments exist or the last draft is rem
     "Add environment…",
   );
   await act(async () => addOption().click());
-  const remove = [
-    ...container.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((button) => button.textContent?.trim() === "Remove")!;
+  const remove = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Delete New environment environment"]',
+  )!;
   await act(async () => remove.click());
   expect(container.querySelector('[role="combobox"]')?.textContent).toContain(
     "Add environment…",
@@ -268,4 +272,247 @@ it("checks immediately on an icon click without repeating the pending debounce, 
   await render("");
   await act(async () => vi.advanceTimersByTimeAsync(1000));
   expect(request).toHaveBeenCalledTimes(1);
+});
+
+function connectionButton(name = "Linux") {
+  return container.querySelector<HTMLButtonElement>(
+    `[aria-label="Check ${name} connection"]`,
+  )!;
+}
+async function fill(input: HTMLInputElement, value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+async function fillHost(value: string) {
+  await fill(
+    container.querySelector<HTMLInputElement>(
+      'input[placeholder="linux-dev"]',
+    )!,
+    value,
+  );
+}
+function mockEnvironmentRequests() {
+  request.mockImplementation(async (method, input) =>
+    method === "checkEnvironment"
+      ? { ready: true, message: "Ready" }
+      : { ...configuration, environments: input.environments },
+  );
+}
+it("debounces environment edits, saves automatically and shows readiness beside the SSH host", async () => {
+  mockEnvironmentRequests();
+  const changed = vi.fn();
+  await act(async () =>
+    root.render(
+      <EnvironmentsEditor configuration={configuration} onChange={changed} />,
+    ),
+  );
+  expect(container.textContent).not.toContain("Check connection");
+  expect(container.textContent).not.toContain("Save environments");
+  await fillHost("first-host");
+  await act(async () => vi.advanceTimersByTimeAsync(300));
+  await fillHost("final-host");
+  await act(async () => vi.advanceTimersByTimeAsync(599));
+  expect(request).not.toHaveBeenCalled();
+  await act(async () => vi.advanceTimersByTimeAsync(1));
+  const environment = { ...configuration.environments![0], host: "final-host" };
+  expect(request).toHaveBeenCalledWith("checkEnvironment", { environment });
+  expect(request).toHaveBeenCalledWith("saveEnvironments", {
+    environments: [environment],
+  });
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(connectionButton().classList.contains("good")).toBe(true);
+  expect(changed).toHaveBeenCalledOnce();
+  expect(container.querySelector('[role="status"]')).toBeNull();
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((option) => option.textContent === "tmux")!
+      .click(),
+  );
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  expect(request).toHaveBeenLastCalledWith("saveEnvironments", {
+    environments: [{ ...environment, tmux: true }],
+  });
+  await fill(
+    container.querySelector<HTMLInputElement>(
+      'input[placeholder="/home/user/.local/bin/codex"]',
+    )!,
+    "/opt/codex",
+  );
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  expect(request).toHaveBeenCalledWith("checkEnvironment", {
+    environment: { ...environment, tmux: true, executable: "/opt/codex" },
+  });
+});
+it("allows immediate checks, clears stale results on edits and ignores responses from another environment", async () => {
+  mockEnvironmentRequests();
+  let finish!: (result: { ready: boolean; message: string }) => void;
+  request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () =>
+    root.render(
+      <EnvironmentsEditor configuration={configuration} onChange={() => {}} />,
+    ),
+  );
+  await act(async () => connectionButton().click());
+  expect(connectionButton().getAttribute("aria-busy")).toBe("true");
+  expect(
+    container.querySelector<HTMLInputElement>('input[placeholder="linux-dev"]')!
+      .disabled,
+  ).toBe(false);
+  await fillHost("new-host");
+  expect(connectionButton().classList.contains("unchecked")).toBe(true);
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  expect(connectionButton().classList.contains("good")).toBe(true);
+  await act(async () => finish({ ready: false, message: "Old host failed" }));
+  expect(connectionButton().classList.contains("good")).toBe(true);
+  expect(container.textContent).not.toContain("Old host failed");
+  request.mockRejectedValueOnce(new Error("Host unreachable"));
+  await act(async () => connectionButton().click());
+  expect(connectionButton().classList.contains("bad")).toBe(true);
+  expect(container.textContent).toContain("Host unreachable");
+  await act(async () => addOption().click());
+  expect(
+    connectionButton("New environment").classList.contains("unchecked"),
+  ).toBe(true);
+  expect(connectionButton("New environment").disabled).toBe(true);
+});
+it("cancels the delayed check after a manual check or empty host and hides trash when there is no selection", async () => {
+  mockEnvironmentRequests();
+  await act(async () =>
+    root.render(
+      <EnvironmentsEditor configuration={configuration} onChange={() => {}} />,
+    ),
+  );
+  const selector = container.querySelector(".codex-environment-selector")!;
+  expect(
+    selector.querySelector('[aria-label="Delete Linux environment"]'),
+  ).not.toBeNull();
+  await act(async () => connectionButton().click());
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  expect(request).toHaveBeenCalledTimes(1);
+  await fillHost("");
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  expect(request).toHaveBeenCalledTimes(1);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Delete Linux environment"]',
+      )!
+      .click(),
+  );
+  expect(selector.querySelector('[title="Delete environment"]')).toBeNull();
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  expect(request).toHaveBeenLastCalledWith("saveEnvironments", {
+    environments: [],
+  });
+});
+it("serializes saves and persists a revert even if the previous save has not finished", async () => {
+  mockEnvironmentRequests();
+  let finish!: (result: CodexConfiguration) => void;
+  request.mockImplementation(async (method, input) =>
+    method === "checkEnvironment"
+      ? { ready: true, message: "Ready" }
+      : input.environments[0]?.host === "new-host"
+        ? new Promise((resolve) => {
+            finish = resolve;
+          })
+        : { ...configuration, environments: input.environments },
+  );
+  const changed = vi.fn();
+  await act(async () =>
+    root.render(
+      <EnvironmentsEditor configuration={configuration} onChange={changed} />,
+    ),
+  );
+  await fillHost("new-host");
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  await fillHost("dev@host");
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  expect(
+    request.mock.calls.filter(([method]) => method === "saveEnvironments"),
+  ).toHaveLength(1);
+  await act(async () =>
+    finish({
+      ...configuration,
+      environments: [{ ...configuration.environments![0], host: "new-host" }],
+    }),
+  );
+  expect(request).toHaveBeenLastCalledWith("saveEnvironments", {
+    environments: configuration.environments,
+  });
+  expect(changed).toHaveBeenCalledExactlyOnceWith(configuration);
+});
+it("flushes pending valid edits when leaving settings and reports failed automatic saves", async () => {
+  mockEnvironmentRequests();
+  await act(async () =>
+    root.render(
+      <EnvironmentsEditor configuration={configuration} onChange={() => {}} />,
+    ),
+  );
+  await fillHost("new-host");
+  await act(async () => root.render(null));
+  expect(request).toHaveBeenCalledExactlyOnceWith("saveEnvironments", {
+    environments: [{ ...configuration.environments![0], host: "new-host" }],
+  });
+  await act(async () =>
+    root.render(
+      <EnvironmentsEditor configuration={configuration} onChange={() => {}} />,
+    ),
+  );
+  request.mockImplementation(async (method) => {
+    if (method === "saveEnvironments") throw new Error("Disk full");
+    return { ready: true, message: "Ready" };
+  });
+  await fillHost("other-host");
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+    "Disk full",
+  );
+});
+
+it("places terminal persistence beside the executable and preserves None as a valid saved choice", async () => {
+  mockEnvironmentRequests();
+  await act(async () =>
+    root.render(
+      <EnvironmentsEditor
+        configuration={{
+          ...configuration,
+          environments: [{ ...configuration.environments![0], tmux: true }],
+        }}
+        onChange={() => {}}
+      />,
+    ),
+  );
+  const row = container.querySelector(".codex-environment-runtime")!;
+  expect(
+    row.querySelector('input[placeholder="/home/user/.local/bin/codex"]'),
+  ).not.toBeNull();
+  expect(
+    row.querySelector('[aria-label="Terminal persistence"]')?.textContent,
+  ).toBe("tmux");
+  expect(row.querySelector('input[type="checkbox"]')).toBeNull();
+  await act(async () =>
+    [...row.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((option) => option.textContent === "None")!
+      .click(),
+  );
+  expect(
+    row.querySelector('[aria-label="Terminal persistence"]')?.textContent,
+  ).toBe("None");
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  expect(request).toHaveBeenCalledWith("saveEnvironments", {
+    environments: configuration.environments,
+  });
+  expect(request).toHaveBeenCalledWith("checkEnvironment", {
+    environment: configuration.environments![0],
+  });
 });

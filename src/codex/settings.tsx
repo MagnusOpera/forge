@@ -28,8 +28,9 @@ export function CodexSettingsDialog({
   onRemoveGithub: () => void;
   onOpenUrl: (url: string) => void;
 }) {
-  const [section, setSection] = useState(project ? "local" : "general");
+  const [section, setSection] = useState(project ? "checkouts" : "general");
   const [homeRelativePath, setHomeRelativePath] = useState<string | null>(null);
+  const [defaultEnvironment, setDefaultEnvironment] = useState("local");
   const [remotePaths, setRemotePaths] = useState<Record<string, string>>({});
   const [configuration, setConfiguration] = useState<CodexConfiguration | null>(
     null,
@@ -38,12 +39,21 @@ export function CodexSettingsDialog({
   const [executable, setExecutable] = useState("");
   const [editor, setEditor] = useState(DEFAULT_TEXT_EDITOR);
   const [sendShortcut, setSendShortcut] = useState<CodexSendShortcut>("enter");
+  const [accountOverride, setAccountOverride] = useState(false);
+  const accountInput =
+    project && accountOverride ? { repositoryId: project.id } : {};
   const [status, setStatus] = useState<CodexStatus | null>(null);
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false),
     [waitingLogin, setWaitingLogin] = useState(false);
-  const { models, error: modelsError } = useCodexModels();
+  const { models, error: modelsError } = useCodexModels(
+    project?.id,
+    undefined,
+    undefined,
+    accountOverride,
+    accountOverride ? project?.id : undefined,
+  );
   const root = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -93,7 +103,7 @@ export function CodexSettingsDialog({
   }, []);
   useEffect(() => {
     let active = true;
-    setSection(project ? "local" : "general");
+    setSection(project ? "checkouts" : "general");
     if (!window.forgeCodex) {
       setError("Codex requires the Forge desktop app.");
       return;
@@ -103,6 +113,14 @@ export function CodexSettingsDialog({
       .then((c) => {
         if (!active) return;
         setConfiguration(c);
+        setDefaultEnvironment(
+          project
+            ? (c.projects[project.id]?.defaultEnvironment ?? "local")
+            : "local",
+        );
+        setAccountOverride(
+          Boolean(project && c.projects[project.id]?.accountOverride),
+        );
         setRemotePaths(
           project ? (c.projects[project.id]?.remotePaths ?? {}) : {},
         );
@@ -116,9 +134,20 @@ export function CodexSettingsDialog({
       .catch((e) => {
         if (active) setError(errorMessage(e));
       });
+    return () => {
+      active = false;
+    };
+  }, [project?.id]);
+  useEffect(() => {
+    if (!window.forgeCodex) return;
+    let active = true;
+    const scope = project && accountOverride ? project.id : undefined;
+    const input = scope ? { repositoryId: scope } : {};
+    setStatus(null);
+    setWaitingLogin(false);
     const refreshStatus = () =>
       void codexApi()
-        .request("status", {})
+        .request("status", input)
         .then((s) => {
           if (active) {
             setStatus(s);
@@ -128,32 +157,31 @@ export function CodexSettingsDialog({
         .catch((e) => {
           if (active) setError(errorMessage(e));
         });
-    if (!project) refreshStatus();
+    refreshStatus();
     const unsubscribe = codexApi().onChanged((change) => {
-      if (change.environmentId) return;
-      if (!change.threadId && !project) {
-        if (change.connectionError) {
-          setStatus({
-            connected: false,
-            authenticated: false,
-            error: change.connectionError,
-          });
-          setWaitingLogin(false);
-          return;
-        }
-        if (change.auth) {
-          setWaitingLogin(false);
-          if (!change.auth.success)
-            setError(change.auth.error || "ChatGPT sign-in failed.");
-        }
-        refreshStatus();
+      if (change.environmentId || change.accountId !== scope || change.threadId)
+        return;
+      if (change.connectionError) {
+        setStatus({
+          connected: false,
+          authenticated: false,
+          error: change.connectionError,
+        });
+        setWaitingLogin(false);
+        return;
       }
+      if (change.auth) {
+        setWaitingLogin(false);
+        if (!change.auth.success)
+          setError(change.auth.error || "ChatGPT sign-in failed.");
+      }
+      refreshStatus();
     });
     return () => {
       active = false;
       unsubscribe();
     };
-  }, [project?.id]);
+  }, [project?.id, accountOverride]);
   const binding = project ? configuration?.projects[project.id] : undefined;
   useEffect(() => {
     setHomeRelativePath(null);
@@ -173,7 +201,7 @@ export function CodexSettingsDialog({
     };
   }, [project?.id, binding?.path]);
   useEffect(() => {
-    if (section !== "environments" || !homeRelativePath) return;
+    if (section !== "checkouts" || !homeRelativePath) return;
     setRemotePaths((current) => {
       const next = { ...current };
       for (const environment of configuration?.environments ?? []) {
@@ -216,14 +244,13 @@ export function CodexSettingsDialog({
           >
             {(project
               ? [
-                  ["local", "Local checkout"],
-                  ["environments", "Remote checkouts"],
+                  ["checkouts", "Checkouts"],
                   ["codex", "Codex overrides"],
                 ]
               : [
                   ["general", "General"],
-                  ["accounts", "Accounts"],
                   ["environments", "Environments"],
+                  ["github", "GitHub"],
                   ["codex", "Codex"],
                 ]
             ).map(([id, label]) => (
@@ -244,14 +271,7 @@ export function CodexSettingsDialog({
                 onChange={setConfiguration}
               />
             )}
-            {project && section === "environments" && configuration && (
-              <ProjectEnvironments
-                configuration={configuration}
-                paths={remotePaths}
-                onChange={setRemotePaths}
-              />
-            )}
-            {!project && section === "accounts" && (
+            {!project && section === "github" && (
               <section>
                 <h3>GitHub account</h3>
                 <p>
@@ -314,9 +334,33 @@ export function CodexSettingsDialog({
                 </p>
               </section>
             )}
-            {!project && section === "accounts" && (
+            {project && section === "codex" && (
               <section>
                 <h3>Codex account</h3>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={accountOverride}
+                    disabled={busy || waitingLogin}
+                    onChange={(event) =>
+                      setAccountOverride(event.target.checked)
+                    }
+                  />{" "}
+                  Use a separate Codex account for this project
+                </label>
+                <p className="codex-muted">
+                  {accountOverride
+                    ? "New local threads use this project's account."
+                    : "New local threads use the global account."}{" "}
+                  Existing threads keep their account. Remote threads use the
+                  remote host's account; imported threads keep their original
+                  Codex account.
+                </p>
+              </section>
+            )}
+            {section === "codex" && (!project || accountOverride) && (
+              <section>
+                <h3>{project ? "Project account" : "Codex account"}</h3>
                 <p>
                   {status?.authenticated
                     ? `Signed in${status.email ? ` as ${status.email}` : ""}${status.plan ? ` · ${status.plan}` : ""}`
@@ -332,7 +376,9 @@ export function CodexSettingsDialog({
                     disabled={busy}
                     onClick={() =>
                       void operation(async () => {
-                        setStatus(await codexApi().request("status", {}));
+                        setStatus(
+                          await codexApi().request("status", accountInput),
+                        );
                       })
                     }
                   >
@@ -345,8 +391,10 @@ export function CodexSettingsDialog({
                       disabled={busy}
                       onClick={() =>
                         void operation(async () => {
-                          await codexApi().request("logout", {});
-                          setStatus(await codexApi().request("status", {}));
+                          await codexApi().request("logout", accountInput);
+                          setStatus(
+                            await codexApi().request("status", accountInput),
+                          );
                         })
                       }
                     >
@@ -358,7 +406,7 @@ export function CodexSettingsDialog({
                       disabled={busy || waitingLogin || !status?.connected}
                       onClick={() =>
                         void operation(async () => {
-                          await codexApi().request("login", {});
+                          await codexApi().request("login", accountInput);
                           setWaitingLogin(true);
                         })
                       }
@@ -375,7 +423,7 @@ export function CodexSettingsDialog({
                     disabled={busy}
                     onClick={() =>
                       void operation(async () => {
-                        await codexApi().request("cancelLogin", {});
+                        await codexApi().request("cancelLogin", accountInput);
                         setWaitingLogin(false);
                       })
                     }
@@ -384,12 +432,40 @@ export function CodexSettingsDialog({
                   </button>
                 )}
                 <p className="codex-muted">
-                  This account belongs to Forge. Other Codex apps and CLI
-                  credentials are separate.
+                  {project
+                    ? "This sign-in is stored separately from the global account. Save configuration to use it for new local threads."
+                    : "This account belongs to Forge. Other Codex apps and CLI credentials are separate."}
                 </p>
               </section>
             )}
-            {project && section === "local" && (
+            {project && section === "checkouts" && configuration && (
+              <section>
+                <h3>Checkouts</h3>
+                <div className="codex-field">
+                  <span>Default environment</span>
+                  <Combobox
+                    label="Default environment"
+                    value={defaultEnvironment}
+                    options={[
+                      { value: "local", label: "Local" },
+                      ...(configuration.environments ?? []).map(
+                        (environment) => ({
+                          value: environment.id,
+                          label: environment.name,
+                          disabled: !remotePaths[environment.id]?.trim(),
+                        }),
+                      ),
+                    ]}
+                    onChange={setDefaultEnvironment}
+                  />
+                </div>
+                <p className="codex-muted">
+                  New threads start in this environment. Existing threads keep
+                  their target.
+                </p>
+              </section>
+            )}
+            {project && section === "checkouts" && (
               <section>
                 <h3>Local Git folder</h3>
                 <p className="codex-path" title={binding?.path}>
@@ -419,6 +495,13 @@ export function CodexSettingsDialog({
                   retain their original folder.
                 </p>
               </section>
+            )}
+            {project && section === "checkouts" && configuration && (
+              <ProjectEnvironments
+                configuration={configuration}
+                paths={remotePaths}
+                onChange={setRemotePaths}
+              />
             )}
             {configuration && section === "codex" && (
               <section>
@@ -546,6 +629,8 @@ export function CodexSettingsDialog({
                         fullName: project.fullName,
                         overrides: preferences,
                         remotePaths,
+                        accountOverride,
+                        defaultEnvironment,
                       })
                     : await codexApi().request("saveConfiguration", {
                         defaults: preferences as CodexPreferences,

@@ -327,3 +327,18 @@ it("keeps Plan mode read-only in the access picker", async () => {
   expect(trigger.disabled).toBe(true);
   expect(trigger.textContent).toBe("Read-only");
 });
+
+it("places the new-thread environment selector below its description", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (method, input) => {
+    const result = await original(method, input);
+    if (method === "thread") return { ...result, thread: { ...result.thread, items: [], serverId: "", repositoryPath: "/Users/developer/src/repo" } };
+    return result;
+  });
+  await act(async () => root.render(<CodexConversation repositoryId="r" id="t" loading={false} onConfigure={() => {}} />));
+  const note = container.querySelector('.codex-start-note')!;
+  expect(note.querySelector('p')?.textContent).toContain("A separate worktree");
+  expect(note.querySelector('p + .codex-environment-header')).not.toBeNull();
+  expect(note.querySelector("code")).toBeNull();
+  expect(container.querySelector('.codex-conversation > .codex-environment-header')).toBeNull();
+});

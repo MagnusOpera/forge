@@ -20,6 +20,8 @@ export function useCodexModels(
   repositoryId?: string,
   id?: string,
   environmentId?: string,
+  accountOverride?: boolean,
+  accountId?: string,
 ) {
   const [models, setModels] = useState<CodexModel[]>([]),
     [error, setError] = useState("");
@@ -30,7 +32,14 @@ export function useCodexModels(
     if (!window.forgeCodex) return;
     const refresh = () =>
       void codexApi()
-        .request("models", id ? { repositoryId, id } : {})
+        .request(
+          "models",
+          id
+            ? { repositoryId, id }
+            : repositoryId
+              ? { repositoryId, accountOverride }
+              : {},
+        )
         .then((result) => {
           if (active) {
             setModels(result);
@@ -42,19 +51,28 @@ export function useCodexModels(
         });
     refresh();
     const unsubscribe = codexApi().onChanged((change) => {
+      if (
+        (change.accountId || change.auth || change.connectionError) &&
+        change.accountId !== accountId
+      )
+        return;
       if (change.environmentId && change.environmentId !== environmentId)
         return;
       if (change.connectionError) {
         setError(change.connectionError);
         return;
       }
-      if (!change.repositoryId && !change.threadId) refresh();
+      if (
+        !change.threadId &&
+        (!change.repositoryId || change.repositoryId === repositoryId)
+      )
+        refresh();
     });
     return () => {
       active = false;
       unsubscribe();
     };
-  }, [repositoryId, id, environmentId]);
+  }, [repositoryId, id, environmentId, accountOverride, accountId]);
   return { models, error };
 }
 export function PreferencesEditor({

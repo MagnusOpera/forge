@@ -1496,3 +1496,45 @@ it("prepares a new chat worktree for its terminal without contacting Codex, then
     client.calls.find((call) => call.method === "thread/start")?.params.cwd,
   ).toBe(checkout);
 });
+
+describe("project Codex accounts", () => {
+  it("snapshots the account for new local threads and preserves routing across settings changes and restarts", async () => {
+    const root = directory(), repo = await repository(), store = new CodexStore(root);
+    store.configuration.projects.R_123 = { repositoryId: "R_123", path: repo, overrides: {} };
+    const global = new FakeTransport(), project = new FakeTransport(), changes = vi.fn();
+    const projectModels = vi.fn(async () => models);
+    const factory = vi.fn(() => ({ client: project, models: projectModels }));
+    const manager = new ThreadManager(store, global, async () => models, changes, () => "attachment", undefined, factory);
+    managers.push(manager);
+    const inherited = store.get("R_123", (await manager.create("R_123")).id);
+    store.configuration.projects.R_123.accountOverride = true;
+    const overridden = store.get("R_123", (await manager.create("R_123")).id);
+    expect(overridden.accountId).toBe("R_123");
+    expect(factory).toHaveBeenCalledExactlyOnceWith("R_123");
+    expect(projectModels).toHaveBeenCalledOnce();
+    store.configuration.projects.R_123.accountOverride = false;
+    store.saveConfiguration();
+    const reset = await manager.create("R_123");
+    expect(reset.accountId).toBeUndefined();
+    await manager.send(inherited, message());
+    await manager.send(overridden, message());
+    expect(global.calls.filter(c => c.method === "turn/start")).toHaveLength(1);
+    expect(project.calls.filter(c => c.method === "turn/start")).toHaveLength(1);
+    expect(manager.hasActiveAccount()).toBe(true);
+    expect(manager.hasActiveAccount("R_123")).toBe(true);
+    expect(manager.hasActiveAccount("other")).toBe(false);
+    project.emit("connection/failed", { message: "Project disconnected" });
+    expect(overridden.state).toBe("interrupted");
+    expect(inherited.state).toBe("running");
+    expect(changes).toHaveBeenLastCalledWith(expect.objectContaining({ accountId: "R_123", connectionError: "Project disconnected" }));
+    manager.flush();
+    const restoredStore = new CodexStore(root);
+    const restored = restoredStore.get("R_123", overridden.id);
+    expect(restored.accountId).toBe("R_123");
+    const resumedFactory = vi.fn(() => ({ client: new FakeTransport(), models: projectModels }));
+    const restarted = new ThreadManager(restoredStore, new FakeTransport(), async () => [], vi.fn(), () => "", undefined, resumedFactory);
+    managers.push(restarted);
+    expect(await restarted.threadModels(restored)).toEqual(models);
+    expect(resumedFactory).toHaveBeenCalledExactlyOnceWith("R_123");
+  });
+});
