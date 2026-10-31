@@ -118,6 +118,9 @@ describe("Codex preload IPC handlers", () => {
       request("thread", { repositoryId: "R_123", id: "not-owned" }),
     ).rejects.toThrow("does not belong");
     await expect(
+      request("resolveMergeConflicts", { repositoryId: "R_123", id: "not-owned" }),
+    ).rejects.toThrow("does not belong");
+    await expect(
       request("quickAction", {
         repositoryId: "R_123",
         id: "not-owned",
@@ -624,7 +627,7 @@ it("stores remote environments and placements, snapshots targets, and rejects re
   const summary = await request("create", { repositoryId: "R_123" }) as { id: string };
   const args = { repositoryId: "R_123", id: summary.id };
   await request("setEnvironment", { ...args, environmentId: "linux" });
-  for (const method of ["git", "checkout", "quickAction", "openFolder", "openEditor", "outputFile", "attach"]) {
+  for (const method of ["git", "checkout", "resolveMergeConflicts", "quickAction", "openFolder", "openEditor", "outputFile", "attach"]) {
     await expect(request(method, args)).rejects.toThrow("unavailable for remote");
   }
   await expect(request("send", { ...args, text: "hello", attachments: [{ id: "anything", name: "notes" }] })).rejects.toThrow("Attachments");

@@ -2,6 +2,7 @@ import { isImageAttachment } from "../../../shared/codex.js";
 import {
   codexQuickActionPrompt,
   codexQuickActionUnavailable,
+  codexResolveMergePrompt,
   type CodexQuickAction,
 } from "../../../shared/codexActions.js";
 import { existsSync } from "node:fs";
@@ -16,6 +17,7 @@ import {
   type CodexChange,
   type CodexMessage,
   type CodexModel,
+  type CodexMergeConflict,
   type CodexPreferences,
   type CodexThread,
   type CodexThreadPage,
@@ -40,6 +42,7 @@ import {
   prepareWorktreeMerge,
   executeWorktreeMerge,
   cleanCheckout,
+  WorktreeMergeConflict,
 } from "./merge.js";
 import { assertWorktree, createWorktree, git } from "./git.js";
 import { hydrateCodexTurn, reduceCodexEvent, turnPolicy } from "./events.js";
@@ -722,11 +725,7 @@ export class ThreadManager {
   isChangingCheckout(thread: CodexThread): boolean {
     return this.checkoutLocks.has(thread.repositoryPath);
   }
-  async checkout(
-    thread: CodexThread,
-    action: "merge" | "worktree",
-    confirm: (title: string, detail: string) => Promise<boolean>,
-  ): Promise<void> {
+  private assertCheckoutAvailable(thread: CodexThread): void {
     const unavailable = codexQuickActionUnavailable(thread);
     if (unavailable) throw new Error(unavailable);
     if (thread.sourceHome)
@@ -749,6 +748,32 @@ export class ThreadManager {
       throw new Error(
         "Stop active chats in this repository before changing checkout.",
       );
+  }
+  async resolveMergeConflicts(thread: CodexThread): Promise<void> {
+    this.assertCheckoutAvailable(thread);
+    if (thread.checkout === "default" || thread.mergedInto)
+      throw new Error("Conflict resolution requires an unmerged Forge worktree.");
+    let conflict: CodexMergeConflict | undefined;
+    this.checkoutLocks.add(thread.repositoryPath);
+    try {
+      await prepareWorktreeMerge(thread, this.store.root);
+    } catch (error) {
+      if (!(error instanceof WorktreeMergeConflict)) throw error;
+      conflict = error.conflict;
+    } finally {
+      this.checkoutLocks.delete(thread.repositoryPath);
+    }
+    if (!conflict) throw new Error("No merge conflicts remain. Retry the merge action.");
+    await this.send(thread, {
+      id: randomUUID(), text: codexResolveMergePrompt(conflict), attachments: [],
+    });
+  }
+  async checkout(
+    thread: CodexThread,
+    action: "merge" | "worktree",
+    confirm: (title: string, detail: string) => Promise<boolean>,
+  ): Promise<{ conflict: CodexMergeConflict } | void> {
+    this.assertCheckoutAvailable(thread);
     this.checkoutLocks.add(thread.repositoryPath);
     try {
       if (action === "merge") {
@@ -848,6 +873,9 @@ export class ThreadManager {
         thread.error = undefined;
         this.publish(thread, true);
       }
+    } catch (error) {
+      if (error instanceof WorktreeMergeConflict) return { conflict: error.conflict };
+      throw error;
     } finally {
       this.checkoutLocks.delete(thread.repositoryPath);
     }

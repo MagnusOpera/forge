@@ -12,7 +12,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import type { CodexThreadSummary } from "../../shared/codex";
+import type { CodexMergeConflict, CodexThreadSummary } from "../../shared/codex";
 import {
   codexQuickActionUnavailable,
   type CodexQuickAction,
@@ -34,6 +34,11 @@ export function CodexQuickActions({
     [error, setError] = useState(""),
     [copied, setCopied] = useState(false),
     [diff, setDiff] = useState(false);
+  const [mergeConflict, setMergeConflict] = useState<CodexMergeConflict | null>(null);
+  useEffect(() => {
+    setError("");
+    setMergeConflict(null);
+  }, [thread?.id, thread?.repositoryId]);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
     () => () => {
@@ -43,6 +48,7 @@ export function CodexQuickActions({
   );
   const execute = async (action: () => Promise<void>) => {
     setError("");
+    setMergeConflict(null);
     setBusy(true);
     try {
       await action();
@@ -184,11 +190,12 @@ export function CodexQuickActions({
             disabled={busy || Boolean(unavailable)}
             onClick={() =>
               void execute(async () => {
-                await codexApi().request("checkout", {
+                const result = await codexApi().request("checkout", {
                   repositoryId: thread.repositoryId,
                   id: thread.id,
                   action: thread.checkout === "default" ? "worktree" : "merge",
                 });
+                if (result?.conflict) setMergeConflict(result.conflict);
               })
             }
           >
@@ -227,13 +234,28 @@ export function CodexQuickActions({
                 {action.icon}
               </button>
             ))}
-        {error && (
+        {(error || mergeConflict) && (
           <div className="codex-action-error" role="alert">
-            <span>{error}</span>
+            <span>
+              {error || (mergeConflict && <span className="codex-conflict-resolution">
+                <span>Changes conflict with {mergeConflict.defaultBranch} in: {mergeConflict.files.join(", ")}. Codex can resolve them in this worktree before you retry the merge.</span>
+                <button
+                  className="ghost-button"
+                  disabled={busy || Boolean(unavailable)}
+                  onClick={() => {
+                    if (thread) void execute(async () => {
+                      await codexApi().request("resolveMergeConflicts", {
+                        repositoryId: thread.repositoryId, id: thread.id,
+                      });
+                    });
+                  }}
+                >Resolve with Codex</button>
+              </span>)}
+            </span>
             <button
               className="icon-button"
               aria-label="Dismiss Git action error"
-              onClick={() => setError("")}
+              onClick={() => { setError(""); setMergeConflict(null); }}
             >
               <X size={13} />
             </button>

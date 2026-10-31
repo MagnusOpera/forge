@@ -6,6 +6,7 @@ import {
   writeFileSync,
   existsSync,
   rmSync,
+  readFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,6 +19,7 @@ import { defaultCodexPreferences, type CodexThread } from "../../shared/codex";
 import {
   prepareWorktreeMerge,
   executeWorktreeMerge,
+  mergeConflictFiles,
 } from "../../electron/main/codex/merge";
 const roots: string[] = [];
 afterEach(() =>
@@ -100,6 +102,86 @@ async function setup() {
   }
   return { root, repo, store, thread, manager, commit, origin, request };
 }
+async function conflictingWorktree() {
+  const context = await setup();
+  const { repo, thread, commit } = context;
+  writeFileSync(path.join(repo, "initial"), "local default change\n");
+  await git(repo, ["add", "initial"]);
+  await git(repo, ["commit", "-m", "local default change"]);
+  writeFileSync(path.join(thread.worktree, "initial"), "worktree change\n");
+  await commit("conflicting feature");
+  return context;
+}
+
+it("parses conflict filenames without mistaking diagnostics or whitespace for paths", () => {
+  expect(mergeConflictFiles("tree\0CHANGELOG.md\0folder/my file\nname.ts\0\0diagnostics\0"))
+    .toEqual(["CHANGELOG.md", "folder/my file\nname.ts"]);
+});
+
+it("offers resolution against the local default commit and lets a verified resolution merge normally", async () => {
+  const { repo, origin, store, thread, manager, request } = await conflictingWorktree();
+  const localHead = (await git(repo, ["rev-parse", "HEAD"])).trim();
+  const remoteHead = (await git(origin, ["rev-parse", "HEAD"])).trim();
+  const sourceHead = (await git(thread.worktree, ["rev-parse", "HEAD"])).trim();
+  expect(localHead).not.toBe(remoteHead);
+  const confirm = vi.fn(async () => true);
+  const result = await manager.checkout(thread, "merge", confirm);
+  expect(result).toEqual({ conflict: {
+    defaultBranch: "trunk", targetCommit: localHead, sourceCommit: sourceHead,
+    sourceBranch: thread.branch, files: ["initial"],
+  } });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(request).not.toHaveBeenCalled();
+  await manager.resolveMergeConflicts(thread);
+  const input = request.mock.calls.find(([method]) => method === "turn/start")?.[1] as { input: { text: string }[] };
+  const prompt = input.input[0].text;
+  expect(prompt).toContain(`"targetCommit":"${localHead}"`);
+  expect(prompt).toContain(`"sourceCommit":"${sourceHead}"`);
+  expect(prompt).toContain('"files":["initial"]');
+  expect(prompt).toContain("retain all relevant release-note bullets");
+  expect(prompt).toContain("Do not merge into or modify the default branch checkout");
+  expect(thread.draft).toBe("keep draft");
+  expect((await git(repo, ["rev-parse", "HEAD"])).trim()).toBe(localHead);
+  expect((await git(thread.worktree, ["rev-parse", "HEAD"])).trim()).toBe(sourceHead);
+  expect(existsSync(thread.worktree)).toBe(true);
+
+  // Simulate Codex resolving the authorized merge in the source worktree.
+  await expect(git(thread.worktree, ["merge", "--no-edit", localHead])).rejects.toThrow();
+  writeFileSync(path.join(thread.worktree, "initial"), "local default change\nworktree change\n");
+  await git(thread.worktree, ["add", "initial"]);
+  await git(thread.worktree, ["commit", "--no-edit"]);
+  thread.state = "idle";
+  thread.turnId = undefined;
+  await manager.checkout(thread, "merge", confirm);
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(thread.checkout).toBe("default");
+  expect(readFileSync(path.join(repo, "initial"), "utf8")).toBe("local default change\nworktree change\n");
+  expect((await git(origin, ["rev-parse", "HEAD"])).trim()).toBe(remoteHead);
+  expect(new CodexStore(store.root).get(thread.repositoryId, thread.id).checkout).toBe("default");
+});
+
+it("revalidates resolution requests and keeps dirty worktrees, unrelated operations, and active chats untouched", async () => {
+  const { repo, thread, manager, request } = await conflictingWorktree();
+  writeFileSync(path.join(thread.worktree, "draft"), "unsaved work");
+  await expect(manager.resolveMergeConflicts(thread)).rejects.toThrow("uncommitted");
+  expect(request).not.toHaveBeenCalled();
+  rmSync(path.join(thread.worktree, "draft"));
+  const target = (await git(repo, ["rev-parse", "HEAD"])).trim();
+  await expect(git(thread.worktree, ["merge", "--no-edit", target])).rejects.toThrow();
+  await expect(manager.resolveMergeConflicts(thread)).rejects.toThrow("uncommitted");
+  expect(request).not.toHaveBeenCalled();
+  await git(thread.worktree, ["merge", "--abort"]);
+  thread.state = "running";
+  await expect(manager.resolveMergeConflicts(thread)).rejects.toThrow("current turn");
+  expect(request).not.toHaveBeenCalled();
+});
+
+it("does not start a Codex turn when a conflict has already been resolved", async () => {
+  const { thread, manager, request, commit } = await setup();
+  await commit();
+  await expect(manager.resolveMergeConflicts(thread)).rejects.toThrow("No merge conflicts remain");
+  expect(request).not.toHaveBeenCalled();
+});
 it("moves the same chat from worktree to default branch and back repeatedly, persisting the active folder", async () => {
   const { repo, store, thread, manager, commit, origin } = await setup();
   const originalBranch = thread.branch;

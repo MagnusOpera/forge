@@ -1,6 +1,6 @@
 import { access, mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
-import type { CodexThread } from "../../../shared/codex.js";
+import type { CodexMergeConflict, CodexThread } from "../../../shared/codex.js";
 import { assertWorktree, git } from "./git.js";
 
 export type WorktreeMergePlan = {
@@ -23,6 +23,16 @@ export type WorktreeMergeResult = {
   worktreeRemoved: boolean;
   warning?: string;
 };
+export class WorktreeMergeConflict extends Error {
+  constructor(readonly conflict: CodexMergeConflict) {
+    super(`The worktree conflicts with ${conflict.defaultBranch}. Resolve the conflicting files with Codex, then retry the merge. Nothing was merged or discarded.`);
+  }
+}
+
+export function mergeConflictFiles(output: string): string[] {
+  // With --name-only -z: tree ID, conflict paths, an empty field, diagnostics.
+  return output.split("\0\0", 1)[0].split("\0").slice(1).filter(Boolean);
+}
 const exists = (file: string) =>
   access(file).then(
     () => true,
@@ -181,13 +191,19 @@ export async function prepareWorktreeMerge(
     await git(repository, [
       "merge-tree",
       "--write-tree",
+      "--name-only",
+      "-z",
       targetCommit,
       sourceCommit,
     ]);
-  } catch {
-    throw new Error(
-      `The worktree conflicts with ${defaultBranch}. Merge ${defaultBranch} into the worktree and resolve conflicts first. Nothing was merged or discarded.`,
-    );
+  } catch (error) {
+    const failure = error as { code?: number; stdout?: string };
+    if (failure.code !== 1 || !failure.stdout) throw error;
+    const files = mergeConflictFiles(failure.stdout);
+    if (!files.length) throw error;
+    throw new WorktreeMergeConflict({
+      defaultBranch, targetCommit, sourceCommit, sourceBranch: thread.branch, files,
+    });
   }
   const commits = Number(
     (

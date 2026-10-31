@@ -4,6 +4,7 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Offer Codex-assisted merge conflict resolution in the worktree, including unpushed changes on the local default branch.
 - Show only one live Codex activity timer when follow-up messages split the same turn into multiple groups.
 - Show Codex progress updates directly in the chat while keeping commands and tool output in expandable activity sections.
 
