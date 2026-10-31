@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.0]
+
+
 - Reduce the space before Codex activity summaries while keeping message actions accessible.
 - Restore timed Codex activity separators and show edited-file summaries with clickable diffs.
 - Show Codex attachments as filename chips with file-type icons and open them in the default app when clicked.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.9.2...0.10.0
 
 ## [0.9.2]
 
