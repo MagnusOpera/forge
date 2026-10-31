@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.9.2]
+
+
 - Keep Codex composer tools on one row when narrowing a thread window.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.9.1...0.9.2
 
 ## [0.9.1]
 
