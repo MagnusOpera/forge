@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0]
+
+
 - Open individual Codex threads in separate windows with shared sessions, preserved drafts, terminal handoff, and a compact toolbar.
 - Keep editable environment selection below the description and fixed targets beside composer status.
 - Hide remote reconnection controls unless a thread is interrupted or failed.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.8.0...0.9.0
 
 ## [0.8.0]
 
