@@ -401,7 +401,7 @@ describe("Codex attachment and output IPC", () => {
   });
 });
 
-it("requires a native, cancel-by-default confirmation for both checkout directions", async () => {
+it("requires a fresh, single-use HTML review before either checkout direction", async () => {
   const store = new CodexStore(path.join(mock.root, "codex"));
   const thread: CodexThread = {
     id: randomUUID(),
@@ -425,62 +425,39 @@ it("requires a native, cancel-by-default confirmation for both checkout directio
     draftAttachments: [],
   };
   store.saveThread(thread);
-  const decisions: boolean[] = [];
-  vi.spyOn(TerminalManager.prototype, "has").mockReturnValue(true);
-  const endTerminal = vi
-    .spyOn(TerminalManager.prototype, "closeForCheckout")
-    .mockResolvedValue();
-  vi.spyOn(ThreadManager.prototype, "checkout").mockImplementation(
-    async (_thread, _action, confirm) => {
-      decisions.push(await confirm("Move checkout?", "Review destination"));
-    },
-  );
+  const decisions: unknown[] = [];
+  const endTerminal = vi.spyOn(TerminalManager.prototype, "closeForCheckout").mockResolvedValue();
+  let revision = "initial";
+  vi.spyOn(ThreadManager.prototype, "checkout").mockImplementation(async (_thread, action, confirm) => {
+    decisions.push(await confirm("Move checkout?", "Review destination", {
+      action, sourceBranch: "feature", sourcePath: "/owned", targetBranch: "main", targetPath: "/repo", commits: 2, summary: "two changes",
+    }, revision));
+  });
+  const args = { repositoryId: thread.repositoryId, id: thread.id };
   for (const action of ["merge", "worktree"] as const) {
-    vi.mocked(dialog.showMessageBox).mockResolvedValueOnce({
-      response: 0,
-      checkboxChecked: false,
-    });
-    await request("checkout", {
-      repositoryId: thread.repositoryId,
-      id: thread.id,
-      action,
-    });
-    expect(dialog.showMessageBox).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        defaultId: 0,
-        cancelId: 0,
-        buttons: [
-          "Cancel",
-          action === "merge" ? "Merge and continue" : "Start worktree",
-        ],
-      }),
-    );
-    vi.mocked(dialog.showMessageBox).mockResolvedValueOnce({
-      response: 1,
-      checkboxChecked: false,
-    });
-    await request("checkout", {
-      repositoryId: thread.repositoryId,
-      id: thread.id,
-      action,
-    });
+    const result = await request("checkoutPreview", { ...args, action }) as { preview: { token: string } };
+    expect(decisions.at(-1)).toBe(false);
+    expect(endTerminal).toHaveBeenCalledTimes(action === "merge" ? 0 : 1);
+    expect(dialog.showMessageBox).not.toHaveBeenCalled();
+    await request("checkout", { ...args, action, token: result.preview.token, method: "squash", message: "Feature summary" });
+    expect(decisions.at(-1)).toEqual({ method: "squash", message: "Feature summary" });
+    await expect(request("checkout", { ...args, action, token: result.preview.token })).rejects.toThrow("Review this checkout");
   }
-  expect(decisions).toEqual([false, true, false, true]);
   expect(endTerminal).toHaveBeenCalledTimes(2);
-  expect(dialog.showMessageBox).toHaveBeenLastCalledWith(
-    expect.anything(),
-    expect.objectContaining({
-      detail: expect.stringContaining("end this chat's terminal session"),
-    }),
-  );
-  await expect(
-    request("checkout", {
-      repositoryId: "OTHER",
-      id: thread.id,
-      action: "merge",
-    }),
-  ).rejects.toThrow("does not belong");
+  const changed = await request("checkoutPreview", { ...args, action: "merge" }) as { preview: { token: string } };
+  revision = "moved";
+  await expect(request("checkout", { ...args, action: "merge", token: changed.preview.token })).rejects.toThrow("repository changed");
+  expect(endTerminal).toHaveBeenCalledTimes(2);
+  await expect(request("checkout", { ...args, action: "merge", token: "forged" })).rejects.toThrow("Review this checkout");
+  const refreshed = await request("checkoutPreview", { ...args, action: "merge" }) as { preview: { token: string } };
+  await expect(request("checkout", { ...args, action: "worktree", token: refreshed.preview.token })).rejects.toThrow("Review this checkout");
+  await expect(request("checkout", { ...args, action: "merge", token: refreshed.preview.token, method: "squash", message: " " })).rejects.toThrow("commit message");
+  await request("checkout", { ...args, action: "merge", token: refreshed.preview.token, method: "merge" });
+  expect(decisions.at(-1)).toEqual({ method: "merge", message: "Checkout" });
+  const expired = await request("checkoutPreview", { ...args, action: "merge" }) as { preview: { token: string } };
+  vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60_000);
+  await expect(request("checkout", { ...args, action: "merge", token: expired.preview.token })).rejects.toThrow("Review this checkout");
+  await expect(request("checkoutPreview", { repositoryId: "OTHER", id: thread.id, action: "merge" })).rejects.toThrow("does not belong");
 });
 
 it("persists the global send shortcut and validates renderer input", async () => {
@@ -627,7 +604,7 @@ it("stores remote environments and placements, snapshots targets, and rejects re
   const summary = await request("create", { repositoryId: "R_123" }) as { id: string };
   const args = { repositoryId: "R_123", id: summary.id };
   await request("setEnvironment", { ...args, environmentId: "linux" });
-  for (const method of ["git", "checkout", "resolveMergeConflicts", "quickAction", "openFolder", "openEditor", "outputFile", "attach"]) {
+  for (const method of ["git", "checkout", "checkoutPreview", "resolveMergeConflicts", "quickAction", "openFolder", "openEditor", "outputFile", "attach"]) {
     await expect(request(method, args)).rejects.toThrow("unavailable for remote");
   }
   await expect(request("send", { ...args, text: "hello", attachments: [{ id: "anything", name: "notes" }] })).rejects.toThrow("Attachments");

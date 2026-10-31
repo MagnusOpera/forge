@@ -77,7 +77,7 @@ it("copies from the checkout label with temporary feedback and opens Finder with
 it("offers Codex resolution for verified merge conflicts and submits only the owned thread identity", async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const conflict = { defaultBranch: "main", targetCommit: "local-main", sourceCommit: "feature-head", sourceBranch: "codex/task", files: ["CHANGELOG.md"] };
-  const request = vi.fn().mockImplementation(async (method) => method === "checkout" ? { conflict } : undefined);
+  const request = vi.fn().mockImplementation(async (method) => method === "checkoutPreview" ? { conflict } : undefined);
   window.forgeCodex = { request } as unknown as CodexApi;
   const container = document.createElement("div");
   document.body.append(container);
@@ -93,7 +93,7 @@ it("offers Codex resolution for verified merge conflicts and submits only the ow
     expect(resolve).not.toBeUndefined();
     await act(async () => resolve.click());
     expect(request).toHaveBeenLastCalledWith("resolveMergeConflicts", { repositoryId: "r", id: "t" });
-    expect(request.mock.calls.filter(([method]) => method === "checkout")).toHaveLength(1);
+    expect(request.mock.calls.filter(([method]) => method === "checkoutPreview")).toHaveLength(1);
     expect(container.querySelector('[role="alert"]')).toBeNull();
 
     request.mockRejectedValueOnce(new Error("Commit or remove uncommitted changes first."));
@@ -128,4 +128,28 @@ it("completes a successful merge without any cleanup popup", async () => {
     container.remove();
     delete window.forgeCodex;
   }
+});
+
+it("opens an HTML review before integration and passes the chosen method with its review token", async () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const preview = { token: "verified-preview", action: "merge", message: "feat: widget", sourceBranch: "codex/task", sourcePath: "/repo/worktree", targetBranch: "main", targetPath: "/repo", commits: 3, summary: "abc Widget" };
+  const request = vi.fn().mockImplementation(async (method) => method === "checkoutPreview" ? { preview } : undefined);
+  window.forgeCodex = { request } as unknown as CodexApi;
+  const container = document.createElement("div");document.body.append(container);const root = createRoot(container);
+  const thread: CodexThreadSummary = { id: "t", repositoryId: "r", title: "Test", archived: false, createdAt: "", updatedAt: "", settings: defaultCodexPreferences, state: "idle", worktree: "/repo/worktree", branch: "codex/task", baseCommit: "base", checkout: "worktree" };
+  try {
+    await act(async () => root.render(<CodexQuickActions thread={thread} theme="light" defaultBranch="main" group="git" />));
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Merge into main"]')!;
+    await act(async () => trigger.click());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(request.mock.calls.some(([method]) => method === "checkout")).toBe(false);
+    act(() => [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(node => node.textContent === "Cancel")!.click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(request.mock.calls.some(([method]) => method === "checkout")).toBe(false);
+    await act(async () => trigger.click());
+    act(() => document.querySelector<HTMLInputElement>('[value="merge"]')!.click());
+    await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(node => node.textContent === "Merge and continue")!.click());
+    expect(request).toHaveBeenLastCalledWith("checkout", { repositoryId: "r", id: "t", action: "merge", token: "verified-preview", method: "merge", message: "feat: widget" });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  } finally { act(() => root.unmount());container.remove();delete window.forgeCodex; }
 });

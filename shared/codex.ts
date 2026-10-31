@@ -144,6 +144,9 @@ export type CodexThreadSummary = {
     sourceCommit: string;
     targetPath: string;
     commit: string;
+    method?: "merge" | "squash";
+    targetCommit?: string;
+    tree?: string;
   };
   environment?: CodexEnvironment;
   sourceHome?: string;
@@ -186,6 +189,17 @@ export type CodexMergeConflict = {
   files: string[];
 };
 export type CodexCheckoutResult = { conflict?: CodexMergeConflict };
+export type CodexMergeChoice = { method: "squash" | "merge"; message: string };
+export type CodexCheckoutReview = {
+  action: "merge" | "worktree";
+  sourceBranch: string;
+  sourcePath: string;
+  targetBranch: string;
+  targetPath: string;
+  commits: number;
+  summary: string;
+};
+export type CodexCheckoutPreview = CodexCheckoutReview & { token: string; message: string };
 export type CodexExistingThread = {
   id: string;
   title: string;
@@ -301,7 +315,8 @@ export type CodexCommands = {
     ThreadInput & { action: import("./codexActions.js").CodexQuickAction },
     void
   >;
-  checkout: Command<ThreadInput & { action: "merge" | "worktree" }, CodexCheckoutResult | void>;
+  checkoutPreview: Command<ThreadInput & { action: "merge" | "worktree" }, CodexCheckoutResult & { preview?: CodexCheckoutPreview }>;
+  checkout: Command<ThreadInput & { action: "merge" | "worktree"; token: string; method?: "squash" | "merge"; message?: string }, CodexCheckoutResult | void>;
   resolveMergeConflicts: Command<ThreadInput, void>;
   terminalOpen: Command<
     ThreadInput & { cols: number; rows: number; attachmentId: string },

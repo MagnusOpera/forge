@@ -1,7 +1,8 @@
 import { access, mkdir, readdir, readlink, realpath, rm, lstat } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { CodexMergeConflict, CodexThread } from "../../../shared/codex.js";
+import type { CodexMergeChoice, CodexMergeConflict, CodexThread } from "../../../shared/codex.js";
 import { assertWorktree, git } from "./git.js";
 
 export type WorktreeMergePlan = {
@@ -17,6 +18,7 @@ export type WorktreeMergePlan = {
   createTarget: boolean;
   commits: number;
   summary: string;
+  tree: string;
 };
 export type WorktreeMergeResult = {
   branch: string;
@@ -193,15 +195,16 @@ export async function prepareWorktreeMerge(
       throw new Error("The default branch checkout changed. Try again.");
   } else if (await exists(temporary))
     throw new Error(`The integration folder already exists: ${temporary}`);
+  let tree: string;
   try {
-    await git(repository, [
+    tree = (await git(repository, [
       "merge-tree",
       "--write-tree",
       "--name-only",
       "-z",
       targetCommit,
       sourceCommit,
-    ]);
+    ])).split("\0")[0].trim();
   } catch (error) {
     const failure = error as { code?: number; stdout?: string };
     if (failure.code !== 1 || !failure.stdout) throw error;
@@ -239,6 +242,7 @@ export async function prepareWorktreeMerge(
     createTarget: !checkouts.length,
     commits,
     summary: summary.trim(),
+    tree,
   };
 }
 export function sameMergePlan(
@@ -261,15 +265,23 @@ async function assertMergedWorktree(
   ).trim();
   if (
     head !== merged.sourceCommit ||
-    !(await isAncestor(
-      thread.repositoryPath,
-      head,
-      `refs/heads/${merged.branch}`,
-    ))
+    !(await mergedChangesIncluded(thread))
   )
     throw new Error(
       "The worktree contains commits that are not in the merged default branch. It was kept.",
     );
+}
+async function mergedChangesIncluded(thread: CodexThread): Promise<boolean> {
+  const merged = thread.mergedInto;
+  if (!merged) return false;
+  if (merged.method !== "squash")
+    return isAncestor(thread.repositoryPath, merged.sourceCommit, `refs/heads/${merged.branch}`);
+  if (!merged.targetCommit || !merged.tree || !(await isAncestor(thread.repositoryPath, merged.commit, `refs/heads/${merged.branch}`)))
+    return false;
+  const parents = (await git(thread.repositoryPath, ["rev-list", "--parents", "-n", "1", merged.commit])).trim().split(/\s+/);
+  const tree = (await git(thread.repositoryPath, ["rev-parse", `${merged.commit}^{tree}`])).trim();
+  return tree === merged.tree && (merged.commit === merged.targetCommit ||
+    (parents.length === 2 && parents[1] === merged.targetCommit));
 }
 export async function discardMergedWorktree(thread: CodexThread, storeRoot: string): Promise<void> {
   await assertMergedWorktree(thread, storeRoot);
@@ -289,7 +301,7 @@ export async function cleanupMergedWorktreeDirectory(thread: CodexThread, storeR
   if (!(await exists(thread.worktree))) return;
   await assertManagedWorktreePath(thread, storeRoot);
   const merged = thread.mergedInto;
-  if (!merged || !(await isAncestor(thread.repositoryPath, merged.sourceCommit, `refs/heads/${merged.branch}`)))
+  if (!merged || !(await mergedChangesIncluded(thread)))
     throw new Error("Worktree cleanup requires verified merged commits.");
   if (!(await lstat(thread.worktree)).isDirectory())
     throw new Error("The worktree folder was replaced. It was kept.");
@@ -339,7 +351,7 @@ export async function recoverMergedWorktree(thread: CodexThread, storeRoot: stri
   const merged = thread.mergedInto;
   if (!merged) throw new Error("The worktree has not been merged.");
   await assertWorktree({ ...thread, worktree: merged.targetPath, branch: merged.branch });
-  if (!(await isAncestor(merged.targetPath, merged.sourceCommit, "HEAD")))
+  if (!(await mergedChangesIncluded(thread)))
     throw new Error("The recorded changes are no longer in the default branch. The worktree was kept.");
   const canonical = (folder: string) => realpath(folder).catch(() => path.resolve(folder));
   const source = await canonical(thread.worktree);
@@ -358,66 +370,105 @@ export async function executeWorktreeMerge(
   storeRoot: string,
   plan: WorktreeMergePlan,
   recordMerge: (result: WorktreeMergeResult) => void,
+  choice: CodexMergeChoice = { method: "merge", message: "" },
 ): Promise<WorktreeMergeResult> {
   const fresh = await prepareWorktreeMerge(thread, storeRoot);
   if (!sameMergePlan(plan, fresh))
     throw new Error(
       "The repository changed while confirmation was open. Review the merge again.",
     );
-  if (plan.createTarget) {
-    await mkdir(path.dirname(plan.targetPath), {
-      recursive: true,
-      mode: 0o700,
-    });
-    await git(
-      thread.repositoryPath,
-      plan.localCommit
-        ? ["worktree", "add", "--", plan.targetPath, plan.defaultBranch]
-        : [
-            "worktree",
-            "add",
-            "-b",
-            plan.defaultBranch,
-            "--",
-            plan.targetPath,
-            plan.remoteCommit,
-          ],
-    );
-  }
+  const staging = path.join(storeRoot, "merge-previews", `${thread.id}-${randomUUID()}`);
+  await mkdir(path.dirname(staging), { recursive: true, mode: 0o700 });
+  await git(thread.repositoryPath, ["worktree", "add", "--detach", "--", staging, plan.targetCommit]);
+  let preparedCommit: string;
   try {
-    if (plan.localCommit !== plan.targetCommit)
-      await git(plan.targetPath, ["merge", "--ff-only", plan.targetCommit]);
-    if (
-      (await git(plan.targetPath, ["branch", "--show-current"])).trim() !==
-      plan.defaultBranch
-    )
-      throw new Error("The target branch changed.");
-    await git(plan.targetPath, ["merge", "--no-edit", plan.sourceCommit]);
-    if (!(await isAncestor(plan.targetPath, plan.sourceCommit, "HEAD")))
-      throw new Error("The source commits were not included.");
-    if (
-      (await git(plan.targetPath, ["branch", "--show-current"])).trim() !==
-      plan.defaultBranch
-    )
-      throw new Error("The target branch changed during merging.");
-    await cleanCheckout(plan.targetPath);
-  } catch (error) {
-    throw new Error(
-      `Merge could not finish in ${plan.targetPath}. The source worktree was kept. ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  const commit = (
-    await git(plan.targetPath, ["rev-parse", "HEAD^{commit}"])
-  ).trim();
-  const result: WorktreeMergeResult = {
-    branch: plan.defaultBranch,
-    commit,
-    worktreeRemoved: false,
-  };
-  // Persist the successful merge before deleting anything, so cleanup can be retried.
-  recordMerge(result);
-  await discardMergedWorktree(thread, storeRoot);
-  result.worktreeRemoved = true;
+    if (choice.method === "squash") {
+      if (!choice.message.trim()) throw new Error("Enter a commit message for the squash merge.");
+      await git(staging, ["merge", "--squash", "--no-commit", plan.sourceCommit]);
+      const stagedTree = (await git(staging, ["write-tree"])).trim();
+      if (stagedTree !== plan.tree) throw new Error("The staged changes differ from the reviewed merge.");
+      const baseTree = (await git(staging, ["rev-parse", "HEAD^{tree}"])).trim();
+      if (stagedTree !== baseTree) await git(staging, ["commit", "-m", choice.message.trim()]);
+    } else {
+      await git(staging, ["merge", "--no-edit", plan.sourceCommit]);
+    }
+    await cleanCheckout(staging);
+    preparedCommit = (await git(staging, ["rev-parse", "HEAD"])).trim();
+    if (choice.method === "squash" && preparedCommit !== plan.targetCommit) {
+      const parents = (await git(staging, ["rev-list", "--parents", "-n", "1", preparedCommit])).trim().split(/\s+/);
+      if (parents.length !== 2 || parents[1] !== plan.targetCommit)
+        throw new Error("The squash result is not one commit on the reviewed target.");
+    }
+    if ((await git(staging, ["rev-parse", "HEAD^{tree}"])).trim() !== plan.tree)
+      throw new Error("A Git hook changed the reviewed merge. Nothing was integrated.");
+    // Hooks and background operations may have changed the repository while
+    // preparing the commit. Recheck before touching the default checkout.
+    const finalPlan = await prepareWorktreeMerge(thread, storeRoot);
+    if (!sameMergePlan(plan, finalPlan))
+      throw new Error("The repository changed. Review the merge again.");
+    if (plan.createTarget) {
+      await mkdir(path.dirname(plan.targetPath), {
+        recursive: true,
+        mode: 0o700,
+      });
+      await git(
+        thread.repositoryPath,
+        plan.localCommit
+          ? ["worktree", "add", "--", plan.targetPath, plan.defaultBranch]
+          : [
+              "worktree",
+              "add",
+              "-b",
+              plan.defaultBranch,
+              "--",
+              plan.targetPath,
+              plan.remoteCommit,
+            ],
+      );
+    }
+    try {
+      if (
+        (await git(plan.targetPath, ["branch", "--show-current"])).trim() !==
+        plan.defaultBranch
+      )
+        throw new Error("The target branch changed.");
+      if ((await git(plan.targetPath, ["rev-parse", "HEAD"])).trim() !== (plan.localCommit ?? plan.remoteCommit))
+        throw new Error("The target commit changed. Review the merge again.");
+      await cleanCheckout(plan.targetPath);
+      await git(plan.targetPath, ["merge", "--ff-only", preparedCommit]);
+      if (!(await isAncestor(plan.targetPath, preparedCommit, "HEAD")))
+        throw new Error("The source commits were not included.");
+      if (
+        (await git(plan.targetPath, ["branch", "--show-current"])).trim() !==
+        plan.defaultBranch
+      )
+        throw new Error("The target branch changed during merging.");
+      await cleanCheckout(plan.targetPath);
+    } catch (error) {
+      throw new Error(
+        `Merge could not finish in ${plan.targetPath}. The source worktree was kept. ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    const result: WorktreeMergeResult = {
+      branch: plan.defaultBranch,
+      commit: preparedCommit,
+      worktreeRemoved: false,
+    };
+    // Persist the successful merge before deleting anything, so cleanup can be retried.
+    recordMerge(result);
+    await discardMergedWorktree(thread, storeRoot);
+    result.worktreeRemoved = true;
 
-  return result;
+    return result;
+  } finally {
+    try {
+      await git(thread.repositoryPath, ["worktree", "remove", "--force", "--", staging]);
+    } catch {
+      // This disposable folder was created by this operation, never used by a chat.
+      await rm(staging, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      const registered = parseWorktreeBranches(await git(thread.repositoryPath, ["worktree", "list", "--porcelain", "-z"]));
+      if (registered.some((entry) => path.resolve(entry.path) === path.resolve(staging)))
+        await git(thread.repositoryPath, ["worktree", "remove", "--force", "--", staging]);
+    }
+  }
 }

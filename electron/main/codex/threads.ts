@@ -18,6 +18,8 @@ import {
   type CodexModel,
   type CodexMergeConflict,
   type CodexCheckoutResult,
+  type CodexCheckoutReview,
+  type CodexMergeChoice,
   type CodexPreferences,
   type CodexThread,
   type CodexThreadPage,
@@ -772,7 +774,7 @@ export class ThreadManager {
   async checkout(
     thread: CodexThread,
     action: "merge" | "worktree",
-    confirm: (title: string, detail: string) => Promise<boolean>,
+    confirm: (title: string, detail: string, review: CodexCheckoutReview, validationKey: string) => Promise<boolean | CodexMergeChoice>,
   ): Promise<CodexCheckoutResult | void> {
     this.assertCheckoutAvailable(thread);
     this.checkoutLocks.add(thread.repositoryPath);
@@ -793,13 +795,16 @@ export class ThreadManager {
           return;
         }
         const plan = await prepareWorktreeMerge(thread, this.store.root);
-        if (
-          !(await confirm(
+        const decision = await confirm(
             `Merge into ${plan.defaultBranch}?`,
             `Merge ${plan.commits} committed change(s) from ${plan.sourceBranch} into local ${plan.defaultBranch}. Nothing will be pushed.\n\n${plan.summary}\n\nRemove worktree: ${plan.worktree}\nContinue this same chat in: ${plan.targetPath}\n\nThe branch and chat history will be kept. Uncommitted changes block this action.`,
-          ))
-        )
-          return;
+            { action, sourceBranch: plan.sourceBranch, sourcePath: plan.worktree,
+              targetBranch: plan.defaultBranch, targetPath: plan.targetPath,
+              commits: plan.commits, summary: plan.summary },
+            JSON.stringify(plan),
+          );
+        if (!decision) return;
+        const choice = typeof decision === "boolean" ? { method: "merge" as const, message: "" } : decision;
         if (this.closing) throw new Error("Forge is quitting.");
         const result = await executeWorktreeMerge(
           thread,
@@ -811,9 +816,13 @@ export class ThreadManager {
               sourceCommit: plan.sourceCommit,
               targetPath: plan.targetPath,
               commit: merged.commit,
+              method: choice.method,
+              targetCommit: plan.targetCommit,
+              tree: plan.tree,
             };
             this.publish(thread, true);
           },
+          choice,
         );
         thread.checkout = "default";
         thread.worktree = plan.targetPath;
@@ -834,6 +843,11 @@ export class ThreadManager {
           !(await confirm(
             "Start a new worktree?",
             `Create a fresh worktree from local ${thread.branch} (${commit.slice(0, 10)}).\n\nContinue this same chat in the new worktree. Finder, the text editor, and Codex will use its folder.\n\nCurrent checkout: ${thread.worktree}`,
+            { action, sourceBranch: thread.branch, sourcePath: thread.worktree,
+              targetBranch: `codex/forge-${thread.id}-${(thread.worktreeGeneration ?? 0) + 1}`,
+              targetPath: path.join(this.store.root, "worktrees", `${thread.id}-${(thread.worktreeGeneration ?? 0) + 1}`),
+              commits: 0, summary: "" },
+            JSON.stringify({ commit, branch: thread.branch, worktree: thread.worktree, generation: thread.worktreeGeneration ?? 0 }),
           ))
         )
           return;

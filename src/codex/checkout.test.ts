@@ -365,7 +365,7 @@ it("continues on the default branch when removal unregisters the worktree but le
   const runGit = gitCommands.git;
   vi.spyOn(gitCommands, "git").mockImplementation(async (cwd, args) => {
     const output = await runGit(cwd, args);
-    if (args[0] === "worktree" && args[1] === "remove") {
+    if (args[0] === "worktree" && args[1] === "remove" && args.includes(source)) {
       mkdirSync(source, { recursive: true });
       writeFileSync(path.join(source, "initial"), "base");
       mkdirSync(path.join(source, "node_modules"));
@@ -452,7 +452,7 @@ it("automatically removes a verified merged folder and its leftover registration
   const runGit = gitCommands.git;
   let failed = false;
   vi.spyOn(gitCommands, "git").mockImplementation(async (cwd, args) => {
-    if (args[0] === "worktree" && args[1] === "remove" && !failed) {
+    if (args[0] === "worktree" && args[1] === "remove" && args.includes(source) && !failed) {
       failed = true;
       throw new Error("Directory not empty");
     }
@@ -464,4 +464,109 @@ it("automatically removes a verified merged folder and its leftover registration
   expect(existsSync(source)).toBe(false);
   expect((await git(repo, ["worktree", "list", "--porcelain"]))).not.toContain(source);
   expect(readFileSync(outside, "utf8")).toBe("do not touch the symlink target");
+});
+
+it("squashes the feature into exactly one commit while keeping its original branch", async () => {
+  const { repo, thread, manager, commit } = await setup();
+  const base = (await git(repo, ["rev-parse", "HEAD"])).trim();
+  await commit("first feature change");
+  await commit("second feature change");
+  const source = thread.worktree, branch = thread.branch;
+  const sourceHead = (await git(source, ["rev-parse", "HEAD"])).trim();
+  await manager.checkout(thread, "merge", async () => ({ method: "squash", message: "feat: complete feature" }));
+  expect((await git(repo, ["rev-list", "--count", `${base}..HEAD`])).trim()).toBe("1");
+  expect((await git(repo, ["rev-parse", "HEAD^"])).trim()).toBe(base);
+  expect((await git(repo, ["log", "-1", "--format=%s"])).trim()).toBe("feat: complete feature");
+  expect((await git(repo, ["rev-parse", branch])).trim()).toBe(sourceHead);
+  await expect(git(repo, ["merge-base", "--is-ancestor", sourceHead, "HEAD"])).rejects.toThrow();
+  expect(readFileSync(path.join(repo, "first feature change"), "utf8")).toBe("first feature change");
+  expect(readFileSync(path.join(repo, "second feature change"), "utf8")).toBe("second feature change");
+  expect(existsSync(source)).toBe(false);
+  expect(thread.checkout).toBe("default");
+});
+
+it("leaves the default checkout untouched when a squash commit hook fails", async () => {
+  const { root, repo, thread, manager, commit } = await setup();
+  await commit();
+  const main = (await git(repo, ["rev-parse", "HEAD"])).trim();
+  const source = thread.worktree;
+  const hooks = path.join(root, "hooks");
+  mkdirSync(hooks);
+  writeFileSync(path.join(hooks, "pre-commit"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  await git(repo, ["config", "core.hooksPath", hooks]);
+  await expect(manager.checkout(thread, "merge", async () => ({ method: "squash", message: "Feature" }))).rejects.toThrow();
+  expect((await git(repo, ["rev-parse", "HEAD"])).trim()).toBe(main);
+  expect((await git(repo, ["status", "--porcelain"])).trim()).toBe("");
+  expect((await git(source, ["status", "--porcelain"])).trim()).toBe("");
+  expect(existsSync(source)).toBe(true);
+  expect(thread.mergedInto).toBeUndefined();
+  expect(thread.draft).toBe("keep draft");
+});
+
+it("recovers verified squash integration after an interrupted cleanup without requiring source ancestry", async () => {
+  const { repo, thread, manager, commit } = await setup();
+  await commit();
+  const source = thread.worktree;
+  const runGit = gitCommands.git;
+  let preventCleanup = true;
+  vi.spyOn(gitCommands, "git").mockImplementation(async (cwd, args) => {
+    if (preventCleanup && args[0] === "hash-object") throw new Error("Temporary filesystem error");
+    const output = await runGit(cwd, args);
+    if (preventCleanup && args[0] === "worktree" && args[1] === "remove" && args.includes(source)) {
+      mkdirSync(source);
+      writeFileSync(path.join(source, "initial"), "base");
+      throw new Error("Directory not empty");
+    }
+    return output;
+  });
+  await expect(manager.checkout(thread, "merge", async () => ({ method: "squash", message: "Feature" }))).rejects.toThrow("Temporary filesystem error");
+  expect(thread.mergedInto?.method).toBe("squash");
+  const squashed = (await git(repo, ["rev-parse", "HEAD"])).trim();
+  preventCleanup = false;
+  await manager.checkout(thread, "merge", async () => { throw Error("Already confirmed"); });
+  expect(thread.worktree).toBe(repo);
+  expect(thread.mergedInto).toBeUndefined();
+  expect(existsSync(source)).toBe(false);
+  expect((await git(repo, ["rev-parse", "HEAD"])).trim()).toBe(squashed);
+});
+
+it("squashes onto a newer remote default commit with a single final fast-forward", async () => {
+  const { repo, thread, manager, commit } = await setup();
+  const base = (await git(repo, ["rev-parse", "HEAD"])).trim();
+  writeFileSync(path.join(repo, "remote-change"), "upstream");
+  await git(repo, ["add", "remote-change"]);
+  await git(repo, ["commit", "-m", "upstream change"]);
+  const upstream = (await git(repo, ["rev-parse", "HEAD"])).trim();
+  await git(repo, ["push", "origin", "trunk"]);
+  await git(repo, ["reset", "--hard", base]);
+  await commit("feature");
+  await manager.checkout(thread, "merge", async () => ({ method: "squash", message: "Feature" }));
+  expect((await git(repo, ["rev-parse", "HEAD^"])).trim()).toBe(upstream);
+  expect(readFileSync(path.join(repo, "remote-change"), "utf8")).toBe("upstream");
+  expect(readFileSync(path.join(repo, "feature"), "utf8")).toBe("feature");
+  expect((await git(repo, ["status", "--porcelain"])).trim()).toBe("");
+});
+
+it("preserves outside target changes if the default branch moves during preparation", async () => {
+  const { repo, thread, manager, commit } = await setup();
+  await commit();
+  const runGit = gitCommands.git;
+  let externalHead = "";
+  vi.spyOn(gitCommands, "git").mockImplementation(async (cwd, args) => {
+    const output = await runGit(cwd, args);
+    if (args[0] === "commit" && cwd.includes("merge-previews")) {
+      writeFileSync(path.join(repo, "outside-work"), "keep outside work");
+      await runGit(repo, ["add", "outside-work"]);
+      await runGit(repo, ["commit", "-m", "outside work"]);
+      externalHead = (await runGit(repo, ["rev-parse", "HEAD"])).trim();
+    }
+    return output;
+  });
+  await expect(manager.checkout(thread, "merge", async () => ({ method: "squash", message: "Feature" })))
+    .rejects.toThrow("repository changed");
+  expect(externalHead).not.toBe("");
+  expect((await git(repo, ["rev-parse", "HEAD"])).trim()).toBe(externalHead);
+  expect(readFileSync(path.join(repo, "outside-work"), "utf8")).toBe("keep outside work");
+  expect(existsSync(path.join(repo, "feature"))).toBe(false);
+  expect(existsSync(thread.worktree)).toBe(true);
 });

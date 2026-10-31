@@ -12,13 +12,14 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import type { CodexMergeConflict, CodexThreadSummary } from "../../shared/codex";
+import type { CodexCheckoutPreview, CodexMergeConflict, CodexThreadSummary } from "../../shared/codex";
 import {
   codexQuickActionUnavailable,
   type CodexQuickAction,
 } from "../../shared/codexActions";
 import { codexApi, errorMessage } from "./api";
 import { CodexDiffDialog } from "./diff-dialog";
+import { CheckoutDialog } from "./checkout-dialog";
 export function CodexQuickActions({
   thread,
   theme,
@@ -35,9 +36,11 @@ export function CodexQuickActions({
     [copied, setCopied] = useState(false),
     [diff, setDiff] = useState(false);
   const [mergeConflict, setMergeConflict] = useState<CodexMergeConflict | null>(null);
+  const [checkoutReview, setCheckoutReview] = useState<CodexCheckoutPreview | null>(null);
   useEffect(() => {
     setError("");
     setMergeConflict(null);
+    setCheckoutReview(null);
   }, [thread?.id, thread?.repositoryId]);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
@@ -59,6 +62,12 @@ export function CodexQuickActions({
     }
   };
   const unavailable = codexQuickActionUnavailable(thread);
+  const reviewCheckout = async (action: "merge" | "worktree") => {
+    if (!thread) return;
+    const result = await codexApi().request("checkoutPreview", { repositoryId: thread.repositoryId, id: thread.id, action });
+    setCheckoutReview(result?.preview ?? null);
+    if (result?.conflict) setMergeConflict(result.conflict);
+  };
   const actions: {
     action: CodexQuickAction;
     label: string;
@@ -190,12 +199,7 @@ export function CodexQuickActions({
             disabled={busy || Boolean(unavailable)}
             onClick={() =>
               void execute(async () => {
-                const result = await codexApi().request("checkout", {
-                  repositoryId: thread.repositoryId,
-                  id: thread.id,
-                  action: thread.checkout === "default" ? "worktree" : "merge",
-                });
-                if (result?.conflict) setMergeConflict(result.conflict);
+                await reviewCheckout(thread.checkout === "default" ? "worktree" : "merge");
               })
             }
           >
@@ -272,6 +276,22 @@ export function CodexQuickActions({
           />,
           document.querySelector(".app-shell") ?? document.body,
         )}
+      {checkoutReview && thread && createPortal(
+        <CheckoutDialog
+          preview={checkoutReview}
+          onClose={() => setCheckoutReview(null)}
+          onReview={() => reviewCheckout(checkoutReview.action)}
+          onConfirm={async (choice) => {
+            const result = await codexApi().request("checkout", {
+              repositoryId: thread.repositoryId, id: thread.id, action: checkoutReview.action,
+              token: checkoutReview.token, ...choice,
+            });
+            setCheckoutReview(null);
+            if (result?.conflict) setMergeConflict(result.conflict);
+          }}
+        />,
+        document.querySelector(".app-shell") ?? document.body,
+      )}
     </>
   );
 }

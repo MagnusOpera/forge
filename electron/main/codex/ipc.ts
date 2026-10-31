@@ -28,6 +28,7 @@ import {
   type CodexAttachment,
   type CodexChange,
   type CodexPreferences,
+  type CodexCheckoutPreview,
 } from "../../../shared/codex.js";
 
 import { CodexThreadWindows } from "./windows.js";
@@ -61,6 +62,7 @@ export function registerCodexIpc(
     process.env.CODEX_HOME || path.join(os.homedir(), ".codex"),
   );
   const logins = new Map<string, string>();
+  const checkoutReviews = new Map<string, { preview: CodexCheckoutPreview; validationKey: string; sender: unknown; expires: number }>();
   let loginStarting = false;
   const changed = (change: CodexChange) => {
     if (change.windowChanged && change.threadId)
@@ -558,6 +560,7 @@ export function registerCodexIpc(
         [
           "git",
           "checkout",
+          "checkoutPreview",
           "resolveMergeConflicts",
           "quickAction",
           "openFolder",
@@ -693,31 +696,37 @@ export function registerCodexIpc(
           throw new Error("Unsupported Codex Git action.");
         return manager.quickAction(thread, input.action);
       }
-      if (method === "checkout") {
+      if (method === "checkoutPreview" || method === "checkout") {
         if (input.action !== "merge" && input.action !== "worktree")
           throw new Error("Invalid checkout action.");
-        return manager.checkout(thread, input.action, async (title, detail) => {
-          const result = await dialog.showMessageBox(target, {
-            type: "question",
-            title,
-            message: title,
-            detail:
-              detail +
-              (terminals.has(thread.id)
-                ? "\n\nThis will end this chat's terminal session and its running commands."
-                : ""),
-            buttons: [
-              "Cancel",
-              input.action === "merge"
-                ? "Merge and continue"
-                : "Start worktree",
-            ],
-            defaultId: 0,
-            cancelId: 0,
-            noLink: true,
+        const key = `${thread.repositoryId}:${thread.id}`;
+        if (method === "checkoutPreview") {
+          for (const [pendingKey, pending] of checkoutReviews)
+            if (pending.expires < Date.now()) checkoutReviews.delete(pendingKey);
+          checkoutReviews.delete(key);
+          let preview: CodexCheckoutPreview | undefined;
+          const result = await manager.checkout(thread, input.action, async (_title, _detail, review, validationKey) => {
+            preview = { ...review, token: randomUUID(), message: thread.title.split("\n")[0].slice(0, 200) || "Integrate worktree changes" };
+            checkoutReviews.set(key, { preview, validationKey, sender: event.sender, expires: Date.now() + 5 * 60_000 });
+            return false;
           });
-          if (result.response === 1) await terminals.closeForCheckout(thread);
-          return result.response === 1;
+          return { ...result, ...(preview ? { preview } : {}) };
+        }
+        const token = string(input.token, "checkout review token");
+        const saved = checkoutReviews.get(key);
+        if (!saved || saved.preview.token !== token || saved.sender !== event.sender || saved.expires < Date.now() || saved.preview.action !== input.action)
+          throw new Error("Review this checkout change again before continuing.");
+        const mergeMethod = input.method ?? "squash";
+        if (mergeMethod !== "squash" && mergeMethod !== "merge") throw new Error("Invalid merge method.");
+        const message = input.message === undefined ? saved.preview.message : string(input.message, "commit message", 2000).trim();
+        if (input.action === "merge" && mergeMethod === "squash" && !message)
+          throw new Error("Enter a commit message for the squash merge.");
+        checkoutReviews.delete(key);
+        return manager.checkout(thread, input.action, async (_title, _detail, _review, validationKey) => {
+          if (validationKey !== saved.validationKey)
+            throw new Error("The repository changed while the review was open. Review the changes again.");
+          await terminals.closeForCheckout(thread);
+          return { method: mergeMethod, message };
         });
       }
       if (method === "resolveMergeConflicts") return manager.resolveMergeConflicts(thread);
