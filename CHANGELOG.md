@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0]
+
+
 - Prevent terminal memory corruption from carrying over when a terminal is destroyed and recreated.
 
 - Keep the terminal header compact by removing the repeated branch and checkout path.
@@ -13,6 +16,8 @@ All notable changes to Forge are documented in this file.
 - Avoid a terminal startup error when a new shell has not produced its first output yet.
 
 - Open a resizable Ghostty terminal below the Codex input, with persistent shell sessions per chat in its worktree or default-branch checkout.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.6.0...0.7.0
 
 ## [0.6.0]
 
