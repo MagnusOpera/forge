@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.9.1]
+
+
 - Simplify remote terminal headings by showing persistence only when tmux is selected.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.9.0...0.9.1
 
 ## [0.9.0]
 
