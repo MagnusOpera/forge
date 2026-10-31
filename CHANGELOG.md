@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Return the checkout path, Finder, editor, and diff actions to the third-pane header toolbar.
+
 ## [0.5.0]
 
 

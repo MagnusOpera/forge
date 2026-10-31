@@ -23,10 +23,12 @@ export function CodexQuickActions({
   thread,
   theme,
   defaultBranch,
+  group = "all",
 }: {
   thread?: CodexThreadSummary;
   theme: "light" | "dark";
   defaultBranch?: string | null;
+  group?: "all" | "checkout" | "git";
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -80,72 +82,76 @@ export function CodexQuickActions({
         role="group"
         aria-label="Worktree quick actions"
       >
-        {thread?.worktree && (
-          <button
-            type="button"
-            className={`icon-button codex-checkout-label underline-action ${copied ? "invoked" : ""}`}
-            aria-label="Copy checkout location"
-            title={`${thread.worktree}\nClick to copy path`}
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(thread.worktree)
-                .then(() => {
-                  setCopied(true);
-                  if (timer.current) clearTimeout(timer.current);
-                  timer.current = setTimeout(() => setCopied(false), 900);
-                })
-                .catch((e) => setError(errorMessage(e)));
-            }}
-          >
-            {thread.checkout === "default" ? thread.branch : "Worktree"}
-          </button>
+        {group !== "git" && (
+          <>
+            {thread?.worktree && (
+              <button
+                type="button"
+                className={`icon-button codex-checkout-label underline-action ${copied ? "invoked" : ""}`}
+                aria-label="Copy checkout location"
+                title={`${thread.worktree}\nClick to copy path`}
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(thread.worktree)
+                    .then(() => {
+                      setCopied(true);
+                      if (timer.current) clearTimeout(timer.current);
+                      timer.current = setTimeout(() => setCopied(false), 900);
+                    })
+                    .catch((e) => setError(errorMessage(e)));
+                }}
+              >
+                {thread.checkout === "default" ? thread.branch : "Worktree"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Open checkout in Finder"
+              title="Open checkout in Finder"
+              disabled={!thread?.worktree || busy}
+              onClick={() => {
+                if (thread)
+                  void execute(async () => {
+                    await codexApi().request("openFolder", {
+                      repositoryId: thread.repositoryId,
+                      id: thread.id,
+                    });
+                  });
+              }}
+            >
+              <FolderOpen size={16} />
+            </button>
+            <button
+              className="icon-button"
+              aria-label="Open checkout in text editor"
+              title="Open checkout in text editor"
+              disabled={!thread?.worktree || busy}
+              onClick={() => {
+                if (thread)
+                  void execute(async () => {
+                    await codexApi().request("openEditor", {
+                      repositoryId: thread.repositoryId,
+                      id: thread.id,
+                    });
+                  });
+              }}
+            >
+              <Code2 size={16} />
+            </button>
+            <button
+              className="icon-button"
+              aria-label="Diff checkout changes"
+              title="Diff checkout changes"
+              disabled={!thread?.worktree}
+              onClick={() => setDiff(true)}
+            >
+              <FileDiff size={16} />
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Open checkout in Finder"
-          title="Open checkout in Finder"
-          disabled={!thread?.worktree || busy}
-          onClick={() => {
-            if (thread)
-              void execute(async () => {
-                await codexApi().request("openFolder", {
-                  repositoryId: thread.repositoryId,
-                  id: thread.id,
-                });
-              });
-          }}
-        >
-          <FolderOpen size={16} />
-        </button>
-        <button
-          className="icon-button"
-          aria-label="Open checkout in text editor"
-          title="Open checkout in text editor"
-          disabled={!thread?.worktree || busy}
-          onClick={() => {
-            if (thread)
-              void execute(async () => {
-                await codexApi().request("openEditor", {
-                  repositoryId: thread.repositoryId,
-                  id: thread.id,
-                });
-              });
-          }}
-        >
-          <Code2 size={16} />
-        </button>
-        <button
-          className="icon-button"
-          aria-label="Diff checkout changes"
-          title="Diff checkout changes"
-          disabled={!thread?.worktree}
-          onClick={() => setDiff(true)}
-        >
-          <FileDiff size={16} />
-        </button>
-        <span className="toolbar-divider" />
-        {thread && !thread.sourceHome && (
+        {group === "all" && <span className="toolbar-divider" />}
+        {group !== "checkout" && thread && !thread.sourceHome && (
           <button
             className="icon-button"
             aria-label={
@@ -177,33 +183,34 @@ export function CodexQuickActions({
             )}
           </button>
         )}
-        {actions
-          .filter(
-            (action) =>
-              thread?.checkout !== "default" ||
-              !["sync", "create-pr"].includes(action.action),
-          )
-          .map((action) => (
-            <button
-              key={action.action}
-              className="icon-button"
-              aria-label={action.label}
-              title={unavailable || action.label}
-              disabled={busy || Boolean(unavailable)}
-              onClick={() => {
-                if (thread)
-                  void execute(async () => {
-                    await codexApi().request("quickAction", {
-                      repositoryId: thread.repositoryId,
-                      id: thread.id,
-                      action: action.action,
+        {group !== "checkout" &&
+          actions
+            .filter(
+              (action) =>
+                thread?.checkout !== "default" ||
+                !["sync", "create-pr"].includes(action.action),
+            )
+            .map((action) => (
+              <button
+                key={action.action}
+                className="icon-button"
+                aria-label={action.label}
+                title={unavailable || action.label}
+                disabled={busy || Boolean(unavailable)}
+                onClick={() => {
+                  if (thread)
+                    void execute(async () => {
+                      await codexApi().request("quickAction", {
+                        repositoryId: thread.repositoryId,
+                        id: thread.id,
+                        action: action.action,
+                      });
                     });
-                  });
-              }}
-            >
-              {action.icon}
-            </button>
-          ))}
+                }}
+              >
+                {action.icon}
+              </button>
+            ))}
         {error && (
           <div className="codex-action-error" role="alert">
             <span>{error}</span>

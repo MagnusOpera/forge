@@ -3381,6 +3381,17 @@ export function App() {
       <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
       <ContentPane
         onGlobalConfiguration={() => setSettingsScope("global")}
+        codexActions={projectFocusView === "codex" ? (
+          <>
+            <CodexQuickActions
+              key={`${selectedRepo?.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
+              thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
+              theme={activeTheme}
+              group="checkout"
+            />
+            <span className="toolbar-divider" />
+          </>
+        ) : undefined}
         codexContent={projectFocusView === "codex" && selectedRepo ? (
           <CodexConversation
             key={`${selectedRepo.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
@@ -3390,6 +3401,7 @@ export function App() {
             onConfigure={() => setSettingsScope("project")}
             quickActions={
               <CodexQuickActions
+                group="git"
                 thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
                 theme={activeTheme}
                 defaultBranch={selectedRepo.defaultBranch}
@@ -4416,6 +4428,7 @@ function WorkflowRunSplitButton(props: {
 function ContentPane(props: {
   onGlobalConfiguration(): void;
   codexContent?: React.ReactNode;
+  codexActions?: React.ReactNode;
   auth: AuthStatus | null;
   repo: RepoSummary | null;
   selection: ContentSelection;
@@ -4654,6 +4667,7 @@ function ContentPane(props: {
           </div>
         </div>
         <div className="header-actions">
+          {props.codexActions}
           <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={props.onGlobalConfiguration}>
             <Settings size={17} />
           </button>

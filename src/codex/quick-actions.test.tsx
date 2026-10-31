@@ -52,3 +52,23 @@ it("shows the current checkout and offers the appropriate round-trip action", ()
   expect(worktree).toContain('aria-label="Merge into trunk"');
   expect(worktree).toContain(">Worktree</button>");
 });
+
+it("separates checkout header actions from composer Git actions", () => {
+  const header = renderToStaticMarkup(
+    <CodexQuickActions thread={thread} theme="light" group="checkout" />,
+  );
+  for (const label of [
+    "Copy checkout location",
+    "Open checkout in Finder",
+    "Open checkout in text editor",
+    "Diff checkout changes",
+  ])
+    expect(header).toContain(`aria-label="${label}"`);
+  expect(header).not.toContain('aria-label="Commit"');
+  const composer = renderToStaticMarkup(
+    <CodexQuickActions thread={thread} theme="light" group="git" />,
+  );
+  expect(composer).toContain('aria-label="Commit"');
+  expect(composer).not.toContain('aria-label="Copy checkout location"');
+  expect(composer).not.toContain('aria-label="Diff checkout changes"');
+});
