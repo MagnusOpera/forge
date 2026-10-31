@@ -21,8 +21,8 @@ export function groupTranscript(
   };
   items.forEach((item, index) => {
     if (pending.length && item.turnId !== pending[0].turnId) flush();
-    // Older Codex histories do not have phases. Keep their last assistant message
-    // visible and group earlier progress updates without crossing a user message.
+    // Older histories have no phases. Find their final reply so an empty timed
+    // separator is added before the answer, rather than before a progress update.
     let laterAnswer = false;
     if (item.kind === "agentMessage" && !item.phase) {
       for (let next = index + 1; next < items.length; next++) {
@@ -41,19 +41,16 @@ export function groupTranscript(
         }
       }
     }
-    if (
-      item.kind === "userMessage" ||
-      (item.kind === "agentMessage" &&
-        item.phase !== "commentary" &&
-        !laterAnswer)
-    ) {
+    if (item.kind === "userMessage" || item.kind === "agentMessage") {
       flush();
+      const previous = result.at(-1);
       if (
-        item.kind === "agentMessage" && item.turnId && turns[item.turnId] &&
-        !result.some((entry) => entry.type === "activity" && entry.turnId === item.turnId)
+        item.kind === "agentMessage" && item.phase !== "commentary" && !laterAnswer &&
+        item.turnId && turns[item.turnId] &&
+        !(previous?.type === "activity" && previous.turnId === item.turnId)
       )
         result.push({
-          type: "activity", id: `activity:${item.turnId}`, turnId: item.turnId, items: [],
+          type: "activity", id: `activity:${item.id}`, turnId: item.turnId, items: [],
         });
       result.push({ type: "message", item });
     } else pending.push(item);

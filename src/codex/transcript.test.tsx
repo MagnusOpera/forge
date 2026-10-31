@@ -54,7 +54,7 @@ describe("Codex transcript grouping", () => {
       expect(files[0].prevName).toBeUndefined();
     }
   });
-  it("keeps user messages and final answers visible, grouping intermediate work", () => {
+  it("keeps progress updates visible in the chat while grouping tools and thinking summaries", () => {
     const items = [
       item("prompt", "userMessage"),
       item("progress", "agentMessage", "commentary"),
@@ -66,12 +66,14 @@ describe("Codex transcript grouping", () => {
     const entries = groupTranscript(items);
     expect(entries.map((entry) => entry.type)).toEqual([
       "message",
+      "message",
       "activity",
       "message",
     ]);
-    expect(entries[1]).toMatchObject({
+    expect(entries[1]).toMatchObject({ type: "message", item: items[1] });
+    expect(entries[2]).toMatchObject({
       type: "activity",
-      items: items.slice(1, -1),
+      items: items.slice(2, -1),
       turnId: "turn",
     });
   });
@@ -91,7 +93,7 @@ describe("Codex transcript grouping", () => {
       "activity",
     ]);
   });
-  it("keeps legacy final answers visible without hiding answers across prompts", () => {
+  it("keeps legacy progress updates and answers visible across prompts", () => {
     const items = [
       item("update", "agentMessage"),
       item("answer", "agentMessage"),
@@ -100,7 +102,7 @@ describe("Codex transcript grouping", () => {
     ].map(({ turnId, ...entry }) => entry);
     const entries = groupTranscript(items);
     expect(entries).toHaveLength(4);
-    expect(entries[0]).toMatchObject({ type: "activity", items: [items[0]] });
+    expect(entries[0]).toMatchObject({ type: "message", item: items[0] });
     expect(entries[1]).toMatchObject({ type: "message", item: items[1] });
     expect(entries[3]).toMatchObject({ type: "message", item: items[3] });
   });

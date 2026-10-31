@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Show only one live Codex activity timer when follow-up messages split the same turn into multiple groups.
+- Show Codex progress updates directly in the chat while keeping commands and tool output in expandable activity sections.
+
 ## [0.10.1]
 
 
