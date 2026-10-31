@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Simplify remote terminal headings by showing persistence only when tmux is selected.
+
 ## [0.9.0]
 
 

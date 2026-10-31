@@ -416,7 +416,7 @@ export function TerminalPanel({
           }
         >
           {thread.environment
-            ? `Terminal · ${thread.environment.host}${thread.environment.tmux ? " · tmux" : " · no persistence after disconnect"}`
+            ? `Terminal · ${thread.environment.host}${thread.environment.tmux ? " · tmux" : ""}`
             : "Terminal"}
         </span>
         {exited && (
