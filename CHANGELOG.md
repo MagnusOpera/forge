@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Keep editable environment selection below the description and fixed targets beside composer status.
+- Hide remote reconnection controls unless a thread is interrupted or failed.
+
 ## [0.8.0]
 
 

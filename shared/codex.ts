@@ -373,6 +373,16 @@ export function codexIsActive(
 ): boolean {
   return ["starting", "running", "waiting"].includes(thread.state);
 }
+export function codexEnvironmentIsFixed(thread: CodexThread): boolean {
+  return Boolean(
+    thread.archived ||
+    thread.worktree ||
+    thread.serverId ||
+    thread.items.length ||
+    thread.sourceHome ||
+    codexIsActive(thread),
+  );
+}
 export function validatePreferences(
   value: unknown,
   partial = false,

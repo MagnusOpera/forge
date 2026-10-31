@@ -6,6 +6,7 @@ import { TranscriptView } from "./transcript-view";
 import { ComposerEditor } from "./composer-editor";
 import {
   codexIsActive,
+  codexEnvironmentIsFixed,
   type CodexSendShortcut,
   type CodexAttachment,
   type CodexPendingRequest,
@@ -416,9 +417,10 @@ export function CodexConversation({
         )}
       </div>
     );
+  const environmentFixed = codexEnvironmentIsFixed(thread);
   return (
     <div className="codex-conversation">
-      {thread.items.length > 0 && (
+      {thread.archived && thread.items.length > 0 && (
         <EnvironmentPicker
           thread={thread}
           onConfigure={onConfigure}
@@ -502,13 +504,15 @@ export function CodexConversation({
                   ? "Send a message to work with Codex in this chat’s checkout."
                   : "A separate worktree will be created from committed HEAD when you send the first message. Uncommitted changes in the configured checkout are excluded."}
             </p>
-            <EnvironmentPicker
-              thread={thread}
-              onConfigure={onConfigure}
-              onChange={async () =>
-                setPage(await codexApi().request("thread", args))
-              }
-            />
+            {(thread.archived || !environmentFixed) && (
+              <EnvironmentPicker
+                thread={thread}
+                onConfigure={onConfigure}
+                onChange={async () =>
+                  setPage(await codexApi().request("thread", args))
+                }
+              />
+            )}
           </div>
         )}
         <TranscriptView
@@ -717,6 +721,16 @@ export function CodexConversation({
               />
             </div>
             <div className="codex-composer-status" aria-label="Thread status">
+              {environmentFixed && (
+                <EnvironmentPicker
+                  compact
+                  thread={thread}
+                  onConfigure={onConfigure}
+                  onChange={async () =>
+                    setPage(await codexApi().request("thread", args))
+                  }
+                />
+              )}
               <span className={`codex-state ${thread.state}`}>
                 {thread.state === "waiting" ? "Needs input" : thread.state}
               </span>

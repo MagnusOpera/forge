@@ -297,3 +297,28 @@ it.each([undefined, environment])(
     ).toBe(false);
   },
 );
+
+it.each(["idle", "running", "waiting"] as const)(
+  "does not offer reconnect for an established %s remote thread",
+  async (state) => {
+    await act(async () =>
+      root.render(
+        <EnvironmentPicker
+          compact
+          thread={{
+            ...item(),
+            environment,
+            serverId: "server",
+            worktree: "/srv/worktree",
+            state,
+          }}
+          onChange={async () => {}}
+          onConfigure={() => {}}
+        />,
+      ),
+    );
+    expect(container.textContent).not.toContain("Reconnect");
+    expect(container.textContent).not.toContain("Environment");
+    expect(container.textContent).toContain("Linux");
+  },
+);

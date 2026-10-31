@@ -3622,7 +3622,7 @@ code {
 .codex-thread-actions .icon-button { width: 24px; height: 26px; }
 .codex-thread-row form { display: flex; gap: 4px; padding: 6px; width: 100%; }
 .codex-conversation { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
-.codex-composer-status { justify-self: end; font-size: 11px; white-space: nowrap; }
+.codex-composer-status { display: flex; align-items: center; justify-self: end; gap: 8px; min-width: 0; font-size: 11px; white-space: nowrap; }
 .codex-transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; }
 .codex-item { padding: 12px 0; border-bottom: 1px solid var(--border-soft); overflow-wrap: anywhere; }
 .codex-item-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 11px; color: var(--text-muted); }
@@ -3845,3 +3845,7 @@ code {
 .codex-environment-fields details { font-size: 12px; line-height: 1.6; }
 .codex-environment-header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; flex-shrink: 0; }
 .codex-environment-header .combobox { flex: 1; min-width: 0; }
+.codex-environment-header.compact { flex-wrap: nowrap; padding: 0; border: 0; font-size: 11px; min-width: 0; gap: 6px; }
+.codex-environment-header.compact .combobox { flex: 0 1 auto; max-width: 160px; }
+.codex-environment-header.compact strong { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; color: var(--text-muted); }
+.codex-environment-header.compact > .ghost-button { padding: 4px 7px; font-size: 11px; }

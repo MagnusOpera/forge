@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Settings } from "lucide-react";
 import { Combobox } from "../components/combobox";
 import {
-  codexIsActive,
+  codexEnvironmentIsFixed,
   type CodexConfiguration,
   type CodexEnvironmentCheck,
   type CodexThread,
@@ -13,10 +13,12 @@ export function EnvironmentPicker({
   thread,
   onChange,
   onConfigure,
+  compact = false,
 }: {
   thread: CodexThread;
   onChange: () => Promise<void>;
   onConfigure: () => void;
+  compact?: boolean;
 }) {
   const [configuration, setConfiguration] = useState<CodexConfiguration | null>(
     null,
@@ -47,14 +49,7 @@ export function EnvironmentPicker({
       unsubscribe();
     };
   }, []);
-  const fixed = Boolean(
-    thread.archived ||
-    thread.worktree ||
-    thread.serverId ||
-    thread.items.length ||
-    thread.sourceHome ||
-    codexIsActive(thread),
-  );
+  const fixed = codexEnvironmentIsFixed(thread);
   const binding = configuration?.projects[thread.repositoryId];
   const options = [
     {
@@ -121,17 +116,19 @@ export function EnvironmentPicker({
       label: thread.environment?.name ?? "Local",
     });
   return (
-    <div className="codex-environment-header">
-      <span>Environment</span>
+    <div
+      className={`codex-environment-header${compact ? " compact" : ""}`}
+      aria-label="Execution environment"
+    >
+      {!compact && <span>Environment</span>}
       {fixed ? (
         <strong>
-          {thread.environment
-            ? thread.environment.name
-            : "Local"}
+          {thread.environment ? thread.environment.name : "Local"}
         </strong>
       ) : (
         <Combobox
           label="Thread environment"
+          variant={compact ? "toolbar" : "field"}
           value={selected}
           options={options}
           disabled={busy || !configuration}
@@ -165,26 +162,29 @@ export function EnvironmentPicker({
           <Settings size={16} aria-hidden="true" />
         </button>
       )}
-      {thread.environment && thread.serverId && !codexIsActive(thread) && (
-        <button
-          className="ghost-button"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            setError("");
-            void codexApi()
-              .request("reconnect", {
-                repositoryId: thread.repositoryId,
-                id: thread.id,
-              })
-              .then(onChange)
-              .catch((error) => setError(errorMessage(error)))
-              .finally(() => setBusy(false));
-          }}
-        >
-          Reconnect
-        </button>
-      )}
+      {thread.environment &&
+        thread.serverId &&
+        !thread.archived &&
+        (thread.state === "interrupted" || thread.state === "failed") && (
+          <button
+            className="ghost-button"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              setError("");
+              void codexApi()
+                .request("reconnect", {
+                  repositoryId: thread.repositoryId,
+                  id: thread.id,
+                })
+                .then(onChange)
+                .catch((error) => setError(errorMessage(error)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            Reconnect
+          </button>
+        )}
       {error && (
         <span role="alert" className="inline-error">
           {error}

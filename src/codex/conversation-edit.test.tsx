@@ -328,7 +328,7 @@ it("keeps Plan mode read-only in the access picker", async () => {
   expect(trigger.textContent).toBe("Read-only");
 });
 
-it("places the new-thread environment selector below its description", async () => {
+it("keeps an editable new-thread environment selector below the description", async () => {
   const original = request.getMockImplementation()!;
   request.mockImplementation(async (method, input) => {
     const result = await original(method, input);
@@ -338,7 +338,27 @@ it("places the new-thread environment selector below its description", async () 
   await act(async () => root.render(<CodexConversation repositoryId="r" id="t" loading={false} onConfigure={() => {}} />));
   const note = container.querySelector('.codex-start-note')!;
   expect(note.querySelector('p')?.textContent).toContain("A separate worktree");
-  expect(note.querySelector('p + .codex-environment-header')).not.toBeNull();
+  expect(note.querySelector('p + .codex-environment-header [role="combobox"]')).not.toBeNull();
+  expect(container.querySelector('.codex-composer-status .codex-environment-header')).toBeNull();
   expect(note.querySelector("code")).toBeNull();
   expect(container.querySelector('.codex-conversation > .codex-environment-header')).toBeNull();
+});
+
+it("places established thread environment controls immediately before the composer status", async () => {
+  await act(async () => root.render(<CodexConversation repositoryId="r" id="t" loading={false} onConfigure={() => {}} />));
+  expect(container.querySelector('.codex-conversation > .codex-environment-header')).toBeNull();
+  expect(container.querySelector('.codex-composer-status .codex-environment-header + .codex-state')?.textContent).toBe('idle');
+});
+
+it("moves the settled environment beside status once a worktree exists, even before any messages", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (method, input) => {
+    const result = await original(method, input);
+    if (method === "thread") return { ...result, thread: { ...result.thread, items: [], serverId: "", worktree: "/repo/worktree" } };
+    return result;
+  });
+  await act(async () => root.render(<CodexConversation repositoryId="r" id="t" loading={false} onConfigure={() => {}} />));
+  expect(container.querySelector('.codex-start-note .codex-environment-header')).toBeNull();
+  expect(container.querySelector('.codex-composer-status .codex-environment-header + .codex-state')?.textContent).toBe("idle");
+  expect(container.querySelector('.codex-composer-status [role="combobox"]')).toBeNull();
 });
