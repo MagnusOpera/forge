@@ -4,10 +4,15 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.3]
+
+
 - Review worktree integration in an in-app dialog with squash merge selected by default and changes staged before updating the default branch.
 - Automatically finish merged worktree cleanup and continue on the default branch without cleanup popups or extra user actions.
 - Wait for the terminal shell and its child jobs to stop before merging or changing checkout.
 - Introduce Codex on the homepage and refresh the light and dark app previews.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.10.2...0.10.3
 
 ## [0.10.2]
 
