@@ -558,6 +558,7 @@ export function registerCodexIpc(
         [
           "git",
           "checkout",
+          "resolveMergeConflicts",
           "quickAction",
           "openFolder",
           "openEditor",
@@ -719,6 +720,7 @@ export function registerCodexIpc(
           return result.response === 1;
         });
       }
+      if (method === "resolveMergeConflicts") return manager.resolveMergeConflicts(thread);
       if (method === "stop") return manager.stop(thread);
       if (method === "answer") {
         if (

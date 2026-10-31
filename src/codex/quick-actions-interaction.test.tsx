@@ -73,3 +73,36 @@ it("copies from the checkout label with temporary feedback and opens Finder with
     vi.useRealTimers();
   }
 });
+
+it("offers Codex resolution for verified merge conflicts and submits only the owned thread identity", async () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const conflict = { defaultBranch: "main", targetCommit: "local-main", sourceCommit: "feature-head", sourceBranch: "codex/task", files: ["CHANGELOG.md"] };
+  const request = vi.fn().mockImplementation(async (method) => method === "checkout" ? { conflict } : undefined);
+  window.forgeCodex = { request } as unknown as CodexApi;
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const thread: CodexThreadSummary = { id: "t", repositoryId: "r", title: "Test", archived: false, createdAt: "", updatedAt: "", settings: defaultCodexPreferences, state: "idle", worktree: "/repo/current", branch: "codex/task", baseCommit: "base", checkout: "worktree" };
+  try {
+    await act(async () => root.render(<CodexQuickActions thread={thread} theme="light" defaultBranch="main" group="git" />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Merge into main"]')!.click());
+    const alert = container.querySelector('[role="alert"]')!;
+    expect(alert.textContent).toContain("CHANGELOG.md");
+    expect(alert.textContent).toContain("Changes conflict with main");
+    const resolve = [...alert.querySelectorAll("button")].find(button => button.textContent === "Resolve with Codex")!;
+    expect(resolve).not.toBeUndefined();
+    await act(async () => resolve.click());
+    expect(request).toHaveBeenLastCalledWith("resolveMergeConflicts", { repositoryId: "r", id: "t" });
+    expect(request.mock.calls.filter(([method]) => method === "checkout")).toHaveLength(1);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+
+    request.mockRejectedValueOnce(new Error("Commit or remove uncommitted changes first."));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Merge into main"]')!.click());
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("uncommitted changes");
+    expect(container.textContent).not.toContain("Resolve with Codex");
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+    delete window.forgeCodex;
+  }
+});

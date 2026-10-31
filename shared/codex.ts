@@ -178,6 +178,13 @@ export type CodexGitInfo = {
   diff: string;
   untracked: { path: string; text: string }[];
 };
+export type CodexMergeConflict = {
+  defaultBranch: string;
+  targetCommit: string;
+  sourceCommit: string;
+  sourceBranch: string;
+  files: string[];
+};
 export type CodexExistingThread = {
   id: string;
   title: string;
@@ -293,7 +300,8 @@ export type CodexCommands = {
     ThreadInput & { action: import("./codexActions.js").CodexQuickAction },
     void
   >;
-  checkout: Command<ThreadInput & { action: "merge" | "worktree" }, void>;
+  checkout: Command<ThreadInput & { action: "merge" | "worktree" }, { conflict: CodexMergeConflict } | void>;
+  resolveMergeConflicts: Command<ThreadInput, void>;
   terminalOpen: Command<
     ThreadInput & { cols: number; rows: number; attachmentId: string },
     import("./terminal.js").TerminalSnapshot

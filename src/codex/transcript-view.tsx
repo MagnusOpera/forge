@@ -15,7 +15,6 @@ import { errorMessage } from "./api";
 import { editedFiles, groupTranscript, workedDuration } from "./transcript";
 import { CodexDiffDialog } from "./diff-dialog";
 const labels: Record<string, string> = {
-  agentMessage: "Update",
   reasoning: "Thinking summary",
   plan: "Plan",
   commandExecution: "Command",
@@ -62,11 +61,13 @@ function WorkActivity({
   items,
   timing,
   active,
+  showTiming,
   markdown,
 }: {
   items: CodexItem[];
   timing?: CodexTurnTiming;
   active: boolean;
+  showTiming: boolean;
   markdown: (text: string) => React.ReactNode;
 }) {
   const [now, setNow] = useState(Date.now());
@@ -84,12 +85,12 @@ function WorkActivity({
     <details className="codex-work-activity">
       <summary>
         <span>
-          {active ? "Working" : "Worked"}
-          {elapsed !== undefined
+          {showTiming ? active ? "Working" : "Worked" : "Activity"}
+          {showTiming && (elapsed !== undefined
             ? ` for ${workedDuration(elapsed)}`
             : active
               ? "…"
-              : ""}
+              : "")}
         </span>
         <ChevronRight size={14} aria-hidden="true" />
       </summary>
@@ -100,7 +101,7 @@ function WorkActivity({
               {labels[item.kind] ?? item.kind}
               {item.status ? ` · ${item.status}` : ""}
             </div>
-            {["agentMessage", "plan", "reasoning"].includes(item.kind) ? (
+            {["plan", "reasoning"].includes(item.kind) ? (
               <div className="markdown-body markdown-block compact">
                 {markdown(item.text || "No thinking summary was provided.")}
               </div>
@@ -135,9 +136,12 @@ export function TranscriptView({
   theme?: "light" | "dark";
 }) {
   const entries = groupTranscript(thread.items, thread.turns);
-  if (codexIsActive(thread) && thread.turnId &&
-      !entries.some((entry) => entry.type === "activity" && entry.turnId === thread.turnId)) {
-    entries.push({ type: "activity", id: `activity:${thread.turnId}`, turnId: thread.turnId, items: [] });
+  const trailing = entries.at(-1);
+  const finalReply = trailing?.type === "message" &&
+    trailing.item.turnId === thread.turnId && trailing.item.phase === "final_answer";
+  if (codexIsActive(thread) && thread.turnId && !finalReply &&
+      !(trailing?.type === "activity" && trailing.turnId === thread.turnId)) {
+    entries.push({ type: "activity", id: `active:${thread.turnId}`, turnId: thread.turnId, items: [] });
   }
   const [diff, setDiff] = useState<{ changes: CodexFileChange[]; filePath?: string } | null>(null);
   useEffect(() => setDiff(null), [thread.repositoryId, thread.id]);
@@ -146,12 +150,21 @@ export function TranscriptView({
   ), [thread.items]);
   const lastAnswerByTurn = new Map<string, string>();
   for (const entry of entries)
-    if (entry.type === "message" && entry.item.kind === "agentMessage" && entry.item.turnId)
+    if (entry.type === "message" && entry.item.kind === "agentMessage" &&
+        entry.item.phase !== "commentary" && entry.item.turnId)
       lastAnswerByTurn.set(entry.item.turnId, entry.item.id);
   const latestUser = latestCodexUserMessage(thread.items);
   const lastActivity = entries
     .filter((entry) => entry.type === "activity")
     .at(-1);
+  // Chat messages split tool activity into chronological groups within one turn.
+  // Only the latest group owns that turn's duration and live interval.
+  const latestActivityByTurn = new Map<string | undefined, typeof lastActivity>();
+  for (const entry of entries)
+    if (entry.type === "activity") latestActivityByTurn.set(entry.turnId, entry);
+  const activeActivity = codexIsActive(thread)
+    ? latestActivityByTurn.get(thread.turnId)
+    : undefined;
   const markdown = (text: string) => (
     <CodexMarkdown
       text={text}
@@ -169,17 +182,13 @@ export function TranscriptView({
               key={entry.id}
               items={entry.items}
               timing={entry.turnId ? thread.turns?.[entry.turnId] : undefined}
-              active={
-                codexIsActive(thread) &&
-                (entry.turnId
-                  ? entry.turnId === thread.turnId
-                  : entry === lastActivity)
-              }
+              showTiming={entry === latestActivityByTurn.get(entry.turnId)}
+              active={entry === activeActivity}
               markdown={markdown}
             />
           );
         const item = entry.item;
-        const files = item.kind === "agentMessage" && item.turnId &&
+        const files = item.kind === "agentMessage" && item.phase !== "commentary" && item.turnId &&
           lastAnswerByTurn.get(item.turnId) === item.id
           ? filesByTurn.get(item.turnId) ?? [] : [];
         const timing = item.turnId ? thread.turns?.[item.turnId] : undefined;
