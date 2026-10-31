@@ -1,4 +1,6 @@
-import { TerminalPanel } from "./codex/terminal-panel";
+import { useThreadWindows } from "./codex/api";
+import { flushThreadDraft } from "./codex/thread-drafts";
+import { ThreadWorkspace } from "./codex/thread-workspace";
 import { Combobox } from "./components/combobox";
 import { useSlidingUnderline } from "./useSlidingUnderline";
 import {
@@ -17,6 +19,7 @@ import {
   Command,
   Construction,
   TerminalSquare,
+  AppWindow,
   createLucideIcon,
   ExternalLink,
   FileCode2,
@@ -132,7 +135,6 @@ import type {
 
 import { CodexQuickActions } from "./codex/quick-actions";
 import { CodexSettingsDialog } from "./codex/settings";
-import { CodexConversation } from "./codex/conversation";
 import { CodexThreadList } from "./codex/threads";
 import { useCodexThreads } from "./codex/api";
 
@@ -470,6 +472,15 @@ function useStoredState<T>(key: string, initialValue: T): [T, (next: T | ((value
       return initialValue;
     }
   });
+
+  useEffect(() => {
+    const changed = (event: StorageEvent) => {
+      if (event.key !== key || event.newValue === null) return;
+      try { setValue(JSON.parse(event.newValue) as T); } catch { /* Ignore invalid preferences. */ }
+    };
+    window.addEventListener("storage", changed);
+    return () => window.removeEventListener("storage", changed);
+  }, [key]);
 
   const setStoredValue = useCallback(
     (next: T | ((value: T) => T)) => {
@@ -1118,6 +1129,9 @@ function CommitActionButton(props: {
 }
 
 export function App() {
+  const threadWindows = useThreadWindows();
+  const [openingThreadWindow, setOpeningThreadWindow] = useState(false);
+  const [threadWindowError, setThreadWindowError] = useState("");
   const [openTerminals, setOpenTerminals] = useState<Record<string, boolean>>({});
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
@@ -3222,6 +3236,17 @@ export function App() {
   };
 
   const terminalThread = selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined;
+  const threadDetached = Boolean(terminalThread && threadWindows.some(target => target.repositoryId === selectedRepo?.id && target.id === terminalThread.id));
+  const openThreadWindow = async () => {
+    if (!terminalThread || !selectedRepo || !window.forgeCodex) return;
+    setOpeningThreadWindow(true);
+    setThreadWindowError("");
+    try {
+      await flushThreadDraft(selectedRepo.id, terminalThread.id);
+      await window.forgeCodex.request("openThreadWindow", { repositoryId: selectedRepo.id, id: terminalThread.id, fullName: selectedRepo.fullName, defaultBranch: selectedRepo.defaultBranch, terminalOpen });
+    } catch (error) { setThreadWindowError(error instanceof Error ? error.message : String(error)); }
+    finally { setOpeningThreadWindow(false); }
+  };
   const terminalKey = `${selectedRepo?.id}:${terminalThread?.id}`;
   const terminalOpen = Boolean(terminalThread && !terminalThread.archived && openTerminals[terminalKey]);
   const toggleTerminal = () => { if (terminalThread) setOpenTerminals((current) => ({ ...current, [terminalKey]: !current[terminalKey] })); };
@@ -3404,35 +3429,23 @@ export function App() {
           <>
             <CodexQuickActions
               key={`${selectedRepo?.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
-              thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
+              thread={!threadDetached && selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
               theme={activeTheme}
               group="checkout"
             />
-            <button className="icon-button codex-terminal-toggle" aria-label="Toggle terminal" title={terminalThread ? "Toggle terminal" : "Select a chat to open its terminal"} aria-pressed={terminalOpen} disabled={!terminalThread || terminalThread.archived} onClick={toggleTerminal}>
+            <button className="icon-button codex-terminal-toggle" aria-label="Toggle terminal" title={terminalThread ? "Toggle terminal" : "Select a chat to open its terminal"} aria-pressed={terminalOpen && !threadDetached} disabled={!terminalThread || terminalThread.archived || threadDetached} onClick={toggleTerminal}>
               <TerminalSquare size={16} />
             </button>
+            <button className="icon-button" aria-label="Open thread in new window" title={threadDetached ? "Focus thread window" : "Open thread in new window"} disabled={!terminalThread || openingThreadWindow} onClick={() => void openThreadWindow()}><AppWindow size={16} /></button>
             <span className="toolbar-divider" />
           </>
         ) : undefined}
         codexContent={projectFocusView === "codex" && selectedRepo ? (
-          <div className="codex-workspace">
-            <CodexConversation
-              key={`${selectedRepo.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
-              repositoryId={selectedRepo.id}
-              loading={projectLoading}
-              id={selection.kind === "codex" ? selection.threadId : undefined}
-              onConfigure={() => setSettingsScope("project")}
-              quickActions={
-                <CodexQuickActions
-                  group="git"
-                  thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
-                  theme={activeTheme}
-                  defaultBranch={selectedRepo.defaultBranch}
-                />
-              }
-            />
-            {terminalOpen && terminalThread && <TerminalPanel key={`${selectedRepo.id}:${terminalThread.id}`} thread={terminalThread} theme={activeTheme} onHide={() => setOpenTerminals((current) => ({ ...current, [terminalKey]: false }))} />}
-          </div>
+          <ThreadWorkspace repositoryId={selectedRepo.id} id={selection.kind === "codex" ? selection.threadId : undefined}
+            thread={terminalThread} theme={activeTheme} terminalOpen={terminalOpen} detached={threadDetached} loading={projectLoading}
+            interactionDisabled={openingThreadWindow} error={threadWindowError} onOpen={() => void openThreadWindow()}
+            onConfigure={() => setSettingsScope("project")} onHideTerminal={() => setOpenTerminals(current => ({ ...current, [terminalKey]: false }))}
+            quickActions={<CodexQuickActions group="git" thread={terminalThread} theme={activeTheme} defaultBranch={selectedRepo.defaultBranch} />} />
         ) : undefined}
         auth={auth}
         repo={selectedRepo}
@@ -4649,6 +4662,7 @@ function ContentPane(props: {
           </div>
           <div className="content-title">
             {props.codexContent ? <span>Codex</span> : <ContentTitle selection={props.selection} repo={props.repo} />}
+            {!props.codexContent && (
             <GithubUrlActionButton
               url={githubUrl}
               className="content-title-action"
@@ -4656,6 +4670,7 @@ function ContentPane(props: {
               onCopyText={props.onCopyText}
               onOpenUrl={props.onOpenGithubUrl}
             />
+            )}
             {showDraftAction && reviewPr && (
               showPullRequestWorkflowActions && visiblePrWorkflowState ? (
                 <PullRequestWorkflowToggle

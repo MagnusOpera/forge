@@ -183,7 +183,25 @@ export type CodexExistingThread = {
 };
 type Command<I, O> = { input: I; output: O };
 type ThreadInput = { repositoryId: string; id: string };
+export type CodexThreadWindow = ThreadInput & {
+  title: string;
+  fullName: string;
+  defaultBranch?: string | null;
+  terminalOpen: boolean;
+};
 export type CodexCommands = {
+  openThreadWindow: Command<
+    ThreadInput & {
+      fullName?: string;
+      defaultBranch?: string | null;
+      terminalOpen?: boolean;
+    },
+    void
+  >;
+  cancelThreadWindowClose: Command<Record<string, never>, void>;
+  closeThreadWindow: Command<Record<string, never>, void>;
+  threadWindowContext: Command<Record<string, never>, CodexThreadWindow | null>;
+  threadWindows: Command<Record<string, never>, CodexThreadWindow[]>;
   openLink: Command<{ url: string }, void>;
   configuration: Command<Record<string, never>, CodexConfiguration>;
   saveEnvironments: Command<
@@ -320,6 +338,8 @@ export type CodexCommands = {
   pickEditor: Command<Record<string, never>, string | null>;
 };
 export type CodexChange = {
+  windowChanged?: boolean;
+  windowCloseRequested?: boolean;
   connectionError?: string;
   environmentId?: string;
   accountId?: string;

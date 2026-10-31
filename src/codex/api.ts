@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { CodexApi, CodexThreadSummary } from "../../shared/codex";
+import type {
+  CodexApi,
+  CodexThreadSummary,
+  CodexThreadWindow,
+} from "../../shared/codex";
 export function codexApi(): CodexApi {
   if (!window.forgeCodex)
     throw new Error("Codex requires the Forge desktop app.");
@@ -48,4 +52,28 @@ export function useCodexThreads(repositoryId?: string): {
     };
   }, [repositoryId]);
   return { threads, error };
+}
+
+export function useThreadWindows(): CodexThreadWindow[] {
+  const [windows, setWindows] = useState<CodexThreadWindow[]>([]);
+  useEffect(() => {
+    if (!window.forgeCodex) return;
+    let active = true;
+    const refresh = () =>
+      void codexApi()
+        .request("threadWindows", {})
+        .then((result) => {
+          if (active && Array.isArray(result)) setWindows(result);
+        })
+        .catch(() => undefined);
+    refresh();
+    const unsubscribe = codexApi().onChanged((change) => {
+      if (change.windowChanged) refresh();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+  return windows;
 }

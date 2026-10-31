@@ -326,6 +326,17 @@ export class TerminalManager {
     session.acknowledged = Math.max(session.acknowledged, Number(sequence));
     this.flow(session);
   }
+  detachAll(except: string[] = []): void {
+    for (const id of this.sessions.keys())
+      if (!except.includes(id)) this.detachThread(id);
+  }
+  detachThread(id: string): void {
+    const session = this.sessions.get(id);
+    if (!session) return;
+    session.attached = false;
+    this.flush(session);
+    this.flow(session);
+  }
   detach(thread: CodexThread, sessionId: string, attachmentId?: string) {
     const session = this.sessions.get(thread.id);
     if (

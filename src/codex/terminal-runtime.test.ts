@@ -416,3 +416,20 @@ it("opens remote terminals through SSH, reattaches after disconnect, and never t
   manager.detach(thread, reattached.sessionId);
   expect(second.kill).not.toHaveBeenCalled();
 });
+
+it("detaches terminal output ownership during a window handoff without stopping its process", async () => {
+  const { thread, manager, pty } = await setup();
+  const first = await manager.open(thread, 80, 24, "main-window");
+  vi.useFakeTimers();
+  pty.output("x".repeat(140000));
+  expect(pty.pause).toHaveBeenCalledOnce();
+  manager.detachAll([thread.id]);
+  expect(pty.resume).not.toHaveBeenCalled();
+  manager.detachAll();
+  expect(pty.resume).toHaveBeenCalledOnce();
+  expect(pty.kill).not.toHaveBeenCalled();
+  const moved = await manager.open(thread, 100, 40, "thread-window");
+  expect(moved.sessionId).toBe(first.sessionId);
+  expect(moved.data).toContain("x".repeat(100));
+  expect(moved.attachmentId).toBe("thread-window");
+});

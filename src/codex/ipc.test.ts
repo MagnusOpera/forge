@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mkdtempSync,
@@ -758,4 +759,39 @@ it("persists a project default, applies it only to new threads, and resets it wh
   await request("saveEnvironments", { environments: [] });
   expect(await request("configuration")).toMatchObject({ projects: { R_123: { defaultEnvironment: "local" } } });
   expect((await request("thread", { repositoryId: "R_123", id: after.id }) as { thread: CodexThread }).thread.environment).toEqual(environment);
+});
+
+
+it("trusts registered thread windows, restricts their thread access, and grants one editing owner", async () => {
+  const childFrame = { url: "http://127.0.0.1:5173/#thread-window" };
+  const childContents = Object.assign(new EventEmitter(), { mainFrame: childFrame, send: vi.fn() });
+  const child = Object.assign(new EventEmitter(), { webContents: childContents, show: vi.fn(), focus: vi.fn(), restore: vi.fn(), isMinimized: () => false, destroy: vi.fn(), close: vi.fn() });
+  child.close.mockImplementation(() => { child.emit("closed"); });
+  const factory = vi.fn(() => child as unknown as BrowserWindow);
+  registerCodexIpc(() => ({ webContents: contents }) as unknown as BrowserWindow, factory);
+  const invoke = (method: string, input: unknown = {}) => Promise.resolve(mock.handlers.get("codex:request")!({ sender: childContents, senderFrame: childFrame }, method, input));
+  await expect(invoke("configuration")).rejects.toThrow("Untrusted");
+  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex", tmux: false };
+  await request("saveEnvironments", { environments: [environment] });
+  await request("saveProject", { repositoryId: "R_123", fullName: "owner/repo", overrides: {}, remotePaths: { linux: "~/repo" } });
+  const thread = await request("create", { repositoryId: "R_123" }) as { id: string };
+  const args = { repositoryId: "R_123", id: thread.id };
+  await request("openThreadWindow", args);
+  await request("openThreadWindow", args);
+  expect(factory).toHaveBeenCalledOnce();
+  expect(await invoke("threadWindowContext")).toMatchObject(args);
+  expect(await invoke("thread", args)).toMatchObject({ thread: args });
+  await expect(invoke("thread", { ...args, id: "other" })).rejects.toThrow("another thread");
+  await expect(invoke("saveProject", { repositoryId: "other", overrides: {} })).rejects.toThrow("another thread");
+  await expect(request("update", { ...args, draft: "stale main draft" })).rejects.toThrow("another window");
+  await invoke("update", { ...args, draft: "detached draft" });
+  expect(contents.send).toHaveBeenCalledWith("codex:changed", expect.objectContaining({ threadId: thread.id }));
+  expect(childContents.send).toHaveBeenCalledWith("codex:changed", expect.objectContaining({ threadId: thread.id }));
+  childFrame.url = "https://example.invalid";
+  await expect(invoke("thread", args)).rejects.toThrow("Untrusted");
+  childFrame.url = "http://127.0.0.1:5173/#thread-window";
+  await invoke("closeThreadWindow");
+  await expect(invoke("configuration")).rejects.toThrow("Untrusted");
+  await request("update", { ...args, draft: "main draft after closing" });
+  expect(await request("thread", args)).toMatchObject({ thread: { draft: "main draft after closing" } });
 });

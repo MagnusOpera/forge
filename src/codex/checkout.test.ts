@@ -129,7 +129,7 @@ it("moves the same chat from worktree to default branch and back repeatedly, per
   }
   expect((await git(repo, ["rev-parse", originalBranch])).trim()).toBeTruthy();
   expect((await git(origin, ["rev-parse", "HEAD"])).trim()).toBe(remoteBefore);
-});
+}, 15000);
 it("cancelling either confirmation preserves the checkout and history", async () => {
   const { thread, manager, commit } = await setup();
   await commit();

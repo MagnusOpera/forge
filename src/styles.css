@@ -3849,3 +3849,10 @@ code {
 .codex-environment-header.compact .combobox { flex: 0 1 auto; max-width: 160px; }
 .codex-environment-header.compact strong { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; color: var(--text-muted); }
 .codex-environment-header.compact > .ghost-button { padding: 4px 7px; font-size: 11px; }
+
+.thread-window-shell { display: flex; flex-direction: column; height: 100vh; min-width: 0; background: var(--content-bg); }
+.thread-window-header { flex-shrink: 0; padding-left: 92px; }
+.thread-window-header .content-header-left { min-width: 0; flex: 1; }
+.thread-window-header .content-header-left strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.thread-window-shell .codex-settings-dialog { width: 92vw; height: 86vh; }
+.thread-window-shell .header-actions { gap: 3px; }

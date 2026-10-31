@@ -114,6 +114,14 @@ The terminal button in the Codex header opens a Ghostty terminal below the input
 
 GitHub token controls live in **Global configuration → GitHub**, and Forge's ChatGPT sign-in lives in **Global configuration → Codex**. In **Project configuration → Codex overrides**, enable **Use a separate Codex account for this project** to sign in with a project account, then save configuration. Forge stores that sign-in in a separate Codex home. The override applies to new local threads; existing threads retain their account selection. Turning the override off does not delete the project sign-in. Remote threads use the remote host's account, and imported conversations keep their original Codex account.
 
+### Separate thread windows
+
+Use **Open thread in new window** in the third-pane toolbar to open just that thread's content, controls and terminal in a separate native window. Clicking again focuses its existing window. The main pane shows a shortcut to that window while it owns the thread, so two composers cannot overwrite the same draft or compete for terminal input. Other threads remain usable in the main window.
+
+Opening a thread window saves the current draft first. Finish or cancel a message edit, or wait for an in-flight message operation, before moving the thread. Native window closure also saves the draft before returning editing control to the main pane. Closing a thread window leaves the Codex turn and terminal process running. Terminal history and sessions follow the thread between windows. Closing the main window leaves thread windows open; quitting Forge still ends the app's local processes as usual.
+
+Each thread window includes checkout actions and terminal controls. Repository links stay in the main repository navigation. Configuration and theme toolbar buttons stay in the main window; thread windows follow the shared theme and accent preferences. Windows are not reopened automatically after quitting Forge.
+
 ### Remote Codex environments
 
 Global configuration has a navigation sidebar for General, Environments, GitHub, and Codex. Project configuration groups local and remote paths under **Checkouts**, where **Default environment** chooses the target for new threads. Local remains the default until changed; existing threads keep their target. New threads check the selected environment's project checkout, including Local, before offering a project configuration button for missing or invalid paths. Environments and project placements are stored locally in Forge's configuration; no Insights account is required. Add an SSH host alias or `user@hostname`, a remote Codex executable, and choose None or tmux from the adjacent Terminal persistence selector. Configure keys, ports and other SSH options in `~/.ssh/config`. Forge requires non-interactive key/agent authentication and a known host key. Connect once from a terminal before using Forge; Forge never accepts unknown keys automatically.

@@ -68,6 +68,8 @@ import {
 } from "../../shared/auth.js";
 import { AUTO_MERGE_API_UNAVAILABLE_MESSAGE, isAutoMergeNotAllowedMessage } from "../../shared/errors.js";
 
+import { isThreadWindowCloseShortcut } from "./codex/windows.js";
+import { trustedCodexSenderUrl } from "./codex/validation.js";
 import { registerCodexIpc } from "./codex/ipc.js";
 
 type GraphqlClient = typeof graphql;
@@ -2382,7 +2384,72 @@ function createWindow(): void {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+    codexWindows.mainWindowClosed();
   });
+}
+
+function createThreadWindow(
+  target: import("../../shared/codex.js").CodexThreadWindow,
+): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 980,
+    height: 900,
+    minWidth: 540,
+    minHeight: 480,
+    title: `${target.title} · ${target.fullName} · Forge`,
+    icon: appIconPath("png"),
+    backgroundColor: normalWindowBackground,
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 14, y: 14 },
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      zoomFactor: appDefaultZoomFactor,
+    },
+  });
+  win.once("ready-to-show", () => {
+    win.show();
+    win.focus();
+  });
+  win.webContents.on("before-input-event", (event, input) => {
+    if (isThreadWindowCloseShortcut(input)) {
+      event.preventDefault();
+      win.close();
+    }
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsed = new URL(url);
+      if (["https:", "http:", "mailto:"].includes(parsed.protocol))
+        void shell.openExternal(parsed.toString());
+    } catch {
+      /* Ignore malformed external links. */
+    }
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (event, url) => {
+    if (
+      !trustedCodexSenderUrl(
+        url,
+        app.isPackaged,
+        app.getAppPath(),
+        devServerUrl,
+      )
+    )
+      event.preventDefault();
+  });
+  if (isDev) {
+    const url = new URL(devServerUrl);
+    url.hash = "thread-window";
+    void win.loadURL(url.toString());
+  } else
+    void win.loadFile(path.join(app.getAppPath(), "dist/renderer/index.html"), {
+      hash: "thread-window",
+    });
+  return win;
 }
 
 function normalizeSidebarAppearanceMode(mode: unknown): SidebarAppearanceMode {
@@ -2516,7 +2583,7 @@ function registerIpc(): void {
 }
 
 registerIpc();
-registerCodexIpc(() => mainWindow);
+const codexWindows = registerCodexIpc(() => mainWindow, createThreadWindow);
 
 app.whenReady().then(async () => {
   await migrateLegacyUserData();
@@ -2528,7 +2595,7 @@ app.whenReady().then(async () => {
   }, 30_000);
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (!mainWindow) {
       createWindow();
     }
   });

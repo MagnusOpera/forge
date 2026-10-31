@@ -30,6 +30,8 @@ import {
   type CodexPreferences,
 } from "../../../shared/codex.js";
 
+import { CodexThreadWindows } from "./windows.js";
+import type { CodexThreadWindow } from "../../../shared/codex.js";
 import { trustedCodexSenderUrl } from "./validation.js";
 
 function string(value: unknown, name: string, max = 200): string {
@@ -46,7 +48,10 @@ function repositoryId(value: unknown): string {
     throw new Error("Invalid repository ID.");
   return id;
 }
-export function registerCodexIpc(window: () => BrowserWindow | null): void {
+export function registerCodexIpc(
+  window: () => BrowserWindow | null,
+  createThreadWindow?: (target: CodexThreadWindow) => BrowserWindow,
+): { mainWindowClosed(): void } {
   let store: CodexStore | undefined,
     client: CodexClient | undefined,
     manager: ThreadManager | undefined,
@@ -58,10 +63,13 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
   const logins = new Map<string, string>();
   let loginStarting = false;
   const changed = (change: CodexChange) => {
+    if (change.windowChanged && change.threadId)
+      terminals?.detachThread(change.threadId);
     if (change.auth || (change.connectionError && !change.environmentId))
       logins.delete(change.accountId ?? "");
-    window()?.webContents.send("codex:changed", change);
+    windows.broadcast("codex:changed", change);
   };
+  const windows = new CodexThreadWindows(window, createThreadWindow, changed);
   const attachmentPath = (attachment: CodexAttachment): string => {
     if (!/^[a-f0-9-]{36}(?:\.[a-z0-9.]{1,15})?$/.test(attachment.id))
       throw new Error("Invalid attachment ID.");
@@ -104,7 +112,7 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
       );
       existing = new ExistingThreads(manager, sourceHome);
       terminals = new TerminalManager(
-        (event) => window()?.webContents.send("codex:terminal", event),
+        (event) => windows.broadcast("codex:terminal", event),
         undefined,
         (thread) => manager!.validateCheckout(thread),
       );
@@ -114,7 +122,7 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
   ipcMain.handle(
     "codex:request",
     async (event, method: unknown, raw: unknown) => {
-      const target = window();
+      const target = windows.windowFor(event.sender);
       if (
         !target ||
         event.sender !== target.webContents ||
@@ -129,6 +137,73 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
         throw new Error("Untrusted Codex caller.");
       const input = object(raw),
         { store, client, manager, terminals } = services();
+      const context = windows.context(event.sender);
+      if (
+        context &&
+        ((input.repositoryId !== undefined &&
+          input.repositoryId !== context.repositoryId) ||
+          (input.id !== undefined && input.id !== context.id))
+      )
+        throw new Error("This thread window cannot access another thread.");
+      if (method === "threadWindows") return windows.list();
+      if (method === "threadWindowContext") return context;
+      if (method === "cancelThreadWindowClose")
+        return windows.cancelClose(event.sender);
+      if (method === "closeThreadWindow") return windows.close(event.sender);
+      if (method === "openThreadWindow") {
+        const projectId = repositoryId(input.repositoryId);
+        const thread = store.get(projectId, string(input.id, "thread ID"));
+        const fullName =
+          store.configuration.projects[projectId]?.name ||
+          (input.fullName === undefined
+            ? projectId
+            : string(input.fullName, "repository name"));
+        if (
+          input.terminalOpen !== undefined &&
+          typeof input.terminalOpen !== "boolean"
+        )
+          throw new Error("Invalid terminal visibility.");
+        windows.open({
+          repositoryId: projectId,
+          id: thread.id,
+          title: thread.title,
+          fullName,
+          defaultBranch:
+            input.defaultBranch == null
+              ? undefined
+              : string(input.defaultBranch, "default branch"),
+          terminalOpen: input.terminalOpen === true,
+        });
+        return;
+      }
+      if (input.id !== undefined) {
+        const owner = windows.owner({
+          repositoryId: repositoryId(input.repositoryId),
+          id: string(input.id, "thread ID"),
+        });
+        const readOnly = [
+          "thread",
+          "models",
+          "git",
+          "outputFile",
+          "terminalDetach",
+          "terminalAck",
+        ].includes(String(method));
+        const metadataOnly =
+          method === "update" &&
+          input.draft === undefined &&
+          input.draftAttachments === undefined &&
+          input.settings === undefined;
+        if (
+          owner &&
+          owner.webContents !== event.sender &&
+          !readOnly &&
+          !metadataOnly
+        )
+          throw new Error(
+            "This thread is open in another window. Focus that window to continue.",
+          );
+      }
       if (method === "openLink") {
         const url = new URL(string(input.url, "link", 8192));
         if (
@@ -745,7 +820,12 @@ export function registerCodexIpc(window: () => BrowserWindow | null): void {
     },
   );
   app.on("before-quit", () => {
+    windows.quitting = true;
     terminals?.dispose();
     manager?.flush();
   });
+  return {
+    mainWindowClosed: () =>
+      terminals?.detachAll(windows.list().map((target) => target.id)),
+  };
 }

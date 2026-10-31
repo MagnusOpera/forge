@@ -1,3 +1,4 @@
+import { registerThreadDraft } from "./thread-drafts";
 import { EnvironmentPicker } from "./environment-picker";
 import codexLogo from "../../assets/codex-colored.svg";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -162,12 +163,14 @@ export function CodexConversation({
   loading,
   onConfigure,
   quickActions,
+  interactionDisabled = false,
 }: {
   repositoryId: string;
   id?: string;
   loading: boolean;
   onConfigure: () => void;
   quickActions?: ReactNode;
+  interactionDisabled?: boolean;
 }) {
   const [page, setPage] = useState<CodexThreadPage | null>(null),
     [error, setError] = useState("");
@@ -200,6 +203,10 @@ export function CodexConversation({
     id: string;
     previous: { text: string; attachments: CodexAttachment[] };
   } | null>(null);
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const editingRef = useRef(editingMessage);
+  editingRef.current = editingMessage;
   const composer = useRef<HTMLDivElement>(null);
   const [editingQueue, setEditingQueue] = useState<string | null>(null),
     [queueText, setQueueText] = useState("");
@@ -214,6 +221,7 @@ export function CodexConversation({
     undefined,
   );
   const draftRef = useRef({ text: "", attachments: [] as CodexAttachment[] });
+  const draftWrite = useRef<Promise<unknown>>(Promise.resolve());
   const loaded = useRef(false),
     revision = useRef(0),
     alive = useRef(true);
@@ -310,6 +318,39 @@ export function CodexConversation({
     if (follow.current && scroll.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [page?.thread.items, page?.thread.requests]);
+  useEffect(() => {
+    if (!id) return;
+    const flush = async () => {
+      if (busyRef.current)
+        throw new Error(
+          "Wait for the current message operation before moving or closing this thread window.",
+        );
+      if (editingRef.current)
+        throw new Error(
+          "Finish or cancel the message edit before moving or closing this thread window.",
+        );
+      if (!loaded.current) return;
+      clearTimeout(draftTimer.current);
+      draftTimer.current = undefined;
+      await draftWrite.current.catch(() => undefined);
+      draftWrite.current = codexApi().request("update", {
+        repositoryId,
+        id,
+        draft: draftRef.current.text,
+        draftAttachments: draftRef.current.attachments,
+      });
+      await draftWrite.current;
+    };
+    const unregister = registerThreadDraft(repositoryId, id, flush);
+    const closing = () => {
+      void flush().catch(() => undefined);
+    };
+    window.addEventListener("beforeunload", closing);
+    return () => {
+      unregister();
+      window.removeEventListener("beforeunload", closing);
+    };
+  }, [repositoryId, id]);
   const saveDraft = (text: string, images: CodexAttachment[]) => {
     setDraft(text);
     setAttachments(images);
@@ -317,17 +358,17 @@ export function CodexConversation({
     if (draftTimer.current) clearTimeout(draftTimer.current);
     draftTimer.current = setTimeout(() => {
       draftTimer.current = undefined;
-      if (id)
-        void codexApi()
-          .request("update", {
-            repositoryId,
-            id,
-            draft: text,
-            draftAttachments: images,
-          })
-          .catch((e) => {
-            if (alive.current) setError(errorMessage(e));
-          });
+      if (id) {
+        draftWrite.current = codexApi().request("update", {
+          repositoryId,
+          id,
+          draft: text,
+          draftAttachments: images,
+        });
+        void draftWrite.current.catch((e) => {
+          if (alive.current) setError(errorMessage(e));
+        });
+      }
     }, 250);
   };
   const run = async (operation: () => Promise<void>) => {
@@ -372,6 +413,7 @@ export function CodexConversation({
     });
   const canSend =
     !busy &&
+    !interactionDisabled &&
     thread &&
     thread.state !== "starting" &&
     !thread.requests.length &&
@@ -772,7 +814,9 @@ export function CodexConversation({
               key={thread.id}
               value={draft}
               sendShortcut={sendShortcut}
-              disabled={busy || Boolean(thread.replacement)}
+              disabled={
+                busy || interactionDisabled || Boolean(thread.replacement)
+              }
               placeholder={
                 thread.requests.length
                   ? "Answer Codex's request above to continue"
