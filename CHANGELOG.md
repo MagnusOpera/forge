@@ -4,8 +4,13 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.1]
+
+
 - Recheck Codex checkout errors after closing configuration and clear them once the checkout is ready.
 - Guide users to configure missing Codex checkouts with a calm setup prompt and hide technical IPC error prefixes.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.10.0...0.10.1
 
 ## [0.10.0]
 
