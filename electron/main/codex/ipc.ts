@@ -188,6 +188,7 @@ export function registerCodexIpc(
         });
         const readOnly = [
           "thread",
+          "startOptions",
           "models",
           "git",
           "outputFile",
@@ -555,7 +556,12 @@ export function registerCodexIpc(
         return existing!.adopt(projectId, serverId, input.archived);
       }
       if (method === "list") return store.list(projectId);
-      if (method === "create") return manager.create(projectId);
+      if (method === "startOptions") return manager.startOptions(projectId, input.id === undefined ? undefined : store.get(projectId, string(input.id, "thread ID")));
+      if (method === "create") {
+        const start = input.start == null ? undefined : object(input.start);
+        if (start && !["worktree", "default", "new", "current"].includes(String(start.kind))) throw new Error("Invalid thread starting point.");
+        return manager.create(projectId, start ? { kind: start.kind as "worktree" | "default" | "new" | "current", branch: string(start.branch, "branch name") } : undefined);
+      }
       const id = string(input.id, "thread ID");
       const thread = store.get(projectId, id);
       if (
@@ -575,6 +581,11 @@ export function registerCodexIpc(
         throw new Error(
           "This action is unavailable for remote threads. Use Codex or the remote terminal.",
         );
+      }
+      if (method === "setStart") {
+        const start = object(input.start);
+        if (!["worktree", "default", "new", "current"].includes(String(start.kind))) throw new Error("Invalid thread starting point.");
+        return manager.setStart(thread, { kind: start.kind as "worktree" | "default" | "new" | "current", branch: string(start.branch, "branch name") });
       }
       if (method === "setEnvironment")
         return manager.setEnvironment(

@@ -127,9 +127,7 @@ export function CodexThreadList({
             disabled={busy || loading}
             onClick={() =>
               void run(async () => {
-                const thread = await codexApi().request("create", {
-                  repositoryId,
-                });
+                const thread = await codexApi().request("create", { repositoryId });
                 setArchived(false);
                 onSelect(thread.id);
               })

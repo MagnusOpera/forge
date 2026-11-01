@@ -106,3 +106,9 @@ it("disables remote desktop and Git actions in both themes", () => {
     }
   }
 });
+
+it.each(["new", "current"] as const)("keeps pull-request actions for a %s branch in the repository checkout", (kind) => {
+  const html = renderToStaticMarkup(<CodexQuickActions thread={{ ...thread, checkout: "default", start: { kind, branch: thread.branch } }} theme="light" defaultBranch="main" />);
+  expect(html).toContain('aria-label="Create PR"');
+  expect(html).toContain('aria-label="Start worktree"');
+});

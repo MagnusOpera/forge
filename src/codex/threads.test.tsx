@@ -97,3 +97,12 @@ it("ignores a validation result after configuration has been reopened", async ()
   await act(async () => finish({ ready: true, message: "Ready" }));
   expect(container.querySelector('.codex-setup-notice, [role="alert"]')?.textContent).toContain(setupPrompt);
 });
+
+it("creates and selects a thread immediately without opening a dialog", async () => {
+  request.mockResolvedValue({ id: "created" });
+  await render();
+  await create();
+  expect(request).toHaveBeenCalledWith("create", { repositoryId: "r" });
+  expect(select).toHaveBeenCalledWith("created");
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});

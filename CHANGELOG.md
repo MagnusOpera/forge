@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Choose a default-branch worktree, the default branch, a new named branch, or the current repository branch below the environment selection before a Codex thread starts, with automatic branch-name availability checks.
+
 ## [0.12.0]
 
 

@@ -194,6 +194,17 @@ describe("remote worktree commands", () => {
     await exec("git", ["-C", repo, "commit", "-m", "initial"]);
     return repo;
   }
+  it("starts a selected remote worktree from the default branch instead of the current branch", async () => {
+    const repo = await repository();
+    await exec("git", ["-C", repo, "switch", "-c", "feature"]);
+    writeFileSync(path.join(repo, "file"), "feature");
+    await exec("git", ["-C", repo, "commit", "-am", "Feature"]);
+    const item = thread(repo);
+    item.start = { kind: "worktree", branch: "main" };
+    await prepareRemoteWorktree(new LocalCommandTransport(), item, () => {});
+    expect(readFileSync(path.join(item.worktree, "file"), "utf8")).toBe("committed");
+    expect(readFileSync(path.join(repo, "file"), "utf8")).toBe("feature");
+  });
   it("creates isolated worktrees from committed HEAD and safely recovers an uncertain successful creation", async () => {
     const repo = await repository();
     writeFileSync(path.join(repo, "file"), "uncommitted original");

@@ -135,3 +135,12 @@ it("reports save failure to the window handoff and can retry the same draft", as
     expect.objectContaining({ draft: "Keep this draft" }),
   );
 });
+
+it("places starting-point choices below the environment in the unstarted description", async () => {
+  await act(async () => root.render(<CodexConversation repositoryId="repo" id="thread" loading={false} theme="light" onConfigure={() => {}} />));
+  const note = container.querySelector(".codex-start-note")!;
+  const environment = note.querySelector(".codex-environment-header")!;
+  expect(environment.nextElementSibling?.className).toBe("codex-starting-point");
+  expect(note.querySelector('[aria-label="Thread starting point"]')).not.toBeNull();
+  expect(note.querySelector('[role="dialog"]')).toBeNull();
+});

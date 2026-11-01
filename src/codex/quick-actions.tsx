@@ -218,6 +218,7 @@ export function CodexQuickActions({
             .filter(
               (action) =>
                 thread?.checkout !== "default" ||
+                ((thread.start?.kind === "new" || thread.start?.kind === "current") && thread.branch !== defaultBranch) ||
                 !["sync", "create-pr"].includes(action.action),
             )
             .map((action) => (

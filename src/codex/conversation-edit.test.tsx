@@ -337,7 +337,7 @@ it("keeps an editable new-thread environment selector below the description", as
   });
   await act(async () => root.render(<CodexConversation repositoryId="r" id="t" loading={false} onConfigure={() => {}} />));
   const note = container.querySelector('.codex-start-note')!;
-  expect(note.querySelector('p')?.textContent).toContain("A separate worktree");
+  expect(note.querySelector('p')?.textContent).toContain("Choose an environment and starting point");
   expect(note.querySelector('p + .codex-environment-header [role="combobox"]')).not.toBeNull();
   expect(container.querySelector('.codex-composer-status .codex-environment-header')).toBeNull();
   expect(note.querySelector("code")).toBeNull();

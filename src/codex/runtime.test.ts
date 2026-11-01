@@ -823,6 +823,43 @@ describe("isolated worktrees", () => {
   });
 });
 describe("thread lifecycle", () => {
+  it("updates the starting point only before checkout creation and resets it when changing environment", async () => {
+    const { manager, thread } = await setup();
+    await manager.setStart(thread, { kind: "new", branch: "codex/task" });
+    expect(thread.start).toEqual({ kind: "new", branch: "codex/task" });
+    manager.setEnvironment(thread, "local");
+    expect(thread.start).toEqual({ kind: "worktree", branch: "" });
+    await manager.setStart(thread, { kind: "current", branch: "main" });
+    await manager.prepareTerminalCheckout(thread);
+    await expect(manager.setStart(thread, { kind: "default", branch: "main" })).rejects.toThrow("starting point is fixed");
+  });
+
+  it.each(["worktree", "default", "new", "current"] as const)("persists and prepares the %s starting point", async (kind) => {
+    const { manager, store, repo } = await setup();
+    await git(repo, ["switch", "-c", "feature"]);
+    writeFileSync(path.join(repo, "file.txt"), "feature\n");
+    await git(repo, ["commit", "-am", "Feature"]);
+    expect(await manager.startOptions("R_123")).toEqual({ defaultBranch: "main", currentBranch: "feature" });
+    const branch = kind === "new" ? "codex/task" : kind === "current" ? "feature" : "main";
+    const summary = await manager.create("R_123", { kind, branch });
+    const thread = store.get("R_123", summary.id);
+    expect(summary.start).toEqual({ kind, branch });
+    await manager.prepareTerminalCheckout(thread);
+    expect(thread.baseCommit).toBe((await git(repo, ["rev-parse", kind === "current" ? "feature" : "main"])).trim());
+    if (kind === "worktree") {
+      expect(thread.worktree).not.toBe(repo);
+      expect((await git(repo, ["branch", "--show-current"])).trim()).toBe("feature");
+    } else {
+      expect(thread.worktree).toBe(realpathSync(repo));
+      expect(thread.checkout).toBe("default");
+      expect(thread.branch).toBe(branch);
+    }
+    await manager.prepareTerminalCheckout(thread);
+    store.saveConfiguration();
+    store.saveThread(thread);
+    expect(new CodexStore(store.root).get("R_123", thread.id).start).toEqual({ kind, branch });
+  });
+
   it("snapshots project preferences, retains original folder, and enforces ownership", async () => {
     const { store, manager, thread } = await setup();
     store.configuration.defaults.effort = "high";

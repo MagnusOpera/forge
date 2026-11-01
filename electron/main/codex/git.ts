@@ -42,10 +42,11 @@ export async function createWorktree(
   root: string,
   id: string,
   generation = 0,
+  baseRef = "HEAD",
 ): Promise<{ worktree: string; branch: string; baseCommit: string }> {
   if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid thread ID.");
   const baseCommit = (
-    await git(repository, ["rev-parse", "--verify", "HEAD^{commit}"])
+    await git(repository, ["rev-parse", "--verify", `${baseRef}^{commit}`])
   ).trim();
   const branch = `codex/forge-${id}${generation ? `-${generation}` : ""}`,
     worktree = path.join(root, generation ? `${id}-${generation}` : id);

@@ -124,7 +124,10 @@ export type CodexMessage = {
 };
 export type CodexThreadState =
   "idle" | "starting" | "running" | "waiting" | "interrupted" | "failed";
+export type CodexThreadStart = { kind: "worktree" | "default" | "new" | "current"; branch: string };
+export type CodexStartOptions = { defaultBranch: string; currentBranch: string };
 export type CodexThreadSummary = {
+  start?: CodexThreadStart;
   id: string;
   repositoryId: string;
   title: string;
@@ -288,7 +291,9 @@ export type CodexCommands = {
     CodexThreadSummary
   >;
   list: Command<{ repositoryId: string }, CodexThreadSummary[]>;
-  create: Command<{ repositoryId: string }, CodexThreadSummary>;
+  startOptions: Command<{ repositoryId: string; id?: string }, CodexStartOptions>;
+  setStart: Command<ThreadInput & { start: CodexThreadStart }, void>;
+  create: Command<{ repositoryId: string; start?: CodexThreadStart }, CodexThreadSummary>;
   thread: Command<ThreadInput & { before?: number }, CodexThreadPage>;
   update: Command<
     ThreadInput & {

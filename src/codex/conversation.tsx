@@ -1,4 +1,5 @@
 import { registerThreadDraft } from "./thread-drafts";
+import { ThreadStartPicker } from "./thread-start-picker";
 import { EnvironmentPicker } from "./environment-picker";
 import codexLogo from "../../assets/codex-colored.svg";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -183,6 +184,7 @@ export function CodexConversation({
   const [draft, setDraft] = useState(""),
     [attachments, setAttachments] = useState<CodexAttachment[]>([]);
   const [busy, setBusy] = useState(false);
+  const [startPending, setStartPending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [sendShortcut, setSendShortcut] = useState<CodexSendShortcut>("enter");
   useEffect(() => {
@@ -414,6 +416,7 @@ export function CodexConversation({
     });
   const canSend =
     !busy &&
+    !startPending &&
     !interactionDisabled &&
     thread &&
     thread.state !== "starting" &&
@@ -537,7 +540,7 @@ export function CodexConversation({
                     ? "Send a message to resume the original Codex thread in its existing working folder. Codex retains its stored conversation context."
                     : thread.worktree
                       ? "Send a message to work with Codex in this chat’s checkout."
-                      : "A separate worktree will be created from committed HEAD when you send the first message. Uncommitted changes in the configured checkout are excluded."}
+                      : "Choose an environment and starting point, then send a message to work with Codex."}
                 </p>
                 {(thread.archived || !environmentFixed) && (
                   <EnvironmentPicker
@@ -548,6 +551,12 @@ export function CodexConversation({
                     }
                   />
                 )}
+                {!environmentFixed && <ThreadStartPicker
+                  key={`${thread.id}:${thread.environment?.id ?? "local"}:${thread.repositoryPath}`}
+                  thread={thread}
+                  onChange={async () => setPage(await codexApi().request("thread", args))}
+                  onPendingChange={setStartPending}
+                />}
               </div>
             )}
             <TranscriptView

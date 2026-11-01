@@ -3906,3 +3906,19 @@ code {
 .content-pane-detached > .content-pane > .content-header { padding-left: 92px; }
 .content-pane-detached .header-actions { gap: 3px; }
 .content-pane-detached .navigation-controls { display: none; }
+
+.codex-starting-point { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; text-align: left; }
+.codex-starting-point p { margin: 0 0 0 calc(6.5em + 8px); }
+
+.codex-starting-point-row.codex-field { flex-direction: row; align-items: center; gap: 8px; }
+.codex-starting-point-row > span { flex-shrink: 0; color: var(--text-muted); }
+.codex-starting-point-row > .combobox, .codex-starting-point-row > input { flex: 1; min-width: 0; }
+
+.codex-start-note .codex-environment-header > span:first-child,
+.codex-starting-point-row > span { flex: 0 0 6.5em; }
+
+.codex-branch-input { position: relative; flex: 1; min-width: 0; }
+.codex-branch-input > input { padding-right: 32px; }
+.codex-branch-status { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); display: flex; color: var(--text-muted); }
+.codex-branch-status.valid { color: var(--good-text); }
+.codex-branch-status.invalid { color: var(--danger-text); }

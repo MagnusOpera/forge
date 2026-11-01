@@ -9,9 +9,11 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   codexIsActive,
+  codexEnvironmentIsFixed,
   latestCodexUserMessage,
   effectiveCodexPreferences,
   resolveModelPreferences,
+  type CodexThreadStart,
   type CodexAttachment,
   type CodexChange,
   type CodexMessage,
@@ -38,6 +40,8 @@ import {
   assertRemoteWorktree,
   prepareRemoteWorktree,
   remoteCheckoutPath,
+  remoteCommand,
+  resolveRemoteCheckoutPath,
 } from "./remote.js";
 import { CodexStore, threadSummary } from "./store.js";
 import {
@@ -49,6 +53,7 @@ import {
 } from "./merge.js";
 import { assertWorktree, createWorktree, git } from "./git.js";
 import { hydrateCodexTurn, reduceCodexEvent, turnPolicy } from "./events.js";
+import { threadStartOptions, prepareDirectCheckout, validateThreadStart } from "./thread-start.js";
 const supportedRequests = new Set([
   "item/tool/requestUserInput",
   "item/commandExecution/requestApproval",
@@ -69,6 +74,7 @@ export class ThreadManager {
   private metadataAttempts = new Set<string>();
   private locks = new Set<string>();
   private checkoutLocks = new Set<string>();
+  private startRevisions = new Map<string, number>();
   private cancelStarting = new Set<string>();
   private closing = false;
   private pendingSends = new Map<
@@ -229,8 +235,50 @@ export class ThreadManager {
         pending.message.text.trim().slice(0, 80) || "Image conversation";
     this.pendingSends.delete(thread.id);
   }
+  private async startGit(repositoryId: string, thread?: CodexThread) {
+    if (thread) {
+      if (!thread.repositoryPath) throw new Error("Configure a checkout for this environment first.");
+      if (!thread.environment) return (args: string[]) => git(thread.repositoryPath, args);
+      const client = this.transport(thread);
+      const cwd = await resolveRemoteCheckoutPath(client, thread.repositoryPath);
+      return (args: string[]) => remoteCommand(client, ["git", ...args], cwd);
+    }
+    const project = this.store.configuration.projects[repositoryId];
+    const environmentId = project?.defaultEnvironment ?? (project?.path ? "local"
+      : Object.keys(project?.remotePaths ?? {}).find((id) => project?.remotePaths?.[id]) ?? "local");
+    if (environmentId === "local") {
+      if (!project?.path) throw new Error("Choose a local Git folder or configure a remote project placement first.");
+      return (args: string[]) => git(project.path, args);
+    }
+    const environment = this.store.configuration.environments?.find((entry) => entry.id === environmentId);
+    const folder = project?.remotePaths?.[environmentId];
+    if (!environment || !folder) throw new Error("Configure the default environment's checkout in project configuration before creating a thread.");
+    const client = this.remoteRuntime(environment);
+    const cwd = await resolveRemoteCheckoutPath(client, folder);
+    return (args: string[]) => remoteCommand(client, ["git", ...args], cwd);
+  }
+  async startOptions(repositoryId: string, thread?: CodexThread) {
+    return threadStartOptions(await this.startGit(repositoryId, thread));
+  }
+  async setStart(thread: CodexThread, start: CodexThreadStart): Promise<void> {
+    const assertEditable = () => {
+      if (codexEnvironmentIsFixed(thread) || this.locks.has(thread.id) || this.checkoutLocks.has(thread.repositoryPath))
+        throw new Error("The starting point is fixed once this thread starts or creates its checkout.");
+    };
+    assertEditable();
+    const revision = (this.startRevisions.get(thread.id) ?? 0) + 1;
+    this.startRevisions.set(thread.id, revision);
+    const folder = thread.repositoryPath, environment = thread.environment;
+    await validateThreadStart(await this.startGit(thread.repositoryId, thread), start);
+    assertEditable();
+    if (this.startRevisions.get(thread.id) !== revision || thread.repositoryPath !== folder || thread.environment !== environment)
+      throw new Error("The environment changed. Choose the starting point again.");
+    thread.start = { ...start };
+    this.publish(thread, true);
+  }
   async create(
     repositoryId: string,
+    start?: CodexThreadStart,
   ): Promise<ReturnType<typeof threadSummary>> {
     const project = this.store.configuration.projects[repositoryId];
     if (
@@ -240,7 +288,9 @@ export class ThreadManager {
       throw new Error(
         "Choose a local Git folder or configure a remote project placement first.",
       );
-    const defaultEnvironment = project.defaultEnvironment ?? "local";
+    const defaultEnvironment = project.defaultEnvironment ?? (start && !project.path
+      ? Object.keys(project.remotePaths ?? {}).find((id) => project.remotePaths?.[id]) ?? "local"
+      : "local");
     const environment =
       defaultEnvironment === "local"
         ? undefined
@@ -254,6 +304,7 @@ export class ThreadManager {
       throw new Error(
         "Configure the default environment's checkout in project configuration before creating a thread.",
       );
+    if (start) await validateThreadStart(await this.startGit(repositoryId), start);
     // Resolve against the selected target's catalog when execution starts.
     const defaults = effectiveCodexPreferences(
       this.store.configuration.defaults,
@@ -275,6 +326,7 @@ export class ThreadManager {
       repositoryId,
       accountId,
       title: "New thread",
+      start: start ?? { kind: "worktree", branch: "" },
       archived: false,
       settings,
       state: "idle",
@@ -334,6 +386,8 @@ export class ThreadManager {
       throw new Error(
         "Remove local attachments before selecting a remote environment.",
       );
+    this.startRevisions.set(thread.id, (this.startRevisions.get(thread.id) ?? 0) + 1);
+    thread.start = { kind: "worktree", branch: "" };
     thread.environment = environment ? { ...environment } : undefined;
     thread.repositoryPath = environment ? remoteCheckoutPath(folder) : folder;
     thread.settings = effectiveCodexPreferences(
@@ -349,6 +403,31 @@ export class ThreadManager {
     return assertWorktree(thread);
   }
   private async prepareCheckout(thread: CodexThread): Promise<void> {
+    if (thread.start?.kind === "worktree" && !thread.start.branch) {
+      const options = await this.startOptions(thread.repositoryId, thread);
+      if (!options.defaultBranch) throw new Error("The repository default branch could not be determined.");
+      thread.start = { kind: "worktree", branch: options.defaultBranch };
+    }
+    if (thread.start && thread.start.kind !== "worktree") {
+      if (thread.worktree) return this.validateCheckout(thread);
+      const lockPath = thread.repositoryPath;
+      if (this.checkoutLocks.has(thread.repositoryPath) || [...this.store.threads.values()].some((other) => other.id !== thread.id && other.repositoryPath === thread.repositoryPath && (codexIsActive(other) || this.locks.has(other.id))))
+        throw new Error("Stop active chats in this repository before changing checkout.");
+      this.checkoutLocks.add(thread.repositoryPath);
+      try {
+        const client = thread.environment ? this.transport(thread) : undefined;
+        const cwd = client ? await resolveRemoteCheckoutPath(client, thread.repositoryPath) : thread.repositoryPath;
+        const run = (args: string[]) => client ? remoteCommand(client, ["git", ...args], cwd) : git(cwd, args);
+        Object.assign(thread, await prepareDirectCheckout(run, thread.start));
+        thread.repositoryPath = (await run(["rev-parse", "--show-toplevel"])).trim();
+        thread.worktree = thread.repositoryPath;
+        thread.checkout = "default";
+        this.publish(thread, true);
+      } finally {
+        this.checkoutLocks.delete(lockPath);
+      }
+      return;
+    }
     if (thread.environment) {
       await prepareRemoteWorktree(this.transport(thread), thread, () =>
         this.publish(thread, true),
@@ -364,6 +443,8 @@ export class ThreadManager {
           thread.repositoryPath,
           path.join(this.store.root, "worktrees"),
           thread.id,
+          0,
+          thread.start ? `refs/heads/${thread.start.branch}` : "HEAD",
         ),
       );
     }
@@ -970,7 +1051,7 @@ export class ThreadManager {
         (thread.sourceHome
           ? "This continues an existing Codex thread in its original folder. Preserve all existing files and uncommitted changes. "
           : thread.checkout === "default"
-            ? "This chat is working directly on the repository default branch in the supplied checkout. "
+            ? "This chat is working directly on the recorded branch in the supplied repository checkout. "
             : "Do not modify the original checkout. ") +
         "Do not switch branches. Do not commit, merge, push, or publish to external services unless the user explicitly requests that action. Report changes, checks and blockers honestly. Use Markdown for replies and fenced mermaid blocks for diagrams. " +
         (thread.environment

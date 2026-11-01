@@ -1,3 +1,4 @@
+import { startBaseCommit } from "./thread-start.js";
 import {
   execFile,
   spawn,
@@ -411,11 +412,9 @@ export async function prepareRemoteWorktree(
       await resolveRemoteCheckoutPath(client, thread.repositoryPath),
     );
     thread.repositoryPath = remotePath(root);
-    thread.baseCommit = await remoteCommand(
-      client,
-      ["git", "rev-parse", "--verify", "HEAD^{commit}"],
-      thread.repositoryPath,
-    );
+    thread.baseCommit = thread.start
+      ? await startBaseCommit((args) => remoteCommand(client, ["git", ...args], thread.repositoryPath), thread.start)
+      : await remoteCommand(client, ["git", "rev-parse", "--verify", "HEAD^{commit}"], thread.repositoryPath);
     thread.branch = `codex/forge-${thread.id}`;
     if (
       !/^[a-f0-9-]{36}$/.test(thread.id) ||
