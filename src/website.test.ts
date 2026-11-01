@@ -15,14 +15,14 @@ describe("homepage Codex previews", () => {
       const preview = document.querySelector<HTMLImageElement>("[data-preview-image]")!;
       const toggle = document.querySelector<HTMLButtonElement>("[data-theme-toggle]")!;
       expect(preview.getAttribute("src")).toBe("screenshots/forge-dark.png");
-      for (const kind of ["navigation", "detached"]) {
+      for (const kind of ["navigation", "detached", "releases"]) {
         expect(document.querySelector(`[data-showcase-image="${kind}"]`)?.getAttribute("src")).toBe(`screenshots/forge-${kind}-dark.png`);
         expect(document.querySelector(`[data-showcase-link="${kind}"]`)?.getAttribute("href")).toBe(`screenshots/forge-${kind}-dark.png`);
       }
       toggle.click();
       expect(document.documentElement.dataset.theme).toBe("dark");
       expect(preview.getAttribute("src")).toBe("screenshots/forge-light.png");
-      for (const kind of ["navigation", "detached"]) {
+      for (const kind of ["navigation", "detached", "releases"]) {
         expect(document.querySelector(`[data-showcase-image="${kind}"]`)?.getAttribute("src")).toBe(`screenshots/forge-${kind}-light.png`);
         expect(document.querySelector(`[data-showcase-link="${kind}"]`)?.getAttribute("href")).toBe(`screenshots/forge-${kind}-light.png`);
       }
@@ -51,7 +51,7 @@ describe("homepage Codex previews", () => {
     expect(styles).toContain("aspect-ratio: 1440 / 920;");
   });
   it("ships native main and detached window captures in both themes", () => {
-    for (const kind of ["navigation", "detached"]) {
+    for (const kind of ["navigation", "detached", "releases"]) {
       const sizes = ["dark", "light"].map(theme => {
         const file = `screenshots/forge-${kind}-${theme}.png`;
         const png = readFileSync(path.resolve("website", file));

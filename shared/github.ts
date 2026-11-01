@@ -101,6 +101,25 @@ export interface PullRequestSummary {
   url: string;
 }
 
+export interface ReleaseSummary {
+  id: string;
+  databaseId?: number | null;
+  isLatest?: boolean;
+  name: string | null;
+  tagName: string;
+  description: string | null;
+  isDraft: boolean;
+  isPrerelease: boolean;
+  createdAt: string;
+  publishedAt: string | null;
+  url: string;
+}
+
+export interface PublishReleasePayload {
+  repo: RepoRef;
+  releaseId: number;
+}
+
 export interface IssueSummary {
   id: string;
   number: number;
@@ -358,6 +377,8 @@ export interface GithubFocusApi {
   getRepo(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<RepoSummary>>;
   getRepoLabels(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<LabelSummary[]>>;
   getPullRequests(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<PullRequestSummary[]>>;
+  publishRelease(payload: PublishReleasePayload): Promise<ReleaseSummary>;
+  getReleases(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<ReleaseSummary[]>>;
   getIssues(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<IssueSummary[]>>;
   getWorkflows(repo: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<WorkflowSummary[]>>;
   getWorkflowDispatchConfig(repo: RepoRef, workflowId: number, ref: string): Promise<WorkflowDispatchConfig>;

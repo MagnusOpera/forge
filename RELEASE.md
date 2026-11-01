@@ -4,7 +4,7 @@ Forge follows the same two-step release model as FScript.
 
 1. Push a version tag.
 2. GitHub Actions creates a draft release with an unsigned macOS arm64 app ZIP.
-3. Publish the draft release.
+3. Publish the draft release. In Forge, open Releases (`⌘⇧L`), choose Draft, review the notes, and choose **Release action → Publish release**. The existing prerelease flag is preserved: prerelease drafts stay Pre-release; other drafts become Latest. Published prereleases appear in Preview, and stable releases appear in Active.
 4. GitHub Actions signs and notarizes the app, uploads the signed ZIP and `latest-mac.yml` update metadata, and removes the unsigned ZIP.
 5. Stable releases update `MagnusOpera/homebrew-tap` with the signed Forge cask.
 

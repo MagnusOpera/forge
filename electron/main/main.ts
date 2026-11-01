@@ -1,3 +1,5 @@
+import { publishDraftRelease } from "./releases.js";
+import { fetchRepositoryReleases } from "../../shared/releases.js";
 import { alignWindowButtons, trackWindowButtonAlignment, trafficLightPosition } from "./window-chrome.js";
 import { readStoredToken, writeStoredToken } from "./token-storage.js";
 import { MainContentLayout } from "./content-layout.js";
@@ -38,6 +40,8 @@ import type {
   CommitSummary,
   DispatchWorkflowPayload,
   IssueSummary,
+  ReleaseSummary,
+  PublishReleasePayload,
   LabelSummary,
   NativeNotificationPayload,
   NativeNotificationSource,
@@ -1255,6 +1259,22 @@ async function getPullRequests(
     ]
       .map(toPullRequest)
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+  }, defaultTtlMs, options);
+}
+
+async function publishRelease(payload: PublishReleasePayload): Promise<ReleaseSummary> {
+  const repo = ensureRepo(payload.repo);
+  const { octokit } = await getClients();
+  const release = await publishDraftRelease(octokit.repos, repo, payload.releaseId);
+  await invalidateCacheKey(`repo:${repo.owner}/${repo.name}:releases`);
+  return release;
+}
+
+async function getReleases(repoRef: RepoRef, options?: CacheRequestOptions): Promise<CacheEnvelope<ReleaseSummary[]>> {
+  const repo = ensureRepo(repoRef);
+  return cached(`repo:${repo.owner}/${repo.name}:releases`, async () => {
+    const { gql } = await getClients();
+    return fetchRepositoryReleases((query, variables) => gql(query, variables), repo);
   }, defaultTtlMs, options);
 }
 
@@ -2562,6 +2582,10 @@ function registerIpc(): void {
   );
   ipcMain.handle("github:get-pull-requests", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
     getPullRequests(repo, options)
+  );
+  ipcMain.handle("github:publish-release", (_event, payload: PublishReleasePayload) => publishRelease(payload));
+  ipcMain.handle("github:get-releases", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
+    getReleases(repo, options)
   );
   ipcMain.handle("github:get-issues", (_event, repo: RepoRef, options?: CacheRequestOptions) =>
     getIssues(repo, options)

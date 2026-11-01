@@ -88,6 +88,19 @@ app.whenReady().then(async () => {
         path.join(root, "website/screenshots/forge-" + name + "-" + theme + ".png")]);
     }
     detached.destroy();
+    win.setContentSize(1440, 920);
+    await win.webContents.executeJavaScript(`document.querySelector('button[aria-label^="Releases ("]').click()`);
+    await waitFor(win, `!!document.querySelector('[aria-label="Release view"]')`);
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('[aria-label="Release view"] button')).find(button => button.textContent.startsWith('Draft')).click()`);
+    await waitFor(win, `!!document.querySelector('.project-pane .focus-row')`);
+    await win.webContents.executeJavaScript(`document.querySelector('.project-pane .focus-row').click()`);
+    await waitFor(win, `!!document.querySelector('button[aria-label="Release actions"]')`);
+    win.show();
+    win.focus();
+    await win.webContents.executeJavaScript(`document.querySelector('button[aria-label="Release actions"]').focus()`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    execFileSync("/usr/sbin/screencapture", ["-x", "-o", "-l", windowId,
+      path.join(root, "website/screenshots/forge-releases-" + theme + ".png")]);
     win.destroy();
     console.log("Captured " + theme + " workspace and detached window previews");
   }

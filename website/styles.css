@@ -391,6 +391,7 @@ h3 {
 }
 
 .preview-image-window {
+  display: block;
   padding: clamp(16px, 3.5vw, 48px);
   background: var(--surface-alt);
 }

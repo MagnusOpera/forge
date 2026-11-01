@@ -124,6 +124,10 @@ Use **Reattach content pane** to return an item and select it in the main worksp
 
 Press `⌘⇧D` to detach the current content pane, or press it in a detached window to reattach that item. The shortcut also works while editing a message and is suspended while a dialog or the command palette is open.
 
+### GitHub releases
+
+Open **Releases** in the project toolbar or press `⌘⇧L`. The **Active** tab lists published stable releases, and **Preview** lists published prereleases, both by publication date descending. The **Draft** tab lists unpublished drafts by creation date descending; GitHub only returns drafts your token can access. Select a release to read its notes in the content pane, and use the GitHub URL control to copy its link or double-click to open it in GitHub. Repository refresh also updates releases. With repository write access, select a draft and choose **Release action → Publish release**. Forge keeps the draft’s current prerelease flag: prereleases publish as Pre-release; other drafts publish as Latest. The hint below the release title shows the publication type; the published release appears in Active or Preview accordingly.
+
 ### Keyboard shortcuts (macOS)
 
 | Action | Shortcut |
@@ -138,6 +142,7 @@ Press `⌘⇧D` to detach the current content pane, or press it in a detached wi
 | Workflow runs | `⌘⇧R` |
 | Issues | `⌘⇧I` |
 | Workflows | `⌘⇧W` |
+| Releases (Active / Preview / Draft) | `⌘⇧L` |
 | Next / previous project view | `←` / `→` |
 | Previous / next list item | `↑` or `K` / `↓` or `J` |
 | Open current item in GitHub | `G`, then `G` |
@@ -146,7 +151,7 @@ Press `⌘⇧D` to detach the current content pane, or press it in a detached wi
 | Close focused window | `⌘W` |
 | Zoom in / out / reset to app default | `⌘+` / `⌘−` / `⌘0` |
 
-Plain navigation keys apply outside text fields; dialogs take precedence and the terminal handles its own keys. In Codex, focus the thread list to navigate threads. Project views cycle through Codex, Pull Requests, Workflows, Issues, and Workflow Runs; the current arrow bindings intentionally map Left to next and Right to previous. In the command palette, use `↑`/`↓` to choose, Enter to open, and Escape to close. The conversation search input uses `↓` to focus the first match and Escape to close. Message sending and newlines follow the preference described above.
+Plain navigation keys apply outside text fields; dialogs take precedence and the terminal handles its own keys. In Codex, focus the thread list to navigate threads. Project views cycle through Codex, Pull Requests, Workflows, Issues, Workflow Runs, and Releases; the current arrow bindings intentionally map Left to next and Right to previous. In the command palette, use `↑`/`↓` to choose, Enter to open, and Escape to close. The conversation search input uses `↓` to focus the first match and Escape to close. Message sending and newlines follow the preference described above.
 
 ### Remote Codex environments
 

@@ -71,6 +71,9 @@ describe("appLogic", () => {
     expect(appKeyboardShortcut(event("r", { shiftKey: true }))).toBe("workflow-runs");
     expect(appKeyboardShortcut(event("i", { shiftKey: true }))).toBe("issues");
     expect(appKeyboardShortcut(event("w", { shiftKey: true }))).toBe("workflows");
+    expect(appKeyboardShortcut(event("l", { shiftKey: true }))).toBe("releases");
+    expect(appKeyboardShortcut(event("L", { metaKey: false, ctrlKey: true, shiftKey: true }))).toBe("releases");
+    expect(appKeyboardShortcut(event("l"))).toBeNull();
     expect(appKeyboardShortcut(event("p"))).toBeNull();
     expect(appKeyboardShortcut(event("p", { altKey: true, shiftKey: true }))).toBeNull();
     expect(appKeyboardShortcut(event("p", { metaKey: false, shiftKey: true }))).toBeNull();
@@ -92,7 +95,9 @@ describe("appLogic", () => {
     expect(adjacentProjectFocusView("pull-requests", 1)).toBe("workflows");
     expect(adjacentProjectFocusView("workflows", 1)).toBe("issues");
     expect(adjacentProjectFocusView("issues", 1)).toBe("workflow-runs");
-    expect(adjacentProjectFocusView("workflow-runs", 1)).toBe("codex");
+    expect(adjacentProjectFocusView("workflow-runs", 1)).toBe("releases");
+    expect(adjacentProjectFocusView("releases", 1)).toBe("codex");
+    expect(adjacentProjectFocusView("releases", -1)).toBe("workflow-runs");
     expect(adjacentProjectFocusView("pull-requests", -1)).toBe("codex");
   });
 

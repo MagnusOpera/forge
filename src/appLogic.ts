@@ -9,7 +9,7 @@ import type {
 } from "../shared/github";
 
 export type ProjectPullRequestTab = "open" | "closed";
-export type ProjectFocusView = "codex" | "pull-requests" | "workflow-runs" | "issues" | "workflows";
+export type ProjectFocusView = "codex" | "pull-requests" | "workflow-runs" | "issues" | "workflows" | "releases";
 export type PullRequestWorkflowState = "auto-ready" | "manual-ready" | "draft";
 export type FavoriteRepoSnapshots = Record<string, RepoSummary>;
 export type GithubUrlClickAction = "copy" | "open";
@@ -21,7 +21,8 @@ export type AppKeyboardShortcut =
   | "open-pull-requests"
   | "workflow-runs"
   | "issues"
-  | "workflows";
+  | "workflows"
+  | "releases";
 
 type KeyboardShortcutEvent = Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "metaKey" | "shiftKey">;
 
@@ -77,12 +78,13 @@ export function appKeyboardShortcut(event: KeyboardShortcutEvent): AppKeyboardSh
     p: "open-pull-requests",
     r: "workflow-runs",
     i: "issues",
+    l: "releases",
     w: "workflows"
   };
   return event.shiftKey ? viewShortcuts[key] ?? null : null;
 }
 
-const projectFocusViewOrder: ProjectFocusView[] = ["codex", "pull-requests", "workflows", "issues", "workflow-runs"];
+const projectFocusViewOrder: ProjectFocusView[] = ["codex", "pull-requests", "workflows", "issues", "workflow-runs", "releases"];
 
 export function adjacentProjectFocusView(current: ProjectFocusView, direction: -1 | 1): ProjectFocusView {
   const currentIndex = projectFocusViewOrder.indexOf(current);

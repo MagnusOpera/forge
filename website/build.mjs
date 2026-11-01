@@ -14,7 +14,7 @@ const passthroughFiles = [
   ["assets/magnus-opera-logo.svg", "assets/magnus-opera-logo.svg"],
   ["screenshots/forge-light.png", "screenshots/forge-light.png"],
   ["screenshots/forge-dark.png", "screenshots/forge-dark.png"],
-  ...["navigation", "detached"].flatMap(kind => ["dark", "light"].map(theme => {
+  ...["navigation", "detached", "releases"].flatMap(kind => ["dark", "light"].map(theme => {
     const file = `screenshots/forge-${kind}-${theme}.png`;
     return [file, file];
   }))

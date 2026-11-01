@@ -1,3 +1,5 @@
+import { ReleasesSection } from "./releases";
+import { releaseDate, releasesForTab, type ReleaseTab } from "../shared/releases";
 import { useContentAttachmentShortcut } from "./content-attachment-shortcut";
 import { contentItemKey, retainedContentItems } from "./content-items";
 import { hasOpenKeyboardOverlay, isDomNode, isHtmlElement } from "./dom";
@@ -8,6 +10,7 @@ import { ThreadWorkspace } from "./codex/thread-workspace";
 import { Combobox } from "./components/combobox";
 import { useSlidingUnderline } from "./useSlidingUnderline";
 import {
+  Tag,
   Activity,
   AlertCircle,
   ArrowLeft,
@@ -116,6 +119,7 @@ import type {
   CheckSummary,
   ChangedFileSummary,
   GithubFocusApi,
+  ReleaseSummary,
   IssueSummary,
   LabelSummary,
   NativeNotificationPayload,
@@ -152,11 +156,13 @@ type ContentSelection =
   | { kind: "repo" }
   | { kind: "codex"; threadId: string }
   | { kind: "pr"; pr: PullRequestSummary }
+  | { kind: "release"; release: ReleaseSummary }
   | { kind: "issue"; issue: IssueSummary }
   | { kind: "run"; run: WorkflowRunSummary; focusedJobId?: number | null }
   | { kind: "workflow"; workflow: WorkflowSummary };
 
 type MiddleItem =
+  | { id: string; kind: "release"; release: ReleaseSummary }
   | { id: string; kind: "pr"; pr: PullRequestSummary }
   | { id: string; kind: "issue"; issue: IssueSummary }
   | { id: string; kind: "run"; run: WorkflowRunSummary }
@@ -190,6 +196,7 @@ type NavigationEntry = {
   repo: RepoSummary | null;
   selection: ContentSelection;
   workflowTab: ProjectWorkflowTab;
+  releaseTab: ReleaseTab;
 };
 type NavigationState = {
   entries: NavigationEntry[];
@@ -199,6 +206,7 @@ type ProjectSnapshot = {
   repo: RepoSummary;
   labels: LabelSummary[];
   pullRequests: PullRequestSummary[];
+  releases: ReleaseSummary[];
   issues: IssueSummary[];
   workflows: WorkflowSummary[];
   workflowRuns: WorkflowRunSummary[];
@@ -426,6 +434,8 @@ const browserApi: GithubFocusApi = {
   getRepo: () => ipcUnavailable(),
   getRepoLabels: () => ipcUnavailable(),
   getPullRequests: () => ipcUnavailable(),
+  publishRelease: () => ipcUnavailable(),
+  getReleases: () => ipcUnavailable(),
   getIssues: () => ipcUnavailable(),
   getWorkflows: () => ipcUnavailable(),
   getWorkflowDispatchConfig: () => ipcUnavailable(),
@@ -625,6 +635,7 @@ function selectionRouteKey(selection: ContentSelection): string {
   if (selection.kind === "pr") {
     return `pr:${selection.pr.number}`;
   }
+  if (selection.kind === "release") return `release:${selection.release.id}`;
   if (selection.kind === "issue") {
     return `issue:${selection.issue.number}`;
   }
@@ -643,6 +654,7 @@ function navigationEntryKey(entry: NavigationEntry): string {
     entry.focusView,
     entry.pullRequestTab,
     entry.workflowTab,
+    entry.releaseTab,
     selectionRouteKey(entry.selection)
   ].join(":");
 }
@@ -657,6 +669,10 @@ function refreshSelectionFromProject(selection: ContentSelection, project: Proje
     return refreshed ? { kind: "pr", pr: refreshed } : selection;
   }
 
+  if (selection.kind === "release") {
+    const refreshed = project.releases.find(release => release.id === selection.release.id);
+    return refreshed ? { kind: "release", release: refreshed } : selection;
+  }
   if (selection.kind === "issue") {
     const refreshed = project.issues.find((issue) => issue.number === selection.issue.number);
     return refreshed ? { kind: "issue", issue: refreshed } : selection;
@@ -871,6 +887,7 @@ function openUrlForSelection(selection: ContentSelection, repo: RepoSummary | nu
   if (selection.kind === "pr") {
     return selection.pr.url;
   }
+  if (selection.kind === "release") return selection.release.url;
   if (selection.kind === "issue") {
     return selection.issue.url;
   }
@@ -1195,6 +1212,8 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   }, [codexThreads.threads, selectedRepo?.id]);
   const [repoLabels, setRepoLabels] = useState<LabelSummary[]>([]);
   const [pullRequests, setPullRequests] = useState<PullRequestSummary[]>([]);
+  const [releases, setReleases] = useState<ReleaseSummary[]>([]);
+  const [releaseTab, setReleaseTab] = useState<ReleaseTab>("active");
   const [issues, setIssues] = useState<IssueSummary[]>([]);
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunSummary[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
@@ -1394,6 +1413,9 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     if (projectFocusView === "workflow-runs") {
       return workflowRuns.map((run) => ({ id: `run:${run.id}`, kind: "run" as const, run }));
     }
+    if (projectFocusView === "releases") {
+      return releasesForTab(releases, releaseTab).map(release => ({ id: `release:${release.id}`, kind: "release" as const, release }));
+    }
     if (projectFocusView === "issues") {
       return issues.map((issue) => ({ id: `issue:${issue.number}`, kind: "issue" as const, issue }));
     }
@@ -1402,7 +1424,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       return visibleWorkflows.map((workflow) => ({ id: `workflow:${workflow.id}`, kind: "workflow" as const, workflow }));
     }
     return visiblePullRequests.map((pr) => ({ id: `pr:${pr.number}`, kind: "pr" as const, pr }));
-  }, [issues, projectFocusView, projectWorkflowTab, starredWorkflows, visiblePullRequests, workflowRuns, workflows]);
+  }, [releases, releaseTab, issues, projectFocusView, projectWorkflowTab, starredWorkflows, visiblePullRequests, workflowRuns, workflows]);
 
   const currentGithubUrl = openUrlForSelection(selection, selectedRepo);
   const currentNavigationEntry = useMemo<NavigationEntry>(
@@ -1411,9 +1433,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       pullRequestTab: projectPullRequestTab,
       repo: selectedRepo,
       selection,
+      releaseTab,
       workflowTab: projectWorkflowTab
     }),
-    [projectFocusView, projectPullRequestTab, projectWorkflowTab, selectedRepo, selection]
+    [releaseTab, projectFocusView, projectPullRequestTab, projectWorkflowTab, selectedRepo, selection]
   );
   const canNavigateBack = navigation.index > 0;
   const canNavigateForward = navigation.index >= 0 && navigation.index < navigation.entries.length - 1;
@@ -1606,19 +1629,21 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       const options = force ? { force: true } : undefined;
 
       try {
-        const [repoDetail, labels, prs, repoIssues, repoWorkflows, runs] = await Promise.all([
+        const [repoDetail, labels, prs, repoIssues, repoWorkflows, runs, repoReleases] = await Promise.all([
           api.getRepo(repo, options),
           api.getRepoLabels(repo, options),
           api.getPullRequests(repo, options),
           api.getIssues(repo, options),
           api.getWorkflows(repo, options),
-          api.getWorkflowRuns(repo, options)
+          api.getWorkflowRuns(repo, options),
+          api.getReleases(repo, options)
         ]);
 
         const project = {
           repo: repoDetail.data,
           labels: labels.data,
           pullRequests: prs.data,
+          releases: repoReleases.data,
           issues: repoIssues.data,
           workflows: repoWorkflows.data,
           workflowRuns: runs.data
@@ -1627,6 +1652,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         setSelectedRepo(project.repo);
         setRepoLabels(project.labels);
         setPullRequests(project.pullRequests);
+        setReleases(project.releases);
         setIssues(project.issues);
         setWorkflows(project.workflows);
         setWorkflowRuns(project.workflowRuns);
@@ -2475,6 +2501,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         setSelection({ kind: "pr", pr: item.pr });
         setPrTab("Description");
       }
+      if (item.kind === "release") setSelection({ kind: "release", release: item.release });
       if (item.kind === "issue") {
         setSelection({ kind: "issue", issue: item.issue });
       }
@@ -2534,6 +2561,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
           setPullRequests([source.pullRequest]);
           setWorkflowRuns([]);
           setIssues([]);
+          setReleases([]);
           setWorkflows([]);
         }
         setPrDetail(null);
@@ -2554,6 +2582,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         setWorkflowRuns([source.run]);
         setPullRequests([]);
         setIssues([]);
+        setReleases([]);
         setWorkflows([]);
       }
       setPrDetail(null);
@@ -2656,6 +2685,9 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         setRunDetail((await api.getWorkflowRun(repo, selection.run.id, { force: true })).data);
       } else if (selection.kind === "workflow") {
         setWorkflowRuns((await api.getWorkflowRuns(repo, { force: true })).data);
+      } else if (selection.kind === "release") {
+        const refreshed = (await api.getReleases(repo, { force: true })).data.find(release => release.id === selection.release.id);
+        if (refreshed) setSelection({ kind: "release", release: refreshed });
       } else if (selection.kind === "issue") {
         const refreshed = (await api.getIssues(repo, { force: true })).data.find(issue => issue.id === selection.issue.id);
         if (refreshed) setSelection({ kind: "issue", issue: refreshed });
@@ -2680,12 +2712,13 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       ? api.getWorkflowRun(repo, selectedWorkflowRunId, { force: true })
       : Promise.resolve(null);
 
-    const [prs, repoIssues, runs, pullRequestDetail, workflowRunDetail] = await Promise.all([
+    const [prs, repoIssues, runs, pullRequestDetail, workflowRunDetail, repoReleases] = await Promise.all([
       pullRequestsPromise,
       issuesPromise,
       api.getWorkflowRuns(repo, { force: true }),
       pullRequestDetailPromise,
-      workflowRunDetailPromise
+      workflowRunDetailPromise,
+      shouldRefreshFullProject ? api.getReleases(repo, { force: true }) : Promise.resolve(null)
     ]);
 
     if (selectedRepoKeyRef.current !== key) {
@@ -2698,6 +2731,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     if (prs) {
       setPullRequests(prs.data);
     }
+    if (repoReleases) setReleases(repoReleases.data);
     if (repoIssues) {
       setIssues(repoIssues.data);
     }
@@ -2712,6 +2746,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       if (current.kind === "pr" && prs) {
         const refreshed = prs.data.find((pr) => pr.number === current.pr.number);
         return refreshed ? { kind: "pr", pr: refreshed } : current;
+      }
+      if (current.kind === "release" && repoReleases) {
+        const refreshed = repoReleases.data.find(release => release.id === current.release.id);
+        return refreshed ? { kind: "release", release: refreshed } : current;
       }
       if (current.kind === "issue" && repoIssues) {
         const refreshed = repoIssues.data.find((issue) => issue.number === current.issue.number);
@@ -2757,6 +2795,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       setStoredProjectFocusView(entry.focusView);
       setProjectPullRequestTab(entry.pullRequestTab);
       setProjectWorkflowTab(entry.workflowTab);
+      setReleaseTab(entry.releaseTab);
       if (entry.selection.kind === "pr") {
         setPrTab("Description");
       }
@@ -2825,7 +2864,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       }
 
       const currentId =
-        selection.kind === "pr"
+        selection.kind === "release" ? `release:${selection.release.id}` : selection.kind === "pr"
           ? `pr:${selection.pr.number}`
           : selection.kind === "issue"
             ? `issue:${selection.issue.number}`
@@ -3093,6 +3132,19 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       if (!initialItem && key.startsWith("viewer:")) {
         void loadInitial(false);
       }
+      if (selectedRepo && key === `repo:${repoKey(selectedRepo)}:releases`) {
+        const refreshedRepoKey = repoKey(selectedRepo);
+        void api.getReleases(selectedRepo, { force: true }).then(response => {
+          if (selectedRepoKeyRef.current !== refreshedRepoKey) return;
+          setReleases(response.data);
+          setSelection(current => {
+            if (current.kind !== "release") return current;
+            const release = response.data.find(release => release.id === current.release.id);
+            return release ? { kind: "release", release } : current;
+          });
+        }).catch(error => setProjectError(userFacingError(error, "Unable to refresh releases.")));
+        return;
+      }
       if (selectedRepo && key.startsWith(`repo:${repoKey(selectedRepo)}`) && !isPullRequestCacheUpdate(key)) {
         void loadProject(selectedRepo, false);
       }
@@ -3271,6 +3323,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       setRepoLabels([]);
       setPullRequests([]);
       setIssues([]);
+      setReleases([]);
       setWorkflows([]);
       setWorkflowRuns([]);
       setSelection({ kind: "repo" });
@@ -3324,6 +3377,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   const contentRoute = `${selectedRepo?.id}:${selectionRouteKey(selection)}`;
   const contentTitle = selection.kind === "codex" ? terminalThread?.title
     : selection.kind === "pr" ? selection.pr.title
+    : selection.kind === "release" ? selection.release.name || selection.release.tagName
     : selection.kind === "issue" ? selection.issue.title
     : selection.kind === "run" ? workflowRunDisplayName(selection.run)
     : selection.kind === "workflow" ? selection.workflow.name
@@ -3338,6 +3392,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   const focusSelectedItem = (targetSelection: ContentSelection) => detachedItems.get(contentItemKey(selectedRepo?.id, selectionRouteKey(targetSelection)))?.pane.focus();
   const navigateToItem = useCallback((target: ContentItemTarget) => {
     setSelectedRepo(target.repo); setSelection(target.selection); setStoredProjectFocusView(target.focusView);
+    if (target.selection.kind === "release") setReleaseTab(target.selection.release.isDraft ? "draft" : target.selection.release.isPrerelease ? "preview" : "active");
     if (target.selection.kind === "pr") setProjectPullRequestTab(pullRequestTabForState(target.selection.pr));
     detachedItems.get(target.key)?.pane.focus();
   }, [detachedItems, setStoredProjectFocusView, setProjectPullRequestTab]);
@@ -3496,6 +3551,13 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         onRunTabChange={setRunTab}
         loading={contentLoading}
         error={contentError}
+        onPublishRelease={async release => {
+          if (!selectedRepo || !release.databaseId) throw new Error("Release ID is required.");
+          const published = await api.publishRelease({ repo: selectedRepo, releaseId: release.databaseId });
+          setSelection(current => current.kind === "release" && current.release.id === published.id
+            ? { kind: "release", release: published } : current);
+          return published;
+        }}
         prActionSubmitting={prActionSubmitting}
         theme={activeTheme}
         canNavigateBack={history?.back ?? canNavigateBack}
@@ -3653,6 +3715,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         ) : null}
         repo={selectedRepo}
         sidebarCollapsed={sidebarCollapsed}
+        releases={releases}
+        releaseTab={releaseTab}
+        onReleaseTab={setReleaseTab}
+        onSelectRelease={(release) => { setSelection({ kind: "release", release }); focusSelectedItem({ kind: "release", release }); }}
         issues={issues}
         workflowRuns={workflowRuns}
         workflows={workflows}
@@ -4057,6 +4123,10 @@ function ProjectPane(props: {
   codexCount: number;
   repo: RepoSummary | null;
   sidebarCollapsed: boolean;
+  releases: ReleaseSummary[];
+  releaseTab: ReleaseTab;
+  onReleaseTab(tab: ReleaseTab): void;
+  onSelectRelease(release: ReleaseSummary): void;
   issues: IssueSummary[];
   workflowRuns: WorkflowRunSummary[];
   workflows: WorkflowSummary[];
@@ -4143,6 +4213,7 @@ function ProjectPane(props: {
               codex: props.codexCount,
               "pull-requests": props.openPullRequests.length,
               "workflow-runs": props.workflowRuns.length,
+              releases: releasesForTab(props.releases, "active").length,
               issues: props.issues.length,
               workflows: props.workflows.length
             }}
@@ -4189,6 +4260,9 @@ function ProjectPane(props: {
               selected={props.selection}
               onSelect={props.onSelectRun}
             />
+          ) : props.focusView === "releases" ? (
+            <ReleasesSection releases={props.releases} tab={props.releaseTab} onTab={props.onReleaseTab}
+              selectedId={props.selection.kind === "release" ? props.selection.release.id : undefined} onSelect={props.onSelectRelease} />
           ) : props.focusView === "issues" ? (
             <IssuesSection issues={props.issues} selected={props.selection} onSelect={props.onSelectIssue} />
           ) : props.focusView === "workflows" ? (
@@ -4226,13 +4300,14 @@ function ProjectFocusToolbar(props: {
   onView(view: ProjectFocusView): void;
 }) {
   const toolbarUnderline = useSlidingUnderline(
-    `${props.view}:${props.disabled}:${props.counts["pull-requests"]}:${props.counts["workflow-runs"]}:${props.counts.issues}:${props.counts.workflows}`
+    `${props.view}:${props.disabled}:${props.counts["pull-requests"]}:${props.counts["workflow-runs"]}:${props.counts.issues}:${props.counts.workflows}:${props.counts.releases}`
   );
   const items: Array<{ view: ProjectFocusView; label: string; shortcut: string; icon: React.ReactNode }> = [
     { view: "codex", label: "Codex", shortcut: "⌘⇧C", icon: <Bot size={15} /> },
     { view: "pull-requests", label: "Pull Requests", shortcut: "⌘⇧P", icon: <GitPullRequest size={15} /> },
     { view: "workflow-runs", label: "Workflow Runs", shortcut: "⌘⇧R", icon: <Activity size={15} /> },
     { view: "issues", label: "Issues", shortcut: "⌘⇧I", icon: <Inbox size={15} /> },
+    { view: "releases", label: "Releases", shortcut: "⌘⇧L", icon: <Tag size={15} /> },
     { view: "workflows", label: "Workflows", shortcut: "⌘⇧W", icon: <Workflow size={15} /> }
   ];
 
@@ -4642,6 +4717,7 @@ function ContentPane(props: {
   repoLabels: LabelSummary[];
   loading: boolean;
   error: string | null;
+  onPublishRelease(release: ReleaseSummary): Promise<ReleaseSummary>;
   prActionSubmitting: boolean;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
@@ -4904,6 +4980,8 @@ function ContentPane(props: {
           onCopyText={props.onCopyText}
           onTab={props.onPrTabChange}
         />
+      ) : props.selection.kind === "release" ? (
+        <ReleaseContent key={props.selection.release.id} release={props.selection.release} canPublish={Boolean(props.repo && canManagePullRequest(props.repo))} onPublish={props.onPublishRelease} />
       ) : props.selection.kind === "issue" ? (
         <IssueContent issue={props.selection.issue} />
       ) : props.selection.kind === "run" ? (
@@ -4954,6 +5032,7 @@ function ContentTitle(props: { selection: ContentSelection; repo: RepoSummary | 
   if (props.selection.kind === "pr") {
     return <span>PR #{props.selection.pr.number}</span>;
   }
+  if (props.selection.kind === "release") return <span>Release {props.selection.release.tagName}</span>;
   if (props.selection.kind === "issue") {
     return <span>Issue #{props.selection.issue.number}</span>;
   }
@@ -6082,6 +6161,60 @@ function ChangedFilesDiffList({ files, theme }: { files: ChangedFileSummary[]; t
       })}
     </div>
   );
+}
+
+function ReleaseContent({ release, canPublish, onPublish }: {
+  release: ReleaseSummary;
+  canPublish: boolean;
+  onPublish(release: ReleaseSummary): Promise<ReleaseSummary>;
+}) {
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const publish = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setPublishing(true);
+    setError(null);
+    try {
+      await onPublish(release);
+    } catch (error) {
+      setError(userFacingError(error, "Unable to publish release."));
+    } finally {
+      inFlight.current = false;
+      setPublishing(false);
+    }
+  };
+  return <div className="content-scroll">
+    <div className="detail-heading pr-detail-heading"><div>
+      <span className="eyebrow">{release.isDraft ? "Draft" : "Published"}{release.isPrerelease ? " · Pre-release" : release.isLatest ? " · Latest" : ""} · {release.tagName}</span>
+      <h1>{release.name || release.tagName}</h1>
+      <time dateTime={releaseDate(release)}>{new Date(releaseDate(release)).toLocaleString()}</time>
+      {release.isDraft && canPublish && <p className="muted-line">{release.isPrerelease ? "Publishes as a pre-release." : "Publishes as the latest release."}</p>}
+    </div>
+    {release.isDraft && canPublish && Boolean(release.databaseId) && <div
+      className="pr-management-actions"
+      aria-label="Release management actions"
+      onPointerLeave={event => blurFocusedElementIn(event.currentTarget)}
+    >
+      <button type="button" className="pr-management-trigger" aria-label="Release actions" aria-haspopup="true" disabled={publishing}>
+        {publishing ? <Loader2 size={15} className="spin" /> : <Tag size={15} />}
+        <span>{publishing ? "Publishing…" : "Release action"}</span>
+        <ChevronDown size={14} />
+      </button>
+      <div className="pr-management-menu" role="group" aria-label="Release actions">
+        <button type="button" className="pr-management-option" aria-label="Publish release" disabled={publishing} onClick={() => void publish()}>
+          <Tag size={15} />
+          <span>Publish release</span>
+        </button>
+      </div>
+    </div>}
+    </div>
+    {error && <div className="inline-error" role="alert"><AlertCircle size={15} /><span>{error}</span></div>}
+    <ArticleCard title="Release notes" meta={formatRelative(releaseDate(release))}>
+      <MarkdownBlock value={release.description || "No release notes."} />
+    </ArticleCard>
+  </div>;
 }
 
 function IssueContent({ issue }: { issue: IssueSummary }) {

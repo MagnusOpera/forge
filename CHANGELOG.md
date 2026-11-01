@@ -4,6 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Refresh website screenshots and showcase draft release publishing in both themes.
+
+- Match release publishing controls to the existing PR action menu.
+
+- Publish draft releases while preserving prerelease status and marking stable releases as Latest.
+
+- Browse active, preview, and draft GitHub releases with newest-first dates, release notes, and the ⌘⇧L shortcut.
+
 ## [0.14.1]
 
 

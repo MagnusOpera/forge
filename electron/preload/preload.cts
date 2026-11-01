@@ -11,6 +11,7 @@ import type {
   PullRequestAutoMergePayload,
   PullRequestLabelPayload,
   RepoRef,
+  PublishReleasePayload,
   SubmitPullRequestReviewPayload,
   UpdatePullRequestDraftStatePayload,
   UpdatePullRequestTitlePayload
@@ -50,6 +51,9 @@ const api: GithubFocusApi = {
     ipcRenderer.invoke("github:get-repo-labels", repo, options),
   getPullRequests: (repo: RepoRef, options?: CacheRequestOptions) =>
     ipcRenderer.invoke("github:get-pull-requests", repo, options),
+  publishRelease: (payload: PublishReleasePayload) => ipcRenderer.invoke("github:publish-release", payload),
+  getReleases: (repo: RepoRef, options?: CacheRequestOptions) =>
+    ipcRenderer.invoke("github:get-releases", repo, options),
   getIssues: (repo: RepoRef, options?: CacheRequestOptions) =>
     ipcRenderer.invoke("github:get-issues", repo, options),
   getWorkflows: (repo: RepoRef, options?: CacheRequestOptions) =>
