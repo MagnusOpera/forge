@@ -1,17 +1,17 @@
 // Synthetic data only. Loaded by the screenshot harness, never by the app.
 const settings = { model: "", effort: "", speed: "normal", mode: "implement", followUp: "steer", permissions: "ask" };
 const repo = {
-  id: "forge-demo", owner: "MagnusOpera", name: "forge", fullName: "MagnusOpera/forge",
+  id: "forge-demo", owner: "acme", name: "workspace", fullName: "acme/workspace",
   description: "A focus-first desktop workspace for GitHub and Codex.",
   defaultBranch: "main", viewerPermission: "ADMIN", isPrivate: false, isArchived: false,
-  isFork: false, url: "https://github.com/MagnusOpera/forge"
+  isFork: false, url: "https://github.com/acme/workspace"
 };
-const repositories = [repo, { ...repo, id: "docs-demo", name: "docs", fullName: "MagnusOpera/docs" }, { ...repo, id: "tools-demo", name: "developer-tools", fullName: "MagnusOpera/developer-tools" }];
+const repositories = [repo, { ...repo, id: "docs-demo", name: "docs", fullName: "acme/docs" }, { ...repo, id: "tools-demo", name: "developer-tools", fullName: "acme/developer-tools" }];
 const thread = {
   id: "website-demo", repositoryId: repo.id, title: "Make workflow failures easier to investigate",
   archived: false, createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-01T10:02:00Z",
-  settings, state: "idle", worktree: "/demo/forge/worktrees/workflow-details",
-  repositoryPath: "/demo/forge", branch: "codex/forge-website-demo", baseCommit: "a12bc34",
+  settings, state: "idle", worktree: "/demo/workspace/worktrees/workflow-details",
+  repositoryPath: "/demo/workspace", branch: "codex/workspace-website-demo", baseCommit: "a12bc34",
   serverId: "demo", requests: [], queue: [], queuePaused: false, draft: "", draftAttachments: [],
   turns: { turn: { durationMs: 83000 } },
   items: [
@@ -46,7 +46,7 @@ window.forgeCodex = {
   onChanged: () => () => {},
   request: async (method) => {
     switch (method) {
-      case "configuration": return { editor: "Visual Studio Code", executable: "codex", defaults: settings, projects: { [repo.id]: { repositoryId: repo.id, path: "/demo/forge", overrides: {} } } };
+      case "configuration": return { editor: "Visual Studio Code", executable: "codex", defaults: settings, projects: { [repo.id]: { repositoryId: repo.id, path: "/demo/workspace", overrides: {} } } };
       case "list": return [thread, { ...thread, id: "plan-demo", title: "Plan keyboard navigation improvements", settings: { ...settings, mode: "plan" } }, { ...thread, id: "docs-demo", title: "Document local development setup" }];
       case "thread": return { thread, before: null };
       case "threadWindows": return [];
@@ -59,7 +59,7 @@ localStorage.clear();
 for (const [key, value] of Object.entries({
   "favorites": repositories.map(item => item.fullName),
   "project-focus-view": "codex",
-  "left-width": 240, "middle-width": 340,
+  "left-width": 320, "middle-width": 320,
   "theme": process.env.FORGE_SCREENSHOT_THEME || "dark",
   "sidebar-appearance:dark": "normal", "sidebar-appearance:light": "normal"
 })) localStorage.setItem("github-focus:" + key, JSON.stringify(value));

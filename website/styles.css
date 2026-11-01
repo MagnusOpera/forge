@@ -428,7 +428,7 @@ h3 {
 
 .preview-image-window {
   overflow: hidden;
-  aspect-ratio: 2646 / 1400;
+  aspect-ratio: 1440 / 920;
   border-top: 1px solid var(--border);
 }
 

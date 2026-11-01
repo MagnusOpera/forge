@@ -37,9 +37,11 @@ describe("homepage Codex previews", () => {
       const width = png.readUInt32BE(16);
       const height = png.readUInt32BE(20);
       expect(width).toBeGreaterThanOrEqual(1512);
-      expect(width / height).toBeCloseTo(2646 / 1400, 2);
+      expect(width / height).toBeCloseTo(1440 / 920, 2);
       return [width, height];
     });
     expect(sizes[0]).toEqual(sizes[1]);
+    const styles = readFileSync(path.resolve("website/styles.css"), "utf8");
+    expect(styles).toContain("aspect-ratio: 1440 / 920;");
   });
 });
