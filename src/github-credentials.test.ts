@@ -15,8 +15,7 @@ function setup(initial: string | null) {
 }
 const expired = JSON.stringify({ accessToken: "old", refreshToken: "refresh", expiresAt: 1 });
 
-it("reads both existing PATs and unexpired OAuth sessions without refreshing", async () => {
-  expect(await setup("ghp_existing").credentials.read()).toBe("ghp_existing");
+it("reads unexpired OAuth sessions without refreshing", async () => {
   const { credentials, storage } = setup(JSON.stringify({ accessToken: "gho_saved" }));
   expect(await credentials.read()).toBe("gho_saved");
   expect(storage.refresh).not.toHaveBeenCalled();
@@ -58,23 +57,26 @@ it("reports an unreadable session without exposing its stored token", async () =
   await expect(credentials.read()).rejects.toThrow("saved GitHub session could not be read");
 });
 
-it("reports the active method for both new records and previously saved credentials", async () => {
-  expect(await setup(null).credentials.method()).toBeNull();
-  expect(await setup("ghp_existing").credentials.method()).toBe("token");
-  expect(await setup(JSON.stringify({ accessToken: "ghp_saved" })).credentials.method()).toBe("token");
-  expect(await setup(JSON.stringify({ accessToken: "gho_saved" })).credentials.method()).toBe("oauth");
-  expect(await setup('{broken').credentials.method()).toBeNull();
-  const { credentials } = setup(null);
-  await credentials.replace({ accessToken: "oauth-credential", method: "oauth" });
-  expect(await credentials.method()).toBe("oauth");
-  await credentials.replace({ accessToken: "personal-credential", method: "token" });
-  expect(await credentials.method()).toBe("token");
-  await credentials.clear();
-  expect(await credentials.method()).toBeNull();
+it("requires browser sign-in for legacy personal tokens without using or refreshing them", async () => {
+  for (const stored of ["ghp_existing", JSON.stringify({ accessToken: "ghp_saved" }), JSON.stringify({ accessToken: "legacy", method: "token" })]) {
+    const { credentials, storage, value } = setup(stored);
+    expect(await credentials.hasSession()).toBe(false);
+    expect(await credentials.read()).toBeNull();
+    expect(storage.refresh).not.toHaveBeenCalled();
+    expect(value()).toBe(stored);
+    await credentials.replace({ accessToken: "gho_signed_in" });
+    expect(await credentials.hasSession()).toBe(true);
+    expect(await credentials.read()).toBe("gho_signed_in");
+  }
 });
-it("preserves the authentication method after refreshing an expiring session", async () => {
-  const { credentials, value } = setup(JSON.stringify({ accessToken: "old", refreshToken: "refresh", expiresAt: 1, method: "oauth" }));
-  await credentials.read();
-  expect(JSON.parse(value()!).method).toBe("oauth");
-  expect(await credentials.method()).toBe("oauth");
+it("recognizes previous OAuth sessions, including those with method metadata, and clears session status on sign-out", async () => {
+  for (const stored of [JSON.stringify({ accessToken: "gho_saved" }), JSON.stringify({ accessToken: "gho_saved", method: "oauth" })]) {
+    const { credentials } = setup(stored);
+    expect(await credentials.hasSession()).toBe(true);
+    expect(await credentials.read()).toBe("gho_saved");
+    await credentials.clear();
+    expect(await credentials.hasSession()).toBe(false);
+  }
+  expect(await setup(null).credentials.hasSession()).toBe(false);
+  expect(await setup('{broken').credentials.hasSession()).toBe(false);
 });

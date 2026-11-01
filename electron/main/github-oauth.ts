@@ -1,4 +1,3 @@
-import type { GitHubAuthMethod } from "../../shared/github.js";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { GITHUB_OAUTH_SCOPES, missingRequiredScopes } from "../../shared/auth.js";
@@ -9,7 +8,6 @@ export interface OAuthConfiguration {
 }
 
 export interface OAuthCredential {
-  method?: GitHubAuthMethod;
   accessToken: string;
   refreshToken?: string;
   expiresAt?: number;

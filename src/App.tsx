@@ -1,4 +1,3 @@
-import { GitHubTokenForm } from "./github-token-form";
 import { ReleasesSection } from "./releases";
 import { releaseDate, releasesForTab, type ReleaseTab } from "../shared/releases";
 import { useContentAttachmentShortcut } from "./content-attachment-shortcut";
@@ -424,7 +423,6 @@ const browserApi: GithubFocusApi = {
   platform: "browser",
   getAuthStatus: async () => ({ configured: false, encryptionAvailable: false, viewerLogin: null }),
   signInGithub: () => ipcUnavailable(),
-  saveToken: () => ipcUnavailable(),
   cancelGithubSignIn: () => ipcUnavailable(),
   clearToken: () => ipcUnavailable(),
   getRepositories: () => ipcUnavailable(),
@@ -3484,12 +3482,6 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
             setAuth(next);
             onAuthChange?.(next);
           }}
-          onSaveGithub={async token => {
-            const next = await api.saveToken(token);
-            resetGitHubWorkspace();
-            setAuth(next);
-            onAuthChange?.(next);
-          }}
           onCancelGithubSignIn={() => api.cancelGithubSignIn()}
           onRemoveGithub={() => {
             setSettingsScope(null);
@@ -3618,12 +3610,6 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
             error={authError}
             busy={githubSigningIn}
             onSignIn={() => void signInGithub()}
-            onSaveToken={async token => {
-              const next = await api.saveToken(token);
-              setAuth(next);
-              onAuthChange?.(next);
-            }}
-            onOpenUrl={url => void api.openInGitHub(url)}
             onCancel={() => void api.cancelGithubSignIn().catch(error => setAuthError(userFacingError(error, "Unable to cancel sign-in.")))}
           />
         )}
@@ -5355,10 +5341,7 @@ export function GitHubSignInGate(props: {
   busy: boolean;
   onSignIn(): void;
   onCancel(): void;
-  onSaveToken(token: string): Promise<void>;
-  onOpenUrl(url: string): void;
 }) {
-  const [tokenSaving, setTokenSaving] = useState(false);
   return (
     <div className="token-gate">
       <div className="token-panel">
@@ -5368,13 +5351,11 @@ export function GitHubSignInGate(props: {
         </div>
         <p className="token-help">Sign in through your browser to access your repositories and projects.</p>
         <button className="primary-button" type="button" onClick={props.onSignIn} autoFocus
-          disabled={props.busy || tokenSaving || !props.auth?.encryptionAvailable}>
+          disabled={props.busy || !props.auth?.encryptionAvailable}>
           {props.busy ? <Loader2 className="spin" size={16} /> : <Github size={16} />}
           {props.busy ? "Waiting for GitHub…" : "Sign in with GitHub"}
         </button>
         {props.busy && <button className="ghost-button" type="button" onClick={props.onCancel}>Cancel sign-in</button>}
-        <GitHubTokenForm disabled={props.busy || !props.auth?.encryptionAvailable} onSave={props.onSaveToken}
-          onOpenUrl={props.onOpenUrl} onBusyChange={setTokenSaving} />
         {!props.auth?.encryptionAvailable && <div className="inline-error"><AlertCircle size={15} /><span>Secure storage is unavailable.</span></div>}
         {props.error && <div className="inline-error" role="alert"><AlertCircle size={15} /><span>{displayPathText(props.error)}</span></div>}
       </div>

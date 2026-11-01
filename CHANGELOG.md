@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Use GitHub sign-in exclusively and explain organization OAuth approval.
+
 ## [0.16.0]
 
 

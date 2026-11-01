@@ -3850,23 +3850,3 @@ code {
 .codex-conversation-search { margin: 4px 8px 8px; }
 .codex-search-status { margin: 8px 12px; color: var(--text-muted); font-size: 12px; }
 .codex-search-snippet { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
-
-.github-token-alternative {
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.github-token-alternative summary {
-  cursor: pointer;
-  color: var(--heading);
-}
-
-.github-token-alternative .token-help {
-  margin: 12px 0;
-}
-
-.github-token-alternative form {
-  display: grid;
-  gap: 12px;
-}

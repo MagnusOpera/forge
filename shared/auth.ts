@@ -1,8 +1,3 @@
-export const CLASSIC_TOKEN_SETTINGS_URL = "https://github.com/settings/tokens";
-export function isClassicPersonalAccessToken(token: string): boolean {
-  return token.trim().startsWith("ghp_");
-}
-
 export const GITHUB_OAUTH_SCOPES = ["repo", "read:project"] as const;
 
 export function parseTokenScopes(scopeHeader?: string | null): string[] {

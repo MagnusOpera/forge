@@ -1,4 +1,3 @@
-import { GitHubTokenForm } from "../github-token-form";
 import { usePaneSurface } from "../pane-surface";
 import { displayPath, displayPathText, expandDisplayPath } from "../paths";
 import { EnvironmentsEditor, ProjectEnvironments } from "./environments";
@@ -28,7 +27,6 @@ export function CodexSettingsDialog({
   auth,
   onClose,
   onSignInGithub,
-  onSaveGithub,
   onRemoveGithub,
   onCancelGithubSignIn,
   onOpenUrl,
@@ -37,7 +35,6 @@ export function CodexSettingsDialog({
   auth: AuthStatus | null;
   onClose: () => void;
   onSignInGithub: () => Promise<void>;
-  onSaveGithub?: (token: string) => Promise<void>;
   onCancelGithubSignIn?: () => Promise<void>;
   onRemoveGithub: () => void;
   onOpenUrl: (url: string) => void;
@@ -59,7 +56,6 @@ export function CodexSettingsDialog({
   const accountInput =
     project && accountOverride ? { repositoryId: project.id } : {};
   const [status, setStatus] = useState<CodexStatus | null>(null);
-  const [tokenSaving, setTokenSaving] = useState(false);
   const [githubWaiting, setGithubWaiting] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false),
@@ -305,30 +301,23 @@ export function CodexSettingsDialog({
                     ? `Connected${auth.viewerLogin ? ` as ${auth.viewerLogin}` : ""}`
                     : "Not signed in to GitHub"}
                 </p>
-                {auth?.configured && <p className="github-auth-method">
-                  <strong>Active method: </strong>
-                  {auth.method === "token" ? "Personal access token" : auth.method === "oauth" ? "GitHub sign-in (OAuth)" : auth.method === undefined ? "Restart Forge to detect the saved method" : "Unable to identify the saved method"}
-                </p>}
                 <div className="codex-actions">
-                  <button type="button" className="primary-button" disabled={busy || tokenSaving || !auth?.encryptionAvailable}
+                  <button type="button" className="primary-button" disabled={busy || !auth?.encryptionAvailable}
                     onClick={() => void operation(async () => {
                       githubWaitingRef.current = true;
                       setGithubWaiting(true);
                       try { await onSignInGithub(); }
                       finally { githubWaitingRef.current = false; setGithubWaiting(false); }
                     })}>
-                    {githubWaiting ? "Waiting for GitHub…" : auth?.configured && auth.method === "token" ? "Switch to GitHub sign-in" : auth?.configured && auth.method === "oauth" ? "Reconnect with GitHub" : "Sign in with GitHub"}
+                    {githubWaiting ? "Waiting for GitHub…" : auth?.configured ? "Reconnect with GitHub" : "Sign in with GitHub"}
                   </button>
                   {githubWaiting && <button type="button" className="ghost-button"
                     onClick={() => void onCancelGithubSignIn?.().catch(e => setError(errorMessage(e)))}>Cancel sign-in</button>}
-                  {auth?.configured && <button type="button" className="ghost-button" disabled={busy || tokenSaving} onClick={onRemoveGithub}>Sign out</button>}
+                  {auth?.configured && <button type="button" className="ghost-button" disabled={busy} onClick={onRemoveGithub}>Sign out</button>}
                   <button type="button" className="ghost-button" onClick={() => onOpenUrl("https://github.com/settings/applications")}>Manage GitHub access</button>
                 </div>
-                {onSaveGithub && <GitHubTokenForm disabled={busy || !auth?.encryptionAvailable}
-                  onSave={onSaveGithub} onOpenUrl={onOpenUrl} onBusyChange={setTokenSaving}
-                  active={auth?.method === "token"} connected={auth?.configured} />}
                 {!auth?.encryptionAvailable && <p className="inline-error">Secure storage is unavailable.</p>}
-                <p className="codex-muted">Your credentials stay encrypted on this Mac. Switching methods replaces the current connection.</p>
+                <p className="codex-muted">Sign in through your browser. Your credentials stay encrypted on this Mac.</p>
               </section>
             )}
             {section === "github" && configuration && (

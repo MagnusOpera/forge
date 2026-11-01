@@ -1,5 +1,15 @@
-import type { GitHubAuthMethod } from "../../shared/github.js";
 import { requestOAuthToken, type OAuthConfiguration, type OAuthCredential } from "./github-oauth.js";
+
+function decodeCredential(stored: string | null): OAuthCredential | null {
+  // Legacy raw personal tokens must return users to browser sign-in.
+  if (!stored || !stored.startsWith("{")) return null;
+  try {
+    const credential = JSON.parse(stored) as OAuthCredential & { method?: unknown };
+    if (!credential || typeof credential.accessToken !== "string" || !credential.accessToken) throw new Error();
+    if (credential.method === "token" || /^(ghp_|github_pat_)/.test(credential.accessToken)) return null;
+    return { accessToken: credential.accessToken, refreshToken: credential.refreshToken, expiresAt: credential.expiresAt };
+  } catch { throw new Error("Your saved GitHub session could not be read. Sign in with GitHub again."); }
+}
 
 /** Serializes credential writes so sign-out cannot be undone by a late refresh. */
 export class GitHubCredentials {
@@ -28,18 +38,14 @@ export class GitHubCredentials {
       await this.writes;
       const stored = await this.storage.read();
       if (!stored || generation !== this.generation) return null;
-      if (!stored.startsWith("{")) return stored; // Existing classic PATs remain usable.
-      let credential: OAuthCredential;
-      try {
-        credential = JSON.parse(stored) as OAuthCredential;
-        if (!credential || typeof credential.accessToken !== "string" || !credential.accessToken) throw new Error();
-      } catch { throw new Error("Your saved GitHub session could not be read. Sign in with GitHub again."); }
+      let credential = decodeCredential(stored);
+      if (!credential) return null;
       if (credential.expiresAt && credential.expiresAt <= Date.now() + 60_000) {
         if (!credential.refreshToken) throw new Error("Your GitHub session has expired. Sign in with GitHub again.");
         const refreshed = await (this.storage.refresh ?? requestOAuthToken)(this.storage.configuration(), {
           grant_type: "refresh_token", refresh_token: credential.refreshToken,
         });
-        credential = { ...refreshed, ...(credential.method ? { method: credential.method } : {}) };
+        credential = refreshed;
         await this.mutate(async () => {
           if (generation === this.generation) await this.storage.write(JSON.stringify(credential));
         });
@@ -51,23 +57,10 @@ export class GitHubCredentials {
     finally { if (this.pendingRead === pending) this.pendingRead = null; }
   }
 
-  async method(): Promise<GitHubAuthMethod | null> {
+  async hasSession(): Promise<boolean> {
     await this.writes;
-    const stored = await this.storage.read();
-    if (!stored) return null;
-    let token = stored;
-    if (stored.startsWith("{")) {
-      try {
-        const credential = JSON.parse(stored) as OAuthCredential;
-        if (credential.method === "oauth" || credential.method === "token") return credential.method;
-        token = credential.accessToken;
-      } catch { return null; }
-    }
-    // Infer the method for credentials saved before the method was recorded.
-    if (typeof token !== "string") return null;
-    if (token.startsWith("ghp_")) return "token";
-    if (token.startsWith("gho_")) return "oauth";
-    return null;
+    try { return decodeCredential(await this.storage.read()) !== null; }
+    catch { return false; }
   }
 
   replace(credential: OAuthCredential): Promise<void> {

@@ -447,40 +447,14 @@ it("starts browser GitHub sign-in, allows cancellation, and displays retry error
   expect([...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Sign in with GitHub")!.disabled).toBe(false);
 });
 
-it("replaces a GitHub OAuth session with a personal token from global settings", async () => {
-  const save = vi.fn(async () => {});
-  await act(async () => root.render(<CodexSettingsDialog {...props}
-    auth={{ configured: true, encryptionAvailable: true, viewerLogin: "octocat" }} onSaveGithub={save} />));
-  await navigate("GitHub");
-  expect(container.textContent).toContain("Sign in with GitHub");
-  await act(async () => container.querySelector("summary")!.click());
-  const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
-  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-  await act(async () => { setValue.call(input, "ghp_replacement"); input.dispatchEvent(new Event("input", { bubbles: true })); });
-  await act(async () => container.querySelector<HTMLFormElement>(".github-token-alternative form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-  expect(save).toHaveBeenCalledWith("ghp_replacement");
-  expect(input.value).toBe("");
-});
-
-it.each(["oauth", "token"] as const)("identifies %s as the active GitHub method and labels the switching actions", async method => {
-  await act(async () => root.render(<CodexSettingsDialog {...props}
-    auth={{ configured: true, encryptionAvailable: true, viewerLogin: "octocat", method }}
-    onSaveGithub={async () => {}} />));
-  await navigate("GitHub");
-  expect(container.querySelector(".github-auth-method")?.textContent).toBe(
-    `Active method: ${method === "token" ? "Personal access token" : "GitHub sign-in (OAuth)"}`,
-  );
-  expect(container.querySelector(".github-token-alternative summary")?.textContent).toBe(
-    method === "token" ? "Replace personal access token" : "Switch to a personal access token",
-  );
-  expect(container.textContent).toContain(method === "token" ? "Switch to GitHub sign-in" : "Reconnect with GitHub");
-  expect(container.textContent).not.toContain("Sign in through your browser.");
-});
-
-it("asks for a restart rather than reauthentication when a running older main process omits method metadata", async () => {
+it("shows a single GitHub connection without token controls or an authentication method indicator", async () => {
   await act(async () => root.render(<CodexSettingsDialog {...props}
     auth={{ configured: true, encryptionAvailable: true, viewerLogin: "octocat" }} />));
   await navigate("GitHub");
-  expect(container.querySelector(".github-auth-method")?.textContent).toBe("Active method: Restart Forge to detect the saved method");
-  expect(container.textContent).not.toContain("reconnect to confirm");
+  expect(container.textContent).toContain("Connected as octocat");
+  expect(container.textContent).toContain("Reconnect with GitHub");
+  expect(container.textContent).toContain("Sign out");
+  expect(container.textContent).not.toContain("Active method");
+  expect(container.textContent).not.toContain("personal access token");
+  expect(container.querySelector('input[type="password"]')).toBeNull();
 });

@@ -1,4 +1,3 @@
-import { validatePersonalToken } from "./github-personal-token.js";
 import { GitHubCredentials } from "./github-credentials.js";
 import { publishDraftRelease } from "./releases.js";
 import { fetchRepositoryReleases } from "../../shared/releases.js";
@@ -657,19 +656,11 @@ async function clearToken(): Promise<void> {
 }
 
 async function getAuthStatus(): Promise<AuthStatus> {
-  let configured = false;
-  try {
-    await fs.access(tokenPath());
-    configured = true;
-  } catch {
-    configured = false;
-  }
-
   const encryptionAvailable = await safeStorage.isAsyncEncryptionAvailable();
+  const configured = encryptionAvailable && await githubCredentials.hasSession();
   return {
     configured,
     encryptionAvailable,
-    method: configured && encryptionAvailable ? await githubCredentials.method() : null,
     viewerLogin: await getViewerLogin(configured)
   };
 }
@@ -2548,25 +2539,6 @@ function assertGitHubAuthSender(event: IpcMainInvokeEvent): void {
 
 function registerIpc(): void {
   ipcMain.handle("auth:get-status", () => getAuthStatus());
-  ipcMain.handle("auth:save-token", async (event, value: unknown) => {
-    assertGitHubAuthSender(event);
-    if (githubSignIn) throw new Error("GitHub authentication is already in progress.");
-    if (typeof value !== "string" || !value.trim()) throw new Error("Token cannot be empty.");
-    const controller = new AbortController();
-    githubSignIn = controller;
-    try {
-      if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error("Secure storage is unavailable.");
-      const token = value.trim();
-      await validatePersonalToken(token, controller.signal);
-      controller.signal.throwIfAborted();
-      await githubCredentials.replace({ accessToken: token, method: "token" });
-      controller.signal.throwIfAborted();
-      await resetGitHubClients();
-      return getAuthStatus();
-    } finally {
-      if (githubSignIn === controller) githubSignIn = null;
-    }
-  });
   ipcMain.handle("auth:sign-in", async event => {
     assertGitHubAuthSender(event);
     if (githubSignIn) throw new Error("GitHub sign-in is already in progress.");
@@ -2586,7 +2558,7 @@ function registerIpc(): void {
       const viewer = await response.json() as { login?: string };
       if (!viewer.login) throw new Error("GitHub did not return an account. Try signing in again.");
       controller.signal.throwIfAborted();
-      await githubCredentials.replace({ ...credential, method: "oauth" });
+      await githubCredentials.replace(credential);
       controller.signal.throwIfAborted();
       await resetGitHubClients();
       return getAuthStatus();

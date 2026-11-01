@@ -28,7 +28,11 @@ The tap is `magnusopera/tap`, and the formula is `forge`. You can also download 
 
 ## GitHub sign-in
 
-Choose **Sign in with GitHub** when Forge opens, approve repository and project access in your browser, then return to Forge. Alternatively, choose **Use a personal access token** and save a classic token with `repo` and `read:project` permissions. This option also works in local builds without OAuth App credentials. Manage your connection under **Global configuration → GitHub**, where **Active method** identifies GitHub sign-in or a personal access token. Switching methods replaces the current connection. Sign out removes the saved credentials from this Mac; revoke Forge’s authorization in GitHub’s application settings to remove its access completely. Organization policies may require an administrator to approve Forge.
+Choose **Sign in with GitHub** when Forge opens, approve repository and project access in your browser, then return to Forge. Manage your connection under **Global configuration → GitHub**. Sign out removes the saved credentials from this Mac; revoke Forge’s authorization in GitHub’s application settings to remove its access completely.
+
+If an organization restricts OAuth Apps, request approval for Forge from an organization owner. Owners can grant access under **Organization settings → Third-party Access → OAuth app policy**; see [GitHub’s approval instructions](https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/approving-oauth-apps-for-your-organization). Complete any required organization SSO sign-in as well. An OAuth restriction error means Forge needs organization approval, even if GitHub sign-in succeeded.
+
+Personal access token login is no longer supported. Existing personal-token connections return to the sign-in screen after upgrading; existing browser sign-ins remain connected.
 
 ## Development
 
@@ -40,7 +44,7 @@ Install dependencies:
 npm install
 ```
 
-GitHub sign-in requires Forge’s registered OAuth App credentials. See [GitHub sign-in configuration](RELEASE.md#github-sign-in-configuration) for registration and local build setup. Existing saved tokens remain usable after upgrading.
+GitHub sign-in requires Forge’s registered OAuth App credentials. See [GitHub sign-in configuration](RELEASE.md#github-sign-in-configuration) for registration and local build setup.
 
 Run the Electron app in development (automatically loads an optional, Git-ignored `.env` file):
 
