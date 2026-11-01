@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.17.0]
+
+
 - Use GitHub sign-in exclusively and explain organization OAuth approval.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.16.0...0.17.0
 
 ## [0.16.0]
 
