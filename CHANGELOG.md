@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.18.1]
+
+
 - Avoid compiler verification test timeouts on slower CI runners.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.18.0...0.18.1
 
 ## [0.18.0]
 
