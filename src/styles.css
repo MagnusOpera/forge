@@ -674,6 +674,28 @@ input {
   color: var(--text-strong);
 }
 
+.project-refresh-underline {
+  animation: project-refresh-underline 900ms ease-out;
+}
+
+@keyframes project-refresh-underline {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.3;
+  }
+
+  45%, 100% {
+    clip-path: inset(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-refresh-underline {
+    animation: none;
+  }
+}
+
 .toolbar-divider {
   width: 1px;
   height: 18px;
@@ -1048,6 +1070,11 @@ input {
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 650;
+}
+
+.sidebar-monitor-refresh {
+  width: 20px;
+  height: 20px;
 }
 
 .sidebar-monitor-status svg {

@@ -44,7 +44,6 @@ import {
   Pencil,
   Play,
   Plus,
-  RefreshCw,
   Settings,
   Bot,
   Search,
@@ -3692,6 +3691,9 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         favoriteKeys={favoriteKeys}
         favoriteMonitorChecking={favoriteProjectMonitorStatus.checking}
         favoriteMonitorLastCheckedAt={favoriteProjectMonitorStatus.lastCheckedAt}
+        onRefreshFavorites={() => void refreshFavoriteProjectsForNotifications().catch(error => {
+          flash(error instanceof Error ? error.message : "Unable to refresh favorites.");
+        })}
         loading={initialLoading}
       />
       <div
@@ -3780,6 +3782,7 @@ interface SidebarProps {
   favoriteKeys: string[];
   favoriteMonitorChecking: boolean;
   favoriteMonitorLastCheckedAt: string | null;
+  onRefreshFavorites(): void;
   loading: boolean;
   onSearch(value: string): void;
   onToggle(): void;
@@ -3920,7 +3923,15 @@ function Sidebar(props: SidebarProps) {
       </nav>
       {!searchActive && repoTab === "favorites" && props.favoriteRepos.length > 0 && (
         <div className="sidebar-monitor-status" aria-live="polite">
-          {props.favoriteMonitorChecking ? <Loader2 className="spin" size={13} /> : <Activity size={13} />}
+          <button
+            className="icon-button sidebar-monitor-refresh"
+            aria-label="Refresh favorite repositories"
+            title="Refresh favorite repositories"
+            disabled={props.favoriteMonitorChecking}
+            onClick={props.onRefreshFavorites}
+          >
+            {props.favoriteMonitorChecking ? <Loader2 className="spin" size={13} /> : <Activity size={13} />}
+          </button>
           <span>{favoriteMonitorText}</span>
         </div>
       )}
@@ -4153,45 +4164,12 @@ function ProjectPane(props: {
   onToggleWorkflowStar(workflow: WorkflowSummary): void;
   onReorderFavoriteWorkflow(sourceId: number, targetId: number): void;
 }) {
-  const [syncInvoked, setSyncInvoked] = useState(false);
-  const syncFeedbackTimer = useRef<number | null>(null);
-  const syncFeedbackFrame = useRef<number | null>(null);
+  const [refreshSequence, setRefreshSequence] = useState(0);
 
-  useEffect(
-    () => () => {
-      if (syncFeedbackTimer.current) {
-        window.clearTimeout(syncFeedbackTimer.current);
-      }
-      if (syncFeedbackFrame.current) {
-        window.cancelAnimationFrame(syncFeedbackFrame.current);
-      }
-    },
-    []
-  );
-
-  const animateSync = useCallback(() => {
-    if (syncFeedbackTimer.current) {
-      window.clearTimeout(syncFeedbackTimer.current);
-    }
-    if (syncFeedbackFrame.current) {
-      window.cancelAnimationFrame(syncFeedbackFrame.current);
-    }
-
-    setSyncInvoked(false);
-    syncFeedbackFrame.current = window.requestAnimationFrame(() => {
-      setSyncInvoked(true);
-      syncFeedbackFrame.current = null;
-      syncFeedbackTimer.current = window.setTimeout(() => {
-        setSyncInvoked(false);
-        syncFeedbackTimer.current = null;
-      }, 620);
-    });
-  }, []);
-
-  const refreshProject = useCallback(() => {
-    animateSync();
+  const refreshProject = () => {
+    setRefreshSequence(sequence => sequence + 1);
     props.onRefresh();
-  }, [animateSync, props.onRefresh]);
+  };
 
   return (
     <section className="project-pane" tabIndex={0}>
@@ -4217,17 +4195,9 @@ function ProjectPane(props: {
               workflows: props.workflows.length
             }}
             onView={props.onFocusView}
+            onRefresh={refreshProject}
+            refreshSequence={refreshSequence}
           />
-          <span className="toolbar-divider" />
-          <button
-            className={cx("icon-button underline-action", syncInvoked && "invoked")}
-            aria-label="Refresh repository"
-            title="Refresh repository (⌘R)"
-            onClick={refreshProject}
-            disabled={!props.repo}
-          >
-            <RefreshCw size={16} />
-          </button>
           <GithubUrlActionButton
             url={props.repo?.url ?? null}
             ariaLabel="Copy project GitHub URL. Double-click to open in GitHub"
@@ -4297,6 +4267,8 @@ function ProjectFocusToolbar(props: {
   disabled: boolean;
   view: ProjectFocusView;
   onView(view: ProjectFocusView): void;
+  onRefresh(): void;
+  refreshSequence: number;
 }) {
   const toolbarUnderline = useSlidingUnderline(
     `${props.view}:${props.disabled}:${props.counts["pull-requests"]}:${props.counts["workflow-runs"]}:${props.counts.issues}:${props.counts.workflows}:${props.counts.releases}`
@@ -4319,15 +4291,20 @@ function ProjectFocusToolbar(props: {
           className={cx("icon-button project-view-button", props.view === item.view && "active")}
           data-active-tab={props.view === item.view ? "true" : undefined}
           aria-label={`${item.label} (${props.counts[item.view]})`}
-          title={`${item.label} (${item.shortcut})`}
+          title={`${item.label} (${item.shortcut})${props.view === item.view ? ". Click again to refresh (⌘R)" : ""}`}
           aria-pressed={props.view === item.view}
           disabled={props.disabled}
-          onClick={() => props.onView(item.view)}
+          onClick={() => props.view === item.view ? props.onRefresh() : props.onView(item.view)}
         >
           {item.icon}
         </button>
       ))}
-      <span className="sliding-tab-underline" style={toolbarUnderline.underlineStyle} aria-hidden="true" />
+      <span
+        key={props.refreshSequence}
+        className={cx("sliding-tab-underline", props.refreshSequence > 0 && "project-refresh-underline")}
+        style={toolbarUnderline.underlineStyle}
+        aria-hidden="true"
+      />
     </div>
   );
 }
