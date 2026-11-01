@@ -4,11 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0]
+
+
 - Keep detached windows aligned with Forge when its bottom edge extends offscreen.
 
 - Remove secure token storage deprecation warnings when signing in and loading saved credentials.
 
 - Refine Codex conversations with rounded message bubbles, balanced spacing, and a jump-to-latest control that preserves your reading position.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.11.0...0.12.0
 
 ## [0.11.0]
 
