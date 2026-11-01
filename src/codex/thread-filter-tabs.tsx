@@ -16,6 +16,8 @@ export function ThreadFilterTabs({
   disabled?: boolean;
   label?: string;
 }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const underline = useSlidingUnderline(
     `${archived}:${activeCount}:${archivedCount}`,
   );

@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Enable React Compiler to automatically memoize eligible components and hooks.
+
 ## [0.17.1]
 
 

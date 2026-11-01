@@ -27,6 +27,8 @@ export function Combobox<Value extends string>({
   title?: string;
   triggerRef?: Ref<HTMLButtonElement>;
 }) {
+  "use no memo"; // Preserve the external DOM/ref mutations at this imperative UI boundary.
+
   const { window } = usePaneSurface();
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null),

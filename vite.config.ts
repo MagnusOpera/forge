@@ -1,9 +1,17 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
+
+// Fail on diagnostics in compiled functions; explicitly opted-out functions retain their behavior.
+export const reactCompilerOptions = { panicThreshold: "all_errors" } as const;
 
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [react(), babel({
+    presets: [reactCompilerPreset(reactCompilerOptions)],
+    // Test harnesses deliberately expose render state to their assertions.
+    exclude: [/[\\/]node_modules[\\/]/, /\.test\.[jt]sx?$/],
+  })],
   build: {
     outDir: "dist/renderer",
     emptyOutDir: true,

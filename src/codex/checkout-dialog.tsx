@@ -11,6 +11,8 @@ export function CheckoutDialog({ preview, onConfirm, onReview, onClose }: {
   onReview: () => Promise<void>;
   onClose: () => void;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const { document } = usePaneSurface();
   const [method, setMethod] = useState<CodexMergeChoice["method"]>("squash");
   const [message, setMessage] = useState(preview.message);

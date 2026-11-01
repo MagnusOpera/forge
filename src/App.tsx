@@ -285,6 +285,8 @@ function useAdaptivePolling(
   enabled: boolean,
   options: { immediately?: boolean; document?: Document } = {}
 ): void {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const document = options.document ?? globalThis.document;
   const callbackRef = useRef(callback);
   const immediately = Boolean(options.immediately);
@@ -1163,6 +1165,8 @@ type WorkspaceProps = {
 export function App() { return <ForgeWorkspace />; }
 
 function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneState, onNavigateItem, history }: WorkspaceProps) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const initialItem = useRef(item).current;
   const contentPane = useDetachablePane({ onReattach: () => { if (initialItem) onNavigateItem?.(initialItem); } });
   const [detachedItems, setDetachedItems] = useState<Map<string, { target: ContentItemTarget; pane: ItemPaneControl }>>(new Map());
@@ -3792,6 +3796,8 @@ interface SidebarProps {
 }
 
 function Sidebar(props: SidebarProps) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const sidebarRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useStoredState<Record<string, boolean>>(
@@ -4270,6 +4276,8 @@ function ProjectFocusToolbar(props: {
   onRefresh(): void;
   refreshSequence: number;
 }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const toolbarUnderline = useSlidingUnderline(
     `${props.view}:${props.disabled}:${props.counts["pull-requests"]}:${props.counts["workflow-runs"]}:${props.counts.issues}:${props.counts.workflows}:${props.counts.releases}`
   );
@@ -4317,6 +4325,8 @@ function PullRequestFocusSection(props: {
   onTab(tab: ProjectPullRequestTab): void;
   onSelect(pr: PullRequestSummary): void;
 }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const visiblePullRequests = props.tab === "closed" ? props.closedPullRequests : props.openPullRequests;
   const pullRequestTabsUnderline = useSlidingUnderline(
     `${props.tab}:${props.openPullRequests.length}:${props.closedPullRequests.length}`
@@ -4490,6 +4500,8 @@ function WorkflowFocusSection(props: {
   onToggleStar(workflow: WorkflowSummary): void;
   onReorderFavoriteWorkflow(sourceId: number, targetId: number): void;
 }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const visibleWorkflows = props.tab === "favorites" ? props.favoriteWorkflows : props.allWorkflows;
   const workflowTabsUnderline = useSlidingUnderline(
     `${props.tab}:${props.favoriteWorkflows.length}:${props.allWorkflows.length}`
@@ -4720,6 +4732,8 @@ function ContentPane(props: {
   onRunWorkflow(workflow: WorkflowSummary): void;
   onRunWorkflowWithArguments(workflow: WorkflowSummary): void;
 }) {
+  "use no memo"; // Preserve the existing explicit memoization dependencies in this view.
+
   useContentAttachmentShortcut(props.onToggleAttachment, !props.attachmentOpening);
   const reviewPr = props.selection.kind === "pr" ? props.prDetail ?? props.selection.pr : null;
   const showTitleAction =
@@ -5203,6 +5217,8 @@ function PullRequestReviewActions(props: {
   activeEvent: PullRequestReviewEvent | null;
   onSubmitReview(pr: PullRequestSummary, event: PullRequestReviewEvent): void;
 }) {
+  "use no memo"; // Preserve the existing explicit memoization dependencies in this view.
+
   const currentEvent: PullRequestReviewEvent = props.activeEvent ?? "APPROVE";
   const submitReview = useCallback(
     (event: PullRequestReviewEvent) => {
@@ -5394,6 +5410,8 @@ function PullRequestContent(props: {
   onCopyText(value: string): Promise<boolean>;
   onTab(tab: string): void;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const detail = props.detail;
   const pr = detail ?? props.fallback;
   const title = detail?.title ?? props.fallback.title;
@@ -6119,6 +6137,8 @@ function ReleaseContent({ release, canPublish, onPublish }: {
   canPublish: boolean;
   onPublish(release: ReleaseSummary): Promise<ReleaseSummary>;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
@@ -6200,6 +6220,8 @@ function WorkflowContent(props: {
   onRun(workflow: WorkflowSummary): void;
   onRunWithArguments(workflow: WorkflowSummary): void;
 }) {
+  "use no memo"; // Preserve the existing explicit memoization dependencies in this view.
+
   const [copiedPath, setCopiedPath] = useState(false);
   const copyFeedbackTimer = useRef<number | null>(null);
   const copyFeedbackFrame = useRef<number | null>(null);
@@ -6605,6 +6627,8 @@ function WorkflowJobsList({
 }
 
 function TabBar(props: { tabs: string[]; selected: string; onSelect(tab: string): void }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const selected = props.tabs.includes(props.selected) ? props.selected : props.tabs[0] ?? "";
   const tabsUnderline = useSlidingUnderline(`${selected}:${props.tabs.join("|")}`);
 

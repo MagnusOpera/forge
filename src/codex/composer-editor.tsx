@@ -131,6 +131,8 @@ export function ComposerEditor({
   placeholder: string;
   sendShortcut?: CodexSendShortcut;
 }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const { document } = usePaneSurface();
   const callbacks = useRef({ onChange, onSend, sendShortcut });
   callbacks.current = { onChange, onSend, sendShortcut };

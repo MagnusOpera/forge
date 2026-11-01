@@ -17,6 +17,8 @@ export function EnvironmentsEditor({
   configuration: CodexConfiguration;
   onChange: (configuration: CodexConfiguration) => void;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const [environments, setEnvironments] = useState(
     configuration.environments ?? [],
   );
@@ -351,6 +353,8 @@ function ProjectEnvironmentRow({
   path: string;
   onChange: (path: string) => void;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const [result, setResult] = useState<CodexEnvironmentCheck | null>(null);
   const [busy, setBusy] = useState(false);
   const generation = useRef(0);

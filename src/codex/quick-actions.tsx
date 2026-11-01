@@ -33,6 +33,8 @@ export function CodexQuickActions({
   defaultBranch?: string | null;
   group?: "all" | "checkout" | "git";
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const { document, portalRoot } = usePaneSurface();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),

@@ -17,6 +17,8 @@ export function useCodexThreads(repositoryId?: string): {
   threads: CodexThreadSummary[];
   error: string;
 } {
+  "use no memo"; // React Compiler does not yet support these captured counter updates.
+
   const [threads, setThreads] = useState<CodexThreadSummary[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {

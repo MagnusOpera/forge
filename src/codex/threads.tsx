@@ -37,6 +37,8 @@ export function CodexThreadList({
   configurationOpen?: boolean;
   error: string;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const [archived, setArchived] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);

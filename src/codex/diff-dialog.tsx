@@ -19,6 +19,8 @@ export function CodexDiffDialog({
   changes?: CodexFileChange[];
   filePath?: string;
 }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const { document } = usePaneSurface();
   const [info, setInfo] = useState<CodexGitInfo | null>(null),
     [error, setError] = useState("");

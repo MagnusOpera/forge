@@ -24,6 +24,8 @@ export function TerminalPanel({
   theme: "light" | "dark";
   onHide: () => void;
 }) {
+  "use no memo"; // React Compiler does not yet support these dynamic imports.
+
   const { document, window } = usePaneSurface();
   const root = useRef<HTMLElement>(null),
     mount = useRef<HTMLDivElement>(null),

@@ -179,6 +179,8 @@ export function CodexConversation({
   theme?: "light" | "dark";
   interactionDisabled?: boolean;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const [page, setPage] = useState<CodexThreadPage | null>(null),
     [error, setError] = useState("");
   const [draft, setDraft] = useState(""),

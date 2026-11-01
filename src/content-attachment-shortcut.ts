@@ -9,6 +9,8 @@ export function isContentAttachmentShortcut(event: ShortcutEvent): boolean {
 
 /** Bind to the content's current window so independent detached items cannot toggle one another. */
 export function useContentAttachmentShortcut(toggle: () => void, enabled: boolean): void {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const { window, document } = usePaneSurface();
   const latestToggle = useRef(toggle);
   latestToggle.current = toggle;

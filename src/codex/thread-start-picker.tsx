@@ -9,6 +9,8 @@ export function ThreadStartPicker({ thread, onChange, onPendingChange }: {
   onChange: () => Promise<void>;
   onPendingChange: (pending: boolean) => void;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const [options, setOptions] = useState<CodexStartOptions | null>(null);
   const [kind, setKind] = useState<CodexThreadStart["kind"]>(thread.start?.kind ?? "worktree");
   const [branch, setBranch] = useState(thread.start?.kind === "new" ? thread.start.branch : "");

@@ -41,6 +41,8 @@ function downloadText(text: string, name: string, type: string) {
 let renders: Promise<unknown> = Promise.resolve();
 let diagramId = 0;
 function Mermaid({ source }: { source: string }) {
+  "use no memo"; // React Compiler does not yet support these captured counter updates.
+
   const root = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState("");
   const [error, setError] = useState("");

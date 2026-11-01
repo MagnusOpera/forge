@@ -9,6 +9,8 @@ export function contentWindowUrl(href: string): string {
 
 /** One portal container, moved rather than remounted: drafts and local view state survive. */
 export function useDetachablePane(options: { onReattach?: () => void } = {}) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const [windowName] = useState(() => `forge-content-pane-${crypto.randomUUID()}`);
   const onReattach = useRef(options.onReattach);
   onReattach.current = options.onReattach;
@@ -89,6 +91,8 @@ export function DetachablePane({ pane, theme, accent, title, appearance, childre
   appearance?: string;
   children: ReactNode;
 }) {
+  "use no memo"; // Preserve the external DOM/ref mutations at this imperative UI boundary.
+
   const { host, surface, detached } = pane;
   useLayoutEffect(() => {
     if (!detached) pane.slot.current?.append(host);

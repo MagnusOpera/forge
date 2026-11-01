@@ -32,6 +32,8 @@ export function ModelPicker({
   disabled: boolean;
   onChange: (value: CodexPreferences) => void;
 }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const { window } = usePaneSurface();
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);

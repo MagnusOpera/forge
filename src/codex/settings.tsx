@@ -39,6 +39,8 @@ export function CodexSettingsDialog({
   onRemoveGithub: () => void;
   onOpenUrl: (url: string) => void;
 }) {
+  "use no memo"; // React Compiler does not yet support this try/finally control flow.
+
   const { document } = usePaneSurface();
   const [section, setSection] = useState(project ? "github" : "general");
   const [homeRelativePath, setHomeRelativePath] = useState<string | null>(null);

@@ -10,6 +10,8 @@ export function ReleasesSection(props: {
   onTab(tab: ReleaseTab): void;
   onSelect(release: ReleaseSummary): void;
 }) {
+  "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
+
   const underline = useSlidingUnderline(`${props.tab}:${props.releases.length}`);
   const visible = releasesForTab(props.releases, props.tab);
   const labels = { active: "Active", preview: "Preview", draft: "Draft" };
