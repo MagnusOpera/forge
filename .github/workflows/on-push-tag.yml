@@ -31,6 +31,10 @@ jobs:
         run: npm ci
 
       - name: Build unsigned macOS arm64 artifact
+        env:
+          FORGE_GITHUB_CLIENT_ID: ${{ secrets.FORGE_GITHUB_CLIENT_ID }}
+          FORGE_GITHUB_CLIENT_SECRET: ${{ secrets.FORGE_GITHUB_CLIENT_SECRET }}
+          FORGE_REQUIRE_GITHUB_OAUTH: 'true'
         run: make package-mac-arm64 version="${RELEASE_TAG}"
 
       - name: Upload macOS artifact

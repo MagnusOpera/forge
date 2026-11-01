@@ -11,7 +11,10 @@ export interface CacheRequestOptions {
   force?: boolean;
 }
 
+export type GitHubAuthMethod = "oauth" | "token";
+
 export interface AuthStatus {
+  method?: GitHubAuthMethod | null;
   configured: boolean;
   encryptionAvailable: boolean;
   viewerLogin: string | null;
@@ -368,7 +371,9 @@ export interface PullRequestAutoMergePayload extends PullRequestActionPayload {
 
 export interface GithubFocusApi {
   getAuthStatus(): Promise<AuthStatus>;
+  signInGithub(): Promise<AuthStatus>;
   saveToken(token: string): Promise<AuthStatus>;
+  cancelGithubSignIn(): Promise<void>;
   clearToken(): Promise<AuthStatus>;
   getRepositories(): Promise<CacheEnvelope<RepoSummary[]>>;
   getStarredRepos(): Promise<CacheEnvelope<RepoSummary[]>>;

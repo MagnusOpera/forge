@@ -1,21 +1,17 @@
 export const CLASSIC_TOKEN_SETTINGS_URL = "https://github.com/settings/tokens";
-export const REQUIRED_CLASSIC_TOKEN_SCOPES = ["repo", "read:project"] as const;
-
 export function isClassicPersonalAccessToken(token: string): boolean {
   return token.trim().startsWith("ghp_");
 }
 
+export const GITHUB_OAUTH_SCOPES = ["repo", "read:project"] as const;
+
 export function parseTokenScopes(scopeHeader?: string | null): string[] {
-  return (scopeHeader ?? "")
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter(Boolean);
+  return (scopeHeader ?? "").split(/[ ,]+/).map(scope => scope.trim()).filter(Boolean);
 }
 
-export function missingRequiredClassicTokenScopes(
-  scopeHeader?: string | null,
-  requiredScopes: readonly string[] = REQUIRED_CLASSIC_TOKEN_SCOPES
-): string[] {
-  const grantedScopes = new Set(parseTokenScopes(scopeHeader).map((scope) => scope.toLowerCase()));
-  return requiredScopes.filter((scope) => !grantedScopes.has(scope.toLowerCase()));
+export function missingRequiredScopes(scopeHeader?: string | null): string[] {
+  const granted = new Set(parseTokenScopes(scopeHeader));
+  // GitHub normalizes narrower scopes into their broader parent scope.
+  if (granted.has("project")) granted.add("read:project");
+  return GITHUB_OAUTH_SCOPES.filter(scope => !granted.has(scope));
 }

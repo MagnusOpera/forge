@@ -27,6 +27,9 @@ install:
 	npm install
 
 dev:
+	@set -a; \
+	if [ -f .env ]; then source ./.env || exit $$?; fi; \
+	set +a; \
 	npm run dev
 
 build:

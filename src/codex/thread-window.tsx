@@ -169,7 +169,7 @@ export function ThreadWindow() {
           project={repo}
           auth={null}
           onClose={() => setProjectConfigurationOpen(false)}
-          onSaveGithub={async () => {}}
+          onSignInGithub={async () => {}}
           onRemoveGithub={() => {}}
           onOpenUrl={openUrl}
         />

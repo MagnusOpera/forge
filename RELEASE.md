@@ -45,6 +45,22 @@ Configure these repository secrets before publishing a release:
 
 The app is only signed after the GitHub release is published.
 
+## GitHub sign-in configuration
+
+Register a GitHub **OAuth App** owned by MagnusOpera (once for Forge, not once per user):
+
+- Homepage: `https://github.com/MagnusOpera/forge`
+- Authorization callback URL: `http://127.0.0.1/github/callback`
+- Leave callback wildcard matching and device flow disabled. Forge uses authorization code flow with PKCE S256, random state, and a temporary IPv4 loopback listener on an available port.
+
+Generate a client secret, and add `FORGE_GITHUB_CLIENT_ID` and `FORGE_GITHUB_CLIENT_SECRET` as repository Actions secrets. The tag packaging workflow injects these into the main-process build and fails if either is missing. Do not commit credentials. GitHub currently requires a client secret even with PKCE. As with any native OAuth client, the distributed app credentials can be extracted from the package; they cannot be treated as a confidential server secret. PKCE protects the authorization code exchange. No hosted backend is used.
+
+For local development or packaging, export both variables in the shell before running `npm run dev` or `make build`. Alternatively, put the variables in an ignored `.env` file and run `make dev`, which loads and exports them for the development processes. Direct `npm run dev` and build commands use the existing shell environment. The build script writes `dist-electron/github-oauth.json`, which is ignored by Git and included only with Electron's main-process artifacts. Development builds without credentials remain buildable and report a configuration error when sign-in is attempted. Never use a `VITE_` variable for OAuth credentials.
+
+Users approve the existing `repo` and `read:project` permissions. Organization OAuth restrictions or SAML SSO may require additional approval. Forge supports non-expiring tokens and automatically refreshes expiring tokens when GitHub supplies a refresh token. Access and refresh tokens are encrypted using Electron safeStorage. Previous classic tokens remain readable. First-run setup and global GitHub settings also offer **Use a personal access token** for a classic `ghp_` token with `repo` and `read:project` permissions, including in local builds without OAuth credentials. The selected method replaces the active credential after validation; organization token restrictions and SSO requirements still apply. Sign out deletes local credentials and cached GitHub data; users can revoke authorization separately in GitHub's application settings.
+
+Before release, test a fresh sign-in, rejection, cancellation, restart, sign-out, and reauthentication against the registered app. Confirm repository/project access and Actions operations with an organization that requires approval. Verify the first-run screen and global GitHub configuration in both themes. Automated tests cover local callbacks, PKCE/state, cancellation, timeout, token exchange, refresh, and credential write races; a real GitHub consent round trip needs the registered app.
+
 ## Codex runtime packaging
 
 Forge uses an installed Codex CLI and does not bundle or download a runtime. Keep macOS packaging arm64-only. The packaged application must discover Codex from PATH and the common Homebrew/local installation paths, or honor the executable path saved in global configuration. Verify this from a Finder-launched build, whose PATH may differ from a terminal session.

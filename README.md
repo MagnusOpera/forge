@@ -26,6 +26,10 @@ brew install forge
 
 The tap is `magnusopera/tap`, and the formula is `forge`. You can also download the latest signed macOS build from [GitHub Releases](https://github.com/MagnusOpera/forge/releases/latest).
 
+## GitHub sign-in
+
+Choose **Sign in with GitHub** when Forge opens, approve repository and project access in your browser, then return to Forge. Alternatively, choose **Use a personal access token** and save a classic token with `repo` and `read:project` permissions. This option also works in local builds without OAuth App credentials. Manage your connection under **Global configuration → GitHub**, where **Active method** identifies GitHub sign-in or a personal access token. Switching methods replaces the current connection. Sign out removes the saved credentials from this Mac; revoke Forge’s authorization in GitHub’s application settings to remove its access completely. Organization policies may require an administrator to approve Forge.
+
 ## Development
 
 Use Node.js 22.12+ on the 22 LTS line, or Node.js 24 LTS. CI uses Node.js 22. Node type definitions follow Electron's embedded Node.js 24 runtime.
@@ -36,11 +40,15 @@ Install dependencies:
 npm install
 ```
 
-Run the Electron app in development:
+GitHub sign-in requires Forge’s registered OAuth App credentials. See [GitHub sign-in configuration](RELEASE.md#github-sign-in-configuration) for registration and local build setup. Existing saved tokens remain usable after upgrading.
+
+Run the Electron app in development (automatically loads an optional, Git-ignored `.env` file):
 
 ```sh
-npm run dev
+make dev
 ```
+
+Renderer changes reload automatically during development. After changing Electron main or preload code, stop the development command, fully quit Forge, and run `make dev` again to load those changes. Saved GitHub credentials are retained.
 
 Build the app:
 
@@ -88,7 +96,7 @@ Forge is released under the MIT License. See [LICENSE](LICENSE).
 
 Install the official Codex CLI locally before using Codex in Forge. Forge finds `codex` on PATH or in common macOS installation directories. Global configuration also accepts an absolute executable path. On startup, Forge checks for Codex CLI 0.164.0 or newer and automatically upgrades older Homebrew or global npm installations through their original package manager. Compatible versions are left alone. Custom installations require updating with their original installer; upgrade failures and retry instructions appear in Global configuration → Codex. Forge also checks the app-server protocol before enabling conversations. The CLI is not included in the Forge download, and Forge does not keep its own installation. Remote hosts remain separately managed.
 
-Open the gear in the expanded repository sidebar for global configuration. It contains GitHub token management, ChatGPT sign-in, the Codex executable path, and defaults for model, reasoning effort, speed, Plan/Implement, Steer/Queue, and permissions. The model catalog and supported efforts come from the installed Codex runtime. Blank model and effort choices use the server's defaults.
+Open the gear in the expanded repository sidebar for global configuration. It contains GitHub sign-in, ChatGPT sign-in, the Codex executable path, and defaults for model, reasoning effort, speed, Plan/Implement, Steer/Queue, and permissions. The model catalog and supported efforts come from the installed Codex runtime. Blank model and effort choices use the server's defaults.
 
 Open the gear beside a project's name to choose its local Git folder and override any Codex default independently. “Use global” restores inheritance for that setting. New threads snapshot the effective settings; changes to global or project configuration do not rewrite existing threads. Model, effort, speed, mode, and follow-up controls are also available in each thread. Model, effort, speed, and mode changes apply to its next turn. Steer/Queue changes affect the next submitted follow-up.
 
@@ -114,7 +122,7 @@ After successful integration, Forge removes the clean merged worktree and contin
 
 The terminal button in the Codex header opens a Ghostty terminal below the input, inside the third pane. Drag the horizontal splitter or use its arrow keys to resize it. Opening it in a new chat creates its worktree without sending a Codex message. Each chat has its own local login shell, initially in that chat’s worktree (or its current default-branch checkout). Hiding the terminal or navigating away keeps the session and commands running; reopening reconnects with recent output. The trash button ends the session. Archiving a chat also ends its terminal and discards its retained output; restoring the chat lets you open a fresh terminal. Sessions end when Forge quits; they are not restored after restart. A confirmed checkout change also ends that chat’s terminal before removing or replacing its working folder. Terminal commands run as you, independently of Codex’s permission preset.
 
-GitHub token controls live in **Global configuration → GitHub**, and Forge's ChatGPT sign-in lives in **Global configuration → Codex**. In **Project configuration → Codex**, enable **Use a separate Codex account for this project** to sign in with a project account, then save configuration. Forge stores that sign-in in a separate Codex home. The override applies to new local threads; existing threads retain their account selection. Turning the override off does not delete the project sign-in. Remote threads use the remote host's account, and imported conversations keep their original Codex account.
+GitHub sign-in and sign-out controls live in **Global configuration → GitHub**, and Forge's ChatGPT sign-in lives in **Global configuration → Codex**. In **Project configuration → Codex**, enable **Use a separate Codex account for this project** to sign in with a project account, then save configuration. Forge stores that sign-in in a separate Codex home. The override applies to new local threads; existing threads retain their account selection. Turning the override off does not delete the project sign-in. Remote threads use the remote host's account, and imported conversations keep their original Codex account.
 
 ### Detachable content windows
 
@@ -126,7 +134,7 @@ Press `⌘⇧D` to detach the current content pane, or press it in a detached wi
 
 ### GitHub releases
 
-Open **Releases** in the project toolbar or press `⌘⇧L`. The **Active** tab lists published stable releases, and **Preview** lists published prereleases, both by publication date descending. The **Draft** tab lists unpublished drafts by creation date descending; GitHub only returns drafts your token can access. Select a release to read its notes in the content pane, and use the GitHub URL control to copy its link or double-click to open it in GitHub. Repository refresh also updates releases. With repository write access, select a draft and choose **Release action → Publish release**. Forge keeps the draft’s current prerelease flag: prereleases publish as Pre-release; other drafts publish as Latest. The hint below the release title shows the publication type; the published release appears in Active or Preview accordingly.
+Open **Releases** in the project toolbar or press `⌘⇧L`. The **Active** tab lists published stable releases, and **Preview** lists published prereleases, both by publication date descending. The **Draft** tab lists unpublished drafts by creation date descending; GitHub only returns drafts your account can access. Select a release to read its notes in the content pane, and use the GitHub URL control to copy its link or double-click to open it in GitHub. Repository refresh also updates releases. With repository write access, select a draft and choose **Release action → Publish release**. Forge keeps the draft’s current prerelease flag: prereleases publish as Pre-release; other drafts publish as Latest. The hint below the release title shows the publication type; the published release appears in Active or Preview accordingly.
 
 ### Keyboard shortcuts (macOS)
 

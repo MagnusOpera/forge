@@ -41,6 +41,8 @@ const api: GithubFocusApi = {
   platform: process.platform,
   getAuthStatus: () => ipcRenderer.invoke("auth:get-status"),
   saveToken: (token: string) => ipcRenderer.invoke("auth:save-token", token),
+  signInGithub: () => ipcRenderer.invoke("auth:sign-in"),
+  cancelGithubSignIn: () => ipcRenderer.invoke("auth:cancel-sign-in"),
   clearToken: () => ipcRenderer.invoke("auth:clear-token"),
   getRepositories: () => ipcRenderer.invoke("github:get-repositories"),
   getStarredRepos: () => ipcRenderer.invoke("github:get-starred-repos"),

@@ -192,13 +192,12 @@ brew install forge</code></pre>
           <p class="eyebrow">1 · GitHub access</p>
           <h2 id="token-title">Connect your repositories.</h2>
           <ol>
-            <li>Create a <a href="https://github.com/settings/tokens">classic GitHub personal access token</a>
-              with <strong>repo</strong> and <strong>read:project</strong> scopes.</li>
-            <li>Paste it into Forge’s initial setup and save it. To replace it later, use the gear in the
-              expanded repository sidebar, then <strong>Global configuration → GitHub → Save token</strong>.</li>
+            <li>Open Forge and choose <strong>Sign in with GitHub</strong>.</li>
+            <li>Approve repository and project access in your browser, then return to Forge.</li>
+            <li>Manage your connection under <strong>Global configuration → GitHub</strong>.</li>
           </ol>
-          <p>The token enables repository, pull request, issue, and workflow access. Forge stores it locally using
-            encrypted secure storage and requires secure storage to be available before saving it.</p>
+          <p>You can also choose <strong>Use a personal access token</strong> and save a classic token with <strong>repo</strong> and <strong>read:project</strong> permissions. Forge stores your credentials locally using encrypted secure storage.
+            Your organization may require an administrator to approve Forge’s access.</p>
         </div>
       </section>
 
@@ -206,7 +205,7 @@ brew install forge</code></pre>
         <div>
           <p class="eyebrow">2 · OpenAI authentication</p>
           <h2 id="codex-auth-title">Sign in to Codex with ChatGPT.</h2>
-          <p>Codex needs its own OpenAI authentication, separate from your GitHub token.
+          <p>Codex needs its own OpenAI authentication, separate from your GitHub sign-in.
             Use a ChatGPT account with access to Codex.</p>
           <ol>
             <li>Install the official Codex CLI on your Mac. Forge uses it to run conversations:

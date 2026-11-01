@@ -75,7 +75,7 @@ it("keeps environment definitions global and edits existing checkout mappings on
   const props = {
     auth: null,
     onClose: vi.fn(),
-    onSaveGithub: vi.fn(async () => {}),
+    onSignInGithub: vi.fn(async () => {}),
     onRemoveGithub: vi.fn(),
     onOpenUrl: vi.fn(),
   };
@@ -134,7 +134,7 @@ it("suggests the local home-relative layout for unmapped environments and shows 
         auth={null}
         project={project}
         onClose={() => {}}
-        onSaveGithub={async () => {}}
+        onSignInGithub={async () => {}}
         onRemoveGithub={() => {}}
         onOpenUrl={() => {}}
       />,
@@ -171,7 +171,7 @@ it("requires a local checkout before suggesting a remote layout", async () => {
         auth={null}
         project={project}
         onClose={() => {}}
-        onSaveGithub={async () => {}}
+        onSignInGithub={async () => {}}
         onRemoveGithub={() => {}}
         onOpenUrl={() => {}}
       />,
@@ -205,7 +205,7 @@ it("displays the local checkout with ~ while retaining its absolute operational 
         auth={null}
         project={project}
         onClose={() => {}}
-        onSaveGithub={async () => {}}
+        onSignInGithub={async () => {}}
         onRemoveGithub={() => {}}
         onOpenUrl={() => {}}
       />,
@@ -220,7 +220,7 @@ it("displays the local checkout with ~ while retaining its absolute operational 
 const props = {
   auth: null,
   onClose: vi.fn(),
-  onSaveGithub: vi.fn(async () => {}),
+  onSignInGithub: vi.fn(async () => {}),
   onRemoveGithub: vi.fn(),
   onOpenUrl: vi.fn(),
 };
@@ -248,10 +248,11 @@ it("shows tildified local executable and editor fields but saves absolute paths"
   await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Save configuration")!.click());
   expect(request).toHaveBeenCalledWith("saveConfiguration", expect.objectContaining({ editor: "/Users/alice/Applications/Other.app", executable: "/Users/alice/bin/codex" }));
 });
-it("places GitHub token controls in GitHub and account controls in Codex", async () => {
+it("places GitHub sign-in controls in GitHub and account controls in Codex", async () => {
   await act(async () => root.render(<CodexSettingsDialog {...props} />));
   await navigate("GitHub");
-  expect(container.querySelector('input[type="password"]')).not.toBeNull();
+  expect(container.textContent).toContain("Sign in with GitHub");
+  expect(container.querySelector('input[type="password"]')).toBeNull();
   expect(container.textContent).not.toContain("Codex account");
   await navigate("Codex");
   expect(container.querySelector('input[type="password"]')).toBeNull();
@@ -393,7 +394,7 @@ it("groups local and remote checkouts and saves the project's selected default e
   );
 });
 
-const settingsProps = { auth: null, onClose: () => {}, onSaveGithub: async () => {}, onRemoveGithub: () => {}, onOpenUrl: () => {} };
+const settingsProps = { auth: null, onClose: () => {}, onSignInGithub: async () => {}, onRemoveGithub: () => {}, onOpenUrl: () => {} };
 async function selectStart(label: string) {
   const field = container.querySelector('[aria-label="Default thread starting point"]')!.closest(".combobox")!;
   await act(async () => [...field.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === label)!.click());
@@ -426,4 +427,60 @@ it("restores a saved project starting point", async () => {
   request.mockImplementation(async method => method === "models" ? [] : config);
   await act(async () => root.render(<CodexSettingsDialog {...settingsProps} project={project} />));
   expect(container.querySelector('[aria-label="Default thread starting point"]')?.textContent).toBe("Default branch checkout");
+});
+
+it("starts browser GitHub sign-in, allows cancellation, and displays retry errors", async () => {
+  let reject!: (error: Error) => void;
+  const signIn = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+  const cancel = vi.fn(async () => {});
+  await act(async () => root.render(<CodexSettingsDialog {...props}
+    auth={{ configured: false, encryptionAvailable: true, viewerLogin: null }}
+    onSignInGithub={signIn} onCancelGithubSignIn={cancel} />));
+  await navigate("GitHub");
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Sign in with GitHub")!.click());
+  expect(signIn).toHaveBeenCalledTimes(1);
+  expect(container.textContent).toContain("Waiting for GitHub");
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Cancel sign-in")!.click());
+  expect(cancel).toHaveBeenCalledTimes(1);
+  await act(async () => reject(new Error("Sign-in cancelled")));
+  expect(container.textContent).toContain("Sign-in cancelled");
+  expect([...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Sign in with GitHub")!.disabled).toBe(false);
+});
+
+it("replaces a GitHub OAuth session with a personal token from global settings", async () => {
+  const save = vi.fn(async () => {});
+  await act(async () => root.render(<CodexSettingsDialog {...props}
+    auth={{ configured: true, encryptionAvailable: true, viewerLogin: "octocat" }} onSaveGithub={save} />));
+  await navigate("GitHub");
+  expect(container.textContent).toContain("Sign in with GitHub");
+  await act(async () => container.querySelector("summary")!.click());
+  const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  await act(async () => { setValue.call(input, "ghp_replacement"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  await act(async () => container.querySelector<HTMLFormElement>(".github-token-alternative form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(save).toHaveBeenCalledWith("ghp_replacement");
+  expect(input.value).toBe("");
+});
+
+it.each(["oauth", "token"] as const)("identifies %s as the active GitHub method and labels the switching actions", async method => {
+  await act(async () => root.render(<CodexSettingsDialog {...props}
+    auth={{ configured: true, encryptionAvailable: true, viewerLogin: "octocat", method }}
+    onSaveGithub={async () => {}} />));
+  await navigate("GitHub");
+  expect(container.querySelector(".github-auth-method")?.textContent).toBe(
+    `Active method: ${method === "token" ? "Personal access token" : "GitHub sign-in (OAuth)"}`,
+  );
+  expect(container.querySelector(".github-token-alternative summary")?.textContent).toBe(
+    method === "token" ? "Replace personal access token" : "Switch to a personal access token",
+  );
+  expect(container.textContent).toContain(method === "token" ? "Switch to GitHub sign-in" : "Reconnect with GitHub");
+  expect(container.textContent).not.toContain("Sign in through your browser.");
+});
+
+it("asks for a restart rather than reauthentication when a running older main process omits method metadata", async () => {
+  await act(async () => root.render(<CodexSettingsDialog {...props}
+    auth={{ configured: true, encryptionAvailable: true, viewerLogin: "octocat" }} />));
+  await navigate("GitHub");
+  expect(container.querySelector(".github-auth-method")?.textContent).toBe("Active method: Restart Forge to detect the saved method");
+  expect(container.textContent).not.toContain("reconnect to confirm");
 });

@@ -1,3 +1,4 @@
+import { GitHubTokenForm } from "./github-token-form";
 import { ReleasesSection } from "./releases";
 import { releaseDate, releasesForTab, type ReleaseTab } from "../shared/releases";
 import { useContentAttachmentShortcut } from "./content-attachment-shortcut";
@@ -34,7 +35,6 @@ import {
   GitBranch,
   GitPullRequest,
   Inbox,
-  KeyRound,
   Loader2,
   Moon,
   MessageSquare,
@@ -46,7 +46,6 @@ import {
   Play,
   Plus,
   RefreshCw,
-  Save,
   Settings,
   Bot,
   Search,
@@ -111,7 +110,6 @@ import {
   type ProjectPullRequestTab,
   type PullRequestWorkflowState
 } from "./appLogic";
-import { CLASSIC_TOKEN_SETTINGS_URL } from "../shared/auth";
 import { userFacingError } from "../shared/errors";
 import { DEFAULT_SIDEBAR_APPEARANCE_MODE } from "../shared/github";
 import type {
@@ -425,7 +423,9 @@ function ipcUnavailable<T>(): Promise<T> {
 const browserApi: GithubFocusApi = {
   platform: "browser",
   getAuthStatus: async () => ({ configured: false, encryptionAvailable: false, viewerLogin: null }),
+  signInGithub: () => ipcUnavailable(),
   saveToken: () => ipcUnavailable(),
+  cancelGithubSignIn: () => ipcUnavailable(),
   clearToken: () => ipcUnavailable(),
   getRepositories: () => ipcUnavailable(),
   getStarredRepos: () => ipcUnavailable(),
@@ -1185,7 +1185,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   const [auth, setAuth] = useState<AuthStatus | null>(sharedAuth ?? null);
   const [authChecking, setAuthChecking] = useState(!initialItem);
   useEffect(() => { if (auth && !auth.configured) contentPane.reattach(); }, [auth?.configured, contentPane.reattach]);
-  const [tokenDraft, setTokenDraft] = useState("");
+  const [githubSigningIn, setGithubSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(false);
   const [projectLoading, setProjectLoading] = useState(false);
@@ -1617,7 +1617,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         }
       }
     },
-    [auth?.configured, favoriteKeys, localRecentKeys]
+    [auth, favoriteKeys, localRecentKeys]
   );
 
   const loadProject = useCallback(
@@ -3001,7 +3001,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       } catch (error) {
         if (!cancelled) {
           setAuth({ configured: false, encryptionAvailable: false, viewerLogin: null });
-          setAuthError(userFacingError(error, "Unable to check GitHub token."));
+          setAuthError(userFacingError(error, "Unable to check GitHub sign-in."));
         }
       } finally {
         if (!cancelled) {
@@ -3298,47 +3298,53 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     settingsScope
   ]);
 
-  const saveToken = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const signInGithub = async () => {
     setAuthError(null);
+    setGithubSigningIn(true);
     try {
-      const nextAuth = await api.saveToken(tokenDraft);
-      setTokenDraft("");
+      const nextAuth = await api.signInGithub();
       setAuth(nextAuth);
+      onAuthChange?.(nextAuth);
     } catch (error) {
-      setAuthError(userFacingError(error, "Unable to store token."));
+      setAuthError(userFacingError(error, "Unable to sign in with GitHub."));
+    } finally {
+      setGithubSigningIn(false);
     }
   };
+
+  const resetGitHubWorkspace = useCallback(() => {
+    setRepositories([]);
+    setStarredRepos([]);
+    setRecentRepos([]);
+    setOrganizations([]);
+    setSelectedRepo(null);
+    setRepoLabels([]);
+    setPullRequests([]);
+    setIssues([]);
+    setReleases([]);
+    setWorkflows([]);
+    setWorkflowRuns([]);
+    setSelection({ kind: "repo" });
+  }, []);
 
   const clearStoredToken = useCallback(async (): Promise<boolean> => {
     try {
       const nextAuth = await api.clearToken();
       setAuth(nextAuth);
       onAuthChange?.(nextAuth);
-      setRepositories([]);
-      setStarredRepos([]);
-      setRecentRepos([]);
-      setOrganizations([]);
-      setSelectedRepo(null);
-      setRepoLabels([]);
-      setPullRequests([]);
-      setIssues([]);
-      setReleases([]);
-      setWorkflows([]);
-      setWorkflowRuns([]);
-      setSelection({ kind: "repo" });
+      resetGitHubWorkspace();
       return true;
     } catch (error) {
-      flash(userFacingError(error, "Unable to remove the stored token."));
+      flash(userFacingError(error, "Unable to sign out of GitHub."));
       return false;
     }
-  }, [flash, onAuthChange]);
+  }, [flash, onAuthChange, resetGitHubWorkspace]);
 
   const requestClearStoredToken = useCallback(() => {
     openConfirmation({
-      title: "Remove stored GitHub token?",
-      message: "You will need to enter a token again before using Forge.",
-      confirmLabel: "Remove",
+      title: "Sign out of GitHub?",
+      message: "Your saved GitHub credentials will be removed from this Mac. Sign in again to continue using Forge.",
+      confirmLabel: "Sign out",
       onConfirm: clearStoredToken
     });
   }, [clearStoredToken, openConfirmation]);
@@ -3472,11 +3478,19 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
           project={settingsScope === "project" ? selectedRepo ?? undefined : undefined}
           auth={auth}
           onClose={() => setSettingsScope(null)}
-          onSaveGithub={async (token) => {
-            const next = await api.saveToken(token);
+          onSignInGithub={async () => {
+            const next = await api.signInGithub();
+            resetGitHubWorkspace();
             setAuth(next);
             onAuthChange?.(next);
           }}
+          onSaveGithub={async token => {
+            const next = await api.saveToken(token);
+            resetGitHubWorkspace();
+            setAuth(next);
+            onAuthChange?.(next);
+          }}
+          onCancelGithubSignIn={() => api.cancelGithubSignIn()}
           onRemoveGithub={() => {
             setSettingsScope(null);
             requestClearStoredToken();
@@ -3597,15 +3611,20 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         style={authScreenStyle}
       >
         {authChecking ? (
-          <EmptyPane icon={<Loader2 className="spin" size={24} />} title="Checking GitHub token" />
+          <EmptyPane icon={<Loader2 className="spin" size={24} />} title="Checking GitHub sign-in" />
         ) : (
-          <TokenGate
+          <GitHubSignInGate
             auth={auth}
             error={authError}
-            token={tokenDraft}
-            onTokenChange={setTokenDraft}
-            onSave={saveToken}
-            onOpenTokenSettings={() => void api.openInGitHub(CLASSIC_TOKEN_SETTINGS_URL)}
+            busy={githubSigningIn}
+            onSignIn={() => void signInGithub()}
+            onSaveToken={async token => {
+              const next = await api.saveToken(token);
+              setAuth(next);
+              onAuthChange?.(next);
+            }}
+            onOpenUrl={url => void api.openInGitHub(url)}
+            onCancel={() => void api.cancelGithubSignIn().catch(error => setAuthError(userFacingError(error, "Unable to cancel sign-in.")))}
           />
         )}
       </div>
@@ -5330,55 +5349,35 @@ function PullRequestManagementActions(props: {
   );
 }
 
-function TokenGate(props: {
+export function GitHubSignInGate(props: {
   auth: AuthStatus | null;
   error: string | null;
-  token: string;
-  onTokenChange(value: string): void;
-  onSave(event: React.FormEvent): void;
-  onOpenTokenSettings(): void;
+  busy: boolean;
+  onSignIn(): void;
+  onCancel(): void;
+  onSaveToken(token: string): Promise<void>;
+  onOpenUrl(url: string): void;
 }) {
+  const [tokenSaving, setTokenSaving] = useState(false);
   return (
     <div className="token-gate">
-      <form className="token-panel" onSubmit={props.onSave}>
+      <div className="token-panel">
         <div className="token-heading">
-          <div className="token-icon">
-            <KeyRound size={24} />
-          </div>
-          <h1>GitHub token</h1>
+          <div className="token-icon"><Github size={24} /></div>
+          <h1>Connect to GitHub</h1>
         </div>
-        <p className="token-help">
-          Use a classic PAT with <strong>repo</strong> and <strong>read:project</strong> permissions.
-        </p>
-        <button className="token-settings-link" type="button" onClick={props.onOpenTokenSettings}>
-          <ExternalLink size={14} />
-          <span>Open classic token settings</span>
+        <p className="token-help">Sign in through your browser to access your repositories and projects.</p>
+        <button className="primary-button" type="button" onClick={props.onSignIn} autoFocus
+          disabled={props.busy || tokenSaving || !props.auth?.encryptionAvailable}>
+          {props.busy ? <Loader2 className="spin" size={16} /> : <Github size={16} />}
+          {props.busy ? "Waiting for GitHub…" : "Sign in with GitHub"}
         </button>
-        <div className="token-input-row">
-          <input
-            type="password"
-            value={props.token}
-            onChange={(event) => props.onTokenChange(event.target.value)}
-            placeholder="Personal access token"
-            autoFocus
-          />
-          <button className="primary-button" type="submit" disabled={!props.token.trim()} aria-label="Store token">
-            <Save size={16} />
-          </button>
-        </div>
-        {!props.auth?.encryptionAvailable && (
-          <div className="inline-error">
-            <AlertCircle size={15} />
-            <span>Secure storage is unavailable.</span>
-          </div>
-        )}
-        {props.error && (
-          <div className="inline-error">
-            <AlertCircle size={15} />
-            <span>{displayPathText(props.error)}</span>
-          </div>
-        )}
-      </form>
+        {props.busy && <button className="ghost-button" type="button" onClick={props.onCancel}>Cancel sign-in</button>}
+        <GitHubTokenForm disabled={props.busy || !props.auth?.encryptionAvailable} onSave={props.onSaveToken}
+          onOpenUrl={props.onOpenUrl} onBusyChange={setTokenSaving} />
+        {!props.auth?.encryptionAvailable && <div className="inline-error"><AlertCircle size={15} /><span>Secure storage is unavailable.</span></div>}
+        {props.error && <div className="inline-error" role="alert"><AlertCircle size={15} /><span>{displayPathText(props.error)}</span></div>}
+      </div>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { validatePersonalToken } from "./github-personal-token.js";
+import { GitHubCredentials } from "./github-credentials.js";
 import { publishDraftRelease } from "./releases.js";
 import { fetchRepositoryReleases } from "../../shared/releases.js";
 import { alignWindowButtons, trackWindowButtonAlignment, trafficLightPosition } from "./window-chrome.js";
@@ -70,11 +72,7 @@ import type {
 } from "../../shared/github.js";
 import { DEFAULT_SIDEBAR_APPEARANCE_MODE, repositoryIdentity } from "../../shared/github.js";
 import { parseWorkflowDispatchConfig } from "../../shared/workflowDispatch.js";
-import {
-  isClassicPersonalAccessToken,
-  missingRequiredClassicTokenScopes,
-  REQUIRED_CLASSIC_TOKEN_SCOPES
-} from "../../shared/auth.js";
+import { signInWithGitHub, type OAuthConfiguration } from "./github-oauth.js";
 import { AUTO_MERGE_API_UNAVAILABLE_MESSAGE, isAutoMergeNotAllowedMessage } from "../../shared/errors.js";
 
 import { isThreadWindowCloseShortcut } from "./codex/windows.js";
@@ -617,60 +615,45 @@ async function clearCache(): Promise<void> {
   await fs.rm(cacheDir(), { recursive: true, force: true });
 }
 
-async function readToken(): Promise<string | null> {
-  return readStoredToken(tokenPath(), safeStorage);
+function githubOAuthConfiguration(): OAuthConfiguration {
+  let bundled: Partial<OAuthConfiguration> = {};
+  try {
+    bundled = JSON.parse(readFileSync(path.join(app.getAppPath(), "dist-electron/github-oauth.json"), "utf8"));
+  } catch { /* Development builds can supply runtime environment variables. */ }
+  const clientId = process.env.FORGE_GITHUB_CLIENT_ID?.trim() || bundled.clientId;
+  const clientSecret = process.env.FORGE_GITHUB_CLIENT_SECRET?.trim() || bundled.clientSecret;
+  if (!clientId || !clientSecret) {
+    throw new Error("GitHub sign-in is not configured in this build. Register the Forge OAuth App and configure its credentials as described in RELEASE.md.");
+  }
+  return { clientId, clientSecret };
 }
 
-async function writeToken(token: string): Promise<void> {
-  await writeStoredToken(tokenPath(), token, safeStorage);
+let githubSignIn: AbortController | null = null;
+const githubCredentials = new GitHubCredentials({
+  read: () => readStoredToken(tokenPath(), safeStorage),
+  write: value => writeStoredToken(tokenPath(), value, safeStorage),
+  remove: async () => {
+    try { await fs.unlink(tokenPath()); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  },
+  configuration: githubOAuthConfiguration,
+});
+
+async function readToken(): Promise<string | null> {
+  return githubCredentials.read();
+}
+
+async function resetGitHubClients(): Promise<void> {
   octokitClient = null;
   graphqlClient = null;
   activeTokenHash = null;
   await clearCache();
-}
-
-async function validateTokenBeforeSave(token: string): Promise<void> {
-  if (!isClassicPersonalAccessToken(token)) {
-    throw new Error("This is not a classic GitHub personal access token. Create a classic token and paste the value that starts with ghp_.");
-  }
-
-  const response = await fetchWithTimeout("https://api.github.com/user", {
-    headers: {
-      accept: "application/vnd.github+json",
-      authorization: `Bearer ${token}`,
-      "x-github-api-version": "2022-11-28"
-    }
-  });
-
-  if (response.status === 401) {
-    throw new Error("GitHub rejected this token. Check that it is active and copied correctly.");
-  }
-  if (!response.ok) {
-    throw new GitHubHttpStatusError(`GitHub could not check this token right now (${response.status}). Try again.`, response.status);
-  }
-
-  const scopesHeader = response.headers.get("x-oauth-scopes");
-  const missingScopes = missingRequiredClassicTokenScopes(scopesHeader);
-  if (missingScopes.length) {
-    throw new Error(
-      `This classic token is missing the required ${missingScopes.join(" and ")} permission${missingScopes.length > 1 ? "s" : ""}. ` +
-        `Open classic token settings and enable ${REQUIRED_CLASSIC_TOKEN_SCOPES.join(" and ")}.`
-    );
-  }
 }
 
 async function clearToken(): Promise<void> {
-  try {
-    await fs.unlink(tokenPath());
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw error;
-    }
-  }
-  octokitClient = null;
-  graphqlClient = null;
-  activeTokenHash = null;
-  await clearCache();
+  githubSignIn?.abort();
+  await githubCredentials.clear();
+  await resetGitHubClients();
 }
 
 async function getAuthStatus(): Promise<AuthStatus> {
@@ -682,9 +665,11 @@ async function getAuthStatus(): Promise<AuthStatus> {
     configured = false;
   }
 
+  const encryptionAvailable = await safeStorage.isAsyncEncryptionAvailable();
   return {
     configured,
-    encryptionAvailable: await safeStorage.isAsyncEncryptionAvailable(),
+    encryptionAvailable,
+    method: configured && encryptionAvailable ? await githubCredentials.method() : null,
     viewerLogin: await getViewerLogin(configured)
   };
 }
@@ -707,7 +692,7 @@ async function getViewerLogin(configured: boolean): Promise<string | null> {
 async function getClients(): Promise<{ octokit: Octokit; gql: GraphqlClient }> {
   const token = await readToken();
   if (!token) {
-    throw new Error("GitHub token is not configured.");
+    throw new Error("Sign in with GitHub to continue.");
   }
 
   const tokenHash = hash(token);
@@ -1747,7 +1732,7 @@ function isLiveWorkflowJobStatus(status?: string | null): boolean {
 async function downloadActionsJobLog(repo: RepoRef, jobId: number): Promise<string | null> {
   const token = await readToken();
   if (!token) {
-    throw new Error("GitHub token is not configured.");
+    throw new Error("Sign in with GitHub to continue.");
   }
 
   const response = await fetchWithTimeout(
@@ -2554,18 +2539,64 @@ function setNativeThemeSource(source: NativeThemeSource): void {
   }
 }
 
+function assertGitHubAuthSender(event: IpcMainInvokeEvent): void {
+  if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame ||
+      !trustedCodexSenderUrl(event.senderFrame.url, app.isPackaged, app.getAppPath(), devServerUrl)) {
+    throw new Error("GitHub authentication is only available from Forge.");
+  }
+}
+
 function registerIpc(): void {
   ipcMain.handle("auth:get-status", () => getAuthStatus());
-  ipcMain.handle("auth:save-token", async (_event, token: string) => {
-    const trimmedToken = token.trim();
-    if (!trimmedToken) {
-      throw new Error("Token cannot be empty.");
+  ipcMain.handle("auth:save-token", async (event, value: unknown) => {
+    assertGitHubAuthSender(event);
+    if (githubSignIn) throw new Error("GitHub authentication is already in progress.");
+    if (typeof value !== "string" || !value.trim()) throw new Error("Token cannot be empty.");
+    const controller = new AbortController();
+    githubSignIn = controller;
+    try {
+      if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error("Secure storage is unavailable.");
+      const token = value.trim();
+      await validatePersonalToken(token, controller.signal);
+      controller.signal.throwIfAborted();
+      await githubCredentials.replace({ accessToken: token, method: "token" });
+      controller.signal.throwIfAborted();
+      await resetGitHubClients();
+      return getAuthStatus();
+    } finally {
+      if (githubSignIn === controller) githubSignIn = null;
     }
-    await validateTokenBeforeSave(trimmedToken);
-    await writeToken(trimmedToken);
-    return getAuthStatus();
   });
-  ipcMain.handle("auth:clear-token", async () => {
+  ipcMain.handle("auth:sign-in", async event => {
+    assertGitHubAuthSender(event);
+    if (githubSignIn) throw new Error("GitHub sign-in is already in progress.");
+    const configuration = githubOAuthConfiguration();
+    const controller = new AbortController();
+    githubSignIn = controller;
+    try {
+      if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error("Secure storage is unavailable.");
+      controller.signal.throwIfAborted();
+      const credential = await signInWithGitHub(configuration, url => shell.openExternal(url), controller.signal);
+      // Validate the account before replacing any existing credential.
+      const response = await fetch("https://api.github.com/user", {
+        headers: { authorization: `Bearer ${credential.accessToken}`, accept: "application/vnd.github+json" },
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
+      });
+      if (!response.ok) throw new Error("Unable to verify your GitHub account. Try signing in again.");
+      const viewer = await response.json() as { login?: string };
+      if (!viewer.login) throw new Error("GitHub did not return an account. Try signing in again.");
+      controller.signal.throwIfAborted();
+      await githubCredentials.replace({ ...credential, method: "oauth" });
+      controller.signal.throwIfAborted();
+      await resetGitHubClients();
+      return getAuthStatus();
+    } finally {
+      if (githubSignIn === controller) githubSignIn = null;
+    }
+  });
+  ipcMain.handle("auth:cancel-sign-in", event => { assertGitHubAuthSender(event); githubSignIn?.abort(); });
+  ipcMain.handle("auth:clear-token", async event => {
+    assertGitHubAuthSender(event);
     await clearToken();
     return getAuthStatus();
   });
@@ -2686,6 +2717,8 @@ app.whenReady().then(async () => {
     }
   });
 });
+
+app.on("before-quit", () => githubSignIn?.abort());
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
