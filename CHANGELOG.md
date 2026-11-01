@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.13.2]
+
+
 - Align macOS window controls with the header title and icons, including when changing zoom.
 
 - Move global settings and theme controls to the expanded repository pane and simplify content and detached window toolbars.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.13.1...0.13.2
 
 ## [0.13.1]
 
