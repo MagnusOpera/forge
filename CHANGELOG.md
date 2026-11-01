@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.14.0]
+
+
 - Simplify shortcut documentation into tables and remove basic typing and Tab-navigation explanations.
 
 - Keep keyboard shortcuts working when the model picker is closed.
@@ -29,6 +32,8 @@ All notable changes to Forge are documented in this file.
 - Remove the existing Codex thread import browser and button.
 
 - Refresh website screenshots with conversation search, native macOS window controls, and anonymous demo repositories.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.13.2...0.14.0
 
 ## [0.13.2]
 
