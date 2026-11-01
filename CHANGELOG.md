@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.14.1]
+
+
 - Check Codex at startup and automatically upgrade outdated Homebrew or global npm installations.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.14.0...0.14.1
 
 ## [0.14.0]
 
