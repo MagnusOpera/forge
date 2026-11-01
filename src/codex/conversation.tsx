@@ -2,8 +2,9 @@ import { registerThreadDraft } from "./thread-drafts";
 import { EnvironmentPicker } from "./environment-picker";
 import codexLogo from "../../assets/codex-colored.svg";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ImagePlus, Loader2, Send, Square, X } from "lucide-react";
+import { ArrowDown, ImagePlus, Loader2, Send, Square, X } from "lucide-react";
 import { TranscriptView } from "./transcript-view";
+import { useTranscriptScroll } from "./transcript-scroll";
 import { displayPath, displayPathText } from "../paths";
 import { ComposerEditor } from "./composer-editor";
 import {
@@ -230,9 +231,9 @@ export function CodexConversation({
   const loaded = useRef(false),
     revision = useRef(0),
     alive = useRef(true);
-  const scroll = useRef<HTMLDivElement>(null),
-    follow = useRef(true);
   const thread = page?.thread;
+  const { scroll, content, away, onScroll, jumpToLatest, preserveHistory } =
+    useTranscriptScroll(`${repositoryId}:${id ?? ""}`, thread?.items, thread?.requests);
   const activeSettings =
     thread && codexIsActive(thread)
       ? (thread.activeSettings ?? thread.settings)
@@ -246,7 +247,6 @@ export function CodexConversation({
     setDraft("");
     setAttachments([]);
     setEditingMessage(null);
-    follow.current = true;
     if (!id) return;
     const refresh = async () => {
       const requestRevision = ++revision.current;
@@ -319,10 +319,6 @@ export function CodexConversation({
       }
     };
   }, [repositoryId, id]);
-  useEffect(() => {
-    if (follow.current && scroll.current)
-      scroll.current.scrollTop = scroll.current.scrollHeight;
-  }, [page?.thread.items, page?.thread.requests]);
   useEffect(() => {
     if (!id) return;
     const flush = async () => {
@@ -413,7 +409,7 @@ export function CodexConversation({
         setDraft("");
         setAttachments([]);
         setEditingMessage(null);
-        follow.current = true;
+        jumpToLatest();
       }
     });
   const canSend =
@@ -476,150 +472,149 @@ export function CodexConversation({
           }
         />
       )}
-      <div
-        className="codex-transcript"
-        ref={scroll}
-        onScroll={() => {
-          const element = scroll.current;
-          if (element)
-            follow.current =
-              element.scrollHeight - element.scrollTop - element.clientHeight <
-              60;
-        }}
-      >
-        {thread.sourceHome && (
-          <p className="codex-external-note">
-            Continuing the original Codex thread in{" "}
-            <code>{displayPath(thread.worktree, Boolean(thread.environment))}</code>. Uses your Codex app/CLI account;
-            Forge's selected model and permissions apply to new turns. This
-            folder may be shared with other threads. Finish or stop work in
-            Codex before sending here.
-          </p>
-        )}
-        {thread.historyWarning && (
-          <p className="codex-external-note">{displayPathText(thread.historyWarning, Boolean(thread.environment))}</p>
-        )}
-        {page.before !== null && (
-          <button
-            className="ghost-button"
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                const older = await codexApi().request("thread", {
-                  ...args,
-                  before: page.before!,
-                });
-                follow.current = false;
-                setPage((current) =>
-                  current
-                    ? {
-                        thread: {
-                          ...current.thread,
-                          items: [
-                            ...older.thread.items.filter(
-                              (item) =>
-                                !current.thread.items.some(
-                                  (entry) => entry.id === item.id,
+      <div className="codex-transcript-frame">
+        <div className="codex-transcript" ref={scroll} onScroll={onScroll}>
+          <div className="codex-transcript-content" ref={content}>
+            {thread.sourceHome && (
+              <p className="codex-external-note">
+                Continuing the original Codex thread in{" "}
+                <code>{displayPath(thread.worktree, Boolean(thread.environment))}</code>. Uses your Codex app/CLI account;
+                Forge's selected model and permissions apply to new turns. This
+                folder may be shared with other threads. Finish or stop work in
+                Codex before sending here.
+              </p>
+            )}
+            {thread.historyWarning && (
+              <p className="codex-external-note">{displayPathText(thread.historyWarning, Boolean(thread.environment))}</p>
+            )}
+            {page.before !== null && (
+              <button
+                className="ghost-button"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    const older = await codexApi().request("thread", {
+                      ...args,
+                      before: page.before!,
+                    });
+                    preserveHistory();
+                    setPage((current) =>
+                      current
+                        ? {
+                            thread: {
+                              ...current.thread,
+                              items: [
+                                ...older.thread.items.filter(
+                                  (item) =>
+                                    !current.thread.items.some(
+                                      (entry) => entry.id === item.id,
+                                    ),
                                 ),
-                            ),
-                            ...current.thread.items,
-                          ],
-                        },
-                        before: older.before,
-                      }
-                    : older,
+                                ...current.thread.items,
+                              ],
+                            },
+                            before: older.before,
+                          }
+                        : older,
+                    );
+                  })
+                }
+              >
+                Load earlier activity
+              </button>
+            )}
+            {!thread.items.length && (
+              <div className="codex-start-note">
+                <img
+                  className="codex-start-logo"
+                  src={codexLogo}
+                  alt="Codex"
+                  width={96}
+                  height={96}
+                />
+                <p>
+                  {thread.sourceHome
+                    ? "Send a message to resume the original Codex thread in its existing working folder. Codex retains its stored conversation context."
+                    : thread.worktree
+                      ? "Send a message to work with Codex in this chat’s checkout."
+                      : "A separate worktree will be created from committed HEAD when you send the first message. Uncommitted changes in the configured checkout are excluded."}
+                </p>
+                {(thread.archived || !environmentFixed) && (
+                  <EnvironmentPicker
+                    thread={thread}
+                    onConfigure={onConfigure}
+                    onChange={async () =>
+                      setPage(await codexApi().request("thread", args))
+                    }
+                  />
+                )}
+              </div>
+            )}
+            <TranscriptView
+              thread={thread}
+              theme={theme}
+              onError={setError}
+              editable={
+                !busy &&
+                !thread.archived &&
+                !codexIsActive(thread) &&
+                !thread.queue.length
+              }
+              onEdit={(item) => {
+                const previous = {
+                  text: draftRef.current.text,
+                  attachments: [...draftRef.current.attachments],
+                };
+                setEditingMessage(
+                  (current) => current ?? { id: item.id, previous },
                 );
-              })
-            }
-          >
-            Load earlier activity
-          </button>
-        )}
-        {!thread.items.length && (
-          <div className="codex-start-note">
-            <img
-              className="codex-start-logo"
-              src={codexLogo}
-              alt="Codex"
-              width={96}
-              height={96}
+                saveDraft(item.text, []);
+                requestAnimationFrame(() =>
+                  composer.current
+                    ?.querySelector<HTMLElement>('[contenteditable="true"]')
+                    ?.focus(),
+                );
+              }}
             />
-            <p>
-              {thread.sourceHome
-                ? "Send a message to resume the original Codex thread in its existing working folder. Codex retains its stored conversation context."
-                : thread.worktree
-                  ? "Send a message to work with Codex in this chat’s checkout."
-                  : "A separate worktree will be created from committed HEAD when you send the first message. Uncommitted changes in the configured checkout are excluded."}
-            </p>
-            {(thread.archived || !environmentFixed) && (
-              <EnvironmentPicker
-                thread={thread}
-                onConfigure={onConfigure}
-                onChange={async () =>
-                  setPage(await codexApi().request("thread", args))
+            {thread.requests.map((request) => (
+              <RequestCard
+                remote={Boolean(thread.environment)}
+                key={request.id}
+                request={request}
+                disabled={busy}
+                allowApproval={
+                  activeSettings?.mode !== "plan" &&
+                  activeSettings?.permissions !== "strict"
+                }
+                preview={
+                  request.method === "item/fileChange/requestApproval"
+                    ? thread.items.find((item) => item.id === request.params.itemId)
+                        ?.text
+                    : undefined
+                }
+                answer={(answers, approve) =>
+                  void run(async () => {
+                    await codexApi().request("answer", {
+                      ...args,
+                      requestId: request.id,
+                      answers,
+                      approve,
+                    });
+                  })
                 }
               />
+            ))}
+            {(thread.error || error) && (
+              <div className="inline-error" role="alert">
+                {errorMessage(error || thread.error, Boolean(thread.environment))}
+              </div>
             )}
           </div>
-        )}
-        <TranscriptView
-          thread={thread}
-          theme={theme}
-          onError={setError}
-          editable={
-            !busy &&
-            !thread.archived &&
-            !codexIsActive(thread) &&
-            !thread.queue.length
-          }
-          onEdit={(item) => {
-            const previous = {
-              text: draftRef.current.text,
-              attachments: [...draftRef.current.attachments],
-            };
-            setEditingMessage(
-              (current) => current ?? { id: item.id, previous },
-            );
-            saveDraft(item.text, []);
-            requestAnimationFrame(() =>
-              composer.current
-                ?.querySelector<HTMLElement>('[contenteditable="true"]')
-                ?.focus(),
-            );
-          }}
-        />
-        {thread.requests.map((request) => (
-          <RequestCard
-            remote={Boolean(thread.environment)}
-            key={request.id}
-            request={request}
-            disabled={busy}
-            allowApproval={
-              activeSettings?.mode !== "plan" &&
-              activeSettings?.permissions !== "strict"
-            }
-            preview={
-              request.method === "item/fileChange/requestApproval"
-                ? thread.items.find((item) => item.id === request.params.itemId)
-                    ?.text
-                : undefined
-            }
-            answer={(answers, approve) =>
-              void run(async () => {
-                await codexApi().request("answer", {
-                  ...args,
-                  requestId: request.id,
-                  answers,
-                  approve,
-                });
-              })
-            }
-          />
-        ))}
-        {(thread.error || error) && (
-          <div className="inline-error" role="alert">
-            {errorMessage(error || thread.error, Boolean(thread.environment))}
-          </div>
+        </div>
+        {away && (
+          <button className="codex-jump-latest" onClick={jumpToLatest}>
+            <ArrowDown size={14} aria-hidden="true" />Jump to latest
+          </button>
         )}
       </div>
       {thread.queue.length > 0 && (

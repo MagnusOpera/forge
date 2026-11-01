@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Refine Codex conversations with rounded message bubbles, balanced spacing, and a jump-to-latest control that preserves your reading position.
+
 ## [0.11.0]
 
 

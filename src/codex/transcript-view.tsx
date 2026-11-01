@@ -85,7 +85,7 @@ function WorkActivity({
       ? Math.max(0, now - timing.startedAt)
       : timing?.durationMs;
   return (
-    <details className="codex-work-activity">
+    <details className="codex-work-activity" data-active={active}>
       <summary>
         <span>
           {showTiming ? active ? "Working" : "Worked" : "Activity"}
