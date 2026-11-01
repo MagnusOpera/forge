@@ -4,11 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.16.0]
+
+
 - Show the active GitHub authentication method, clearer switching controls, and restart guidance after development updates.
 
 - Load optional local development credentials from `.env` when running `make dev`.
 
 - Connect to GitHub through browser sign-in or a classic personal access token.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.15.1...0.16.0
 
 ## [0.15.1]
 
