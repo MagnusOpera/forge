@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.15.0]
+
+
 - Refresh website screenshots and showcase draft release publishing in both themes.
 
 - Match release publishing controls to the existing PR action menu.
@@ -11,6 +14,8 @@ All notable changes to Forge are documented in this file.
 - Publish draft releases while preserving prerelease status and marking stable releases as Latest.
 
 - Browse active, preview, and draft GitHub releases with newest-first dates, release notes, and the ⌘⇧L shortcut.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.14.1...0.15.0
 
 ## [0.14.1]
 
