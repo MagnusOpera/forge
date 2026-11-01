@@ -1,7 +1,6 @@
 const root = document.documentElement;
 const toggle = document.querySelector("[data-theme-toggle]");
 const previewImage = document.querySelector("[data-preview-image]");
-const previewTheme = document.querySelector("[data-preview-theme]");
 const platformTabsRoot = document.querySelector("[data-platform-tabs]");
 
 function preferredTheme() {
@@ -17,9 +16,12 @@ function applyTheme(theme) {
   const preview = theme === "dark" ? "light" : "dark";
   root.dataset.theme = theme;
   toggle.setAttribute("aria-label", theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
-  if (previewTheme) {
-    previewTheme.textContent = preview;
-  }
+  document.querySelectorAll("[data-showcase-image]").forEach(image => {
+    image.src = `screenshots/forge-${image.dataset.showcaseImage}-${preview}.png`;
+  });
+  document.querySelectorAll("[data-showcase-link]").forEach(link => {
+    link.href = `screenshots/forge-${link.dataset.showcaseLink}-${preview}.png`;
+  });
   if (previewImage) {
     previewImage.src = `screenshots/forge-${preview}.png`;
   }

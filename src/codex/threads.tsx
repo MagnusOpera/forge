@@ -1,17 +1,16 @@
 import { displayPathText } from "../paths";
-import { createPortal } from "react-dom";
 import { ThreadFilterTabs } from "./thread-filter-tabs";
-import { ExistingCodexDialog } from "./existing-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Archive,
-  History,
   MessageSquare,
   Pencil,
   Plus,
   RotateCcw,
+  Search,
+  X,
 } from "lucide-react";
-import { codexIsActive, type CodexThreadSummary } from "../../shared/codex";
+import { codexIsActive, type CodexThreadSearchResult, type CodexThreadSummary } from "../../shared/codex";
 import { codexApi, errorMessage } from "./api";
 function checkoutSetupMessage(error: string): string | undefined {
   if (error.includes("Choose a local Git folder or configure a remote project placement first."))
@@ -43,8 +42,46 @@ export function CodexThreadList({
     [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null),
     [title, setTitle] = useState("");
-  const [existing, setExisting] = useState(false);
-  useEffect(() => setExisting(false), [repositoryId]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [matches, setMatches] = useState<{
+    repositoryId: string; query: string; archived: boolean;
+    results: CodexThreadSearchResult[]; error: string;
+  } | null>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchButton = useRef<HTMLButtonElement>(null);
+  const searchQuery = searchOpen ? query.trim() : "";
+  useEffect(() => {
+    setQuery("");
+    setMatches(null);
+  }, [repositoryId]);
+  useEffect(() => {
+    if (searchOpen) searchInput.current?.focus();
+  }, [searchOpen]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 180);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+  useEffect(() => {
+    if (!searchQuery) { setMatches(null); return; }
+    if (searchQuery !== debouncedQuery) return;
+    let active = true;
+    void Promise.resolve()
+      .then(() => codexApi().request("search", { repositoryId, query: searchQuery, archived }))
+      .then((results) => {
+        if (active) setMatches({ repositoryId, query: searchQuery, archived, results, error: "" });
+      })
+      .catch((error) => {
+        if (active) setMatches({ repositoryId, query: searchQuery, archived, results: [], error: errorMessage(error) });
+      });
+    return () => { active = false; };
+  }, [repositoryId, searchQuery, debouncedQuery, archived, threads]);
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setQuery("");
+    searchButton.current?.focus();
+  };
   useEffect(() => {
     if (configurationOpen || !checkoutSetupMessage(error)) return;
     let active = true;
@@ -69,7 +106,15 @@ export function CodexThreadList({
     return () => { active = false; };
   }, [configurationOpen, error, repositoryId]);
   const setupMessage = checkoutSetupMessage(error || loadError);
-  const visible = threads.filter((t) => t.archived === archived);
+  const currentMatches = matches?.repositoryId === repositoryId && matches.query === searchQuery && matches.archived === archived
+    ? matches : null;
+  const searching = Boolean(searchQuery && !currentMatches);
+  const visible = searchQuery
+    ? (currentMatches?.results ?? []).flatMap((match) => {
+        const thread = threads.find((t) => t.id === match.id && t.archived === archived);
+        return thread ? [thread] : [];
+      })
+    : threads.filter((t) => t.archived === archived);
   const run = async (action: () => Promise<void>) => {
     setError("");
     setBusy(true);
@@ -112,13 +157,15 @@ export function CodexThreadList({
         />
         <div className="codex-actions">
           <button
+            ref={searchButton}
             className="icon-button"
-            title="Existing Codex threads"
-            aria-label="Browse existing Codex threads"
-            disabled={busy || loading}
-            onClick={() => setExisting(true)}
+            title="Search conversations"
+            aria-label="Search conversations"
+            aria-expanded={searchOpen}
+            aria-controls="codex-conversation-search"
+            onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}
           >
-            <History size={16} />
+            <Search size={16} />
           </button>
           <button
             className="icon-button"
@@ -129,6 +176,7 @@ export function CodexThreadList({
               void run(async () => {
                 const thread = await codexApi().request("create", { repositoryId });
                 setArchived(false);
+                setQuery("");
                 onSelect(thread.id);
               })
             }
@@ -137,19 +185,35 @@ export function CodexThreadList({
           </button>
         </div>
       </div>
-      {existing &&
-        createPortal(
-          <ExistingCodexDialog
-            key={repositoryId}
-            repositoryId={repositoryId}
-            onSelect={(id) => {
-              setArchived(false);
-              onSelect(id);
+      {searchOpen && (
+        <div className="search-box codex-conversation-search" id="codex-conversation-search">
+          <Search size={15} aria-hidden="true" />
+          <input
+            ref={searchInput}
+            aria-label="Search conversation text"
+            placeholder="Search conversations…"
+            maxLength={1000}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") { event.stopPropagation(); closeSearch(); }
+              if (event.key === "ArrowDown" && visible.length) {
+                event.preventDefault();
+                event.currentTarget.closest("section")?.querySelector<HTMLButtonElement>(".codex-thread-select")?.focus();
+              }
             }}
-            onClose={() => setExisting(false)}
-          />,
-          document.querySelector(".app-shell") ?? document.body,
-        )}
+          />
+          <button className="icon-button" aria-label="Close conversation search" onClick={closeSearch}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      {searchQuery && (
+        <p className="codex-search-status" role="status">
+          {searching ? "Searching…" : currentMatches?.error ? "Search failed" : `${visible.length} matching ${visible.length === 1 ? "thread" : "threads"}`}
+        </p>
+      )}
+      {currentMatches?.error && <p className="inline-error" role="alert">{currentMatches.error}</p>}
       {(error || loadError) && (
         <div className={setupMessage ? "codex-setup-notice" : "inline-error"} role={setupMessage ? "status" : "alert"}>
           {setupMessage ?? (error || loadError)}
@@ -209,6 +273,7 @@ export function CodexThreadList({
                         ? " · Codex app/CLI"
                         : ""}
                   </span>
+                  {searchQuery && <span className="codex-search-snippet">{displayPathText(currentMatches?.results.find((match) => match.id === thread.id)?.snippet ?? "", Boolean(thread.environment))}</span>}
                 </span>
                 <span
                   className={`state-chip ${thread.state === "failed" ? "bad" : codexIsActive(thread) ? "running" : "muted"}`}
@@ -254,7 +319,7 @@ export function CodexThreadList({
           )}
         </div>
       ))}
-      {!visible.length && (
+      {!visible.length && !searchQuery && (
         <div className="codex-empty">
           <MessageSquare size={22} />
           <p>{archived ? "No archived threads" : "No Codex threads yet"}</p>

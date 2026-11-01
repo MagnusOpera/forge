@@ -15,11 +15,17 @@ describe("homepage Codex previews", () => {
       const preview = document.querySelector<HTMLImageElement>("[data-preview-image]")!;
       const toggle = document.querySelector<HTMLButtonElement>("[data-theme-toggle]")!;
       expect(preview.getAttribute("src")).toBe("screenshots/forge-dark.png");
-      expect(document.querySelector("[data-preview-theme]")?.textContent).toBe("dark");
+      for (const kind of ["navigation", "detached"]) {
+        expect(document.querySelector(`[data-showcase-image="${kind}"]`)?.getAttribute("src")).toBe(`screenshots/forge-${kind}-dark.png`);
+        expect(document.querySelector(`[data-showcase-link="${kind}"]`)?.getAttribute("href")).toBe(`screenshots/forge-${kind}-dark.png`);
+      }
       toggle.click();
       expect(document.documentElement.dataset.theme).toBe("dark");
       expect(preview.getAttribute("src")).toBe("screenshots/forge-light.png");
-      expect(document.querySelector("[data-preview-theme]")?.textContent).toBe("light");
+      for (const kind of ["navigation", "detached"]) {
+        expect(document.querySelector(`[data-showcase-image="${kind}"]`)?.getAttribute("src")).toBe(`screenshots/forge-${kind}-light.png`);
+        expect(document.querySelector(`[data-showcase-link="${kind}"]`)?.getAttribute("href")).toBe(`screenshots/forge-${kind}-light.png`);
+      }
       expect(toggle.getAttribute("aria-label")).toBe("Switch to light theme");
       toggle.click();
       expect(preview.getAttribute("src")).toBe("screenshots/forge-dark.png");
@@ -44,4 +50,18 @@ describe("homepage Codex previews", () => {
     const styles = readFileSync(path.resolve("website/styles.css"), "utf8");
     expect(styles).toContain("aspect-ratio: 1440 / 920;");
   });
+  it("ships native main and detached window captures in both themes", () => {
+    for (const kind of ["navigation", "detached"]) {
+      const sizes = ["dark", "light"].map(theme => {
+        const file = `screenshots/forge-${kind}-${theme}.png`;
+        const png = readFileSync(path.resolve("website", file));
+        expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+        expect(png.readUInt32BE(16)).toBeGreaterThanOrEqual(1400);
+        expect(png.readUInt32BE(20)).toBe(1840);
+        return [png.readUInt32BE(16), png.readUInt32BE(20)];
+      });
+      expect(sizes[0]).toEqual(sizes[1]);
+    }
+  });
+
 });

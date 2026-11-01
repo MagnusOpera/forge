@@ -1033,7 +1033,7 @@ export class ThreadManager {
         throw new Error("This model does not support image attachments.");
       if (thread.sourceHome && !thread.serverId)
         throw new Error(
-          "The original Codex thread ID is missing. Reattach it from Existing Codex threads.",
+          "The original Codex thread ID is missing. This conversation cannot be resumed.",
         );
       if (!thread.worktree || (thread.environment && !thread.serverId)) {
         if (thread.sourceHome)

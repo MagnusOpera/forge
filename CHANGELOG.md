@@ -4,9 +4,31 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Simplify shortcut documentation into tables and remove basic typing and Tab-navigation explanations.
+
+- Keep keyboard shortcuts working when the model picker is closed.
+
+- Detach and reattach the current content pane with ⌘⇧D, including while editing a message.
+
 - Remove tmux terminal persistence; remote terminals now use SSH login shells.
 
-- Refresh website screenshots with the latest interface, native macOS window controls, and anonymous demo repositories.
+- Expand installation instructions for Codex ChatGPT sign-in, project checkouts, and remote SSH environments.
+
+- Update documentation with current keyboard shortcuts, detachable-window behavior, and checkout options.
+
+- Frame the main website screenshot with the same inset background and shadow as detached-window previews.
+
+- Remove the website screenshot title bar and decorative controls, keeping native controls inside app screenshots.
+
+- Introduce Forge as an AI Development Environment and refresh website highlights for its complete coding workflow.
+
+- Showcase detachable conversation windows on the website with anonymous previews in both themes.
+
+- Search conversation titles and messages from the thread list, with ranked matches and excerpts.
+
+- Remove the existing Codex thread import browser and button.
+
+- Refresh website screenshots with conversation search, native macOS window controls, and anonymous demo repositories.
 
 ## [0.13.2]
 

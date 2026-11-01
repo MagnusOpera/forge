@@ -1,3 +1,4 @@
+import { ConversationSearch } from "./search.js";
 import {
   mkdirSync,
   openSync,
@@ -101,6 +102,7 @@ export function threadSummary(thread: CodexThread): CodexThreadSummary {
 export class CodexStore {
   configuration: CodexConfiguration;
   threads = new Map<string, CodexThread>();
+  private searchIndex?: ConversationSearch;
   private savedItems = new Map<string, Map<string, CodexItem>>();
   constructor(readonly root: string) {
     const configurationPath = path.join(root, "configuration.json");
@@ -211,6 +213,18 @@ export class CodexStore {
       ...thread,
       items: [],
     });
+    this.searchIndex?.update(thread);
+  }
+  search(repositoryId: string, query: string, archived: boolean) {
+    if (!this.searchIndex) {
+      this.searchIndex = new ConversationSearch();
+      for (const thread of this.threads.values()) this.searchIndex.update(thread);
+    }
+    return this.searchIndex.search(repositoryId, query, archived);
+  }
+  close(): void {
+    this.searchIndex?.close();
+    this.searchIndex = undefined;
   }
   get(repositoryId: string, id: string): CodexThread {
     const thread = this.threads.get(id);

@@ -139,37 +139,17 @@ describe("Codex preload IPC handlers", () => {
       }),
     ).rejects.toThrow("does not belong");
   });
-  it("validates existing-thread requests and never accepts renderer-supplied folders or homes", async () => {
+  it("validates search input and scopes queries to the requested project", async () => {
+    const search = vi.spyOn(CodexStore.prototype, "search").mockReturnValue([{ id: "match", snippet: "Found" }]);
+    await expect(request("search", { repositoryId: "R_123", query: 3, archived: false })).rejects.toThrow("search query");
+    await expect(request("search", { repositoryId: "R_123", query: "a".repeat(1001), archived: false })).rejects.toThrow("search query");
+    await expect(request("search", { repositoryId: "R_123", query: "test", archived: "yes" })).rejects.toThrow("archive filter");
+    expect(search).not.toHaveBeenCalled();
+    expect(await request("search", { repositoryId: "R_123", query: "test", archived: true })).toEqual([{ id: "match", snippet: "Found" }]);
+    expect(search).toHaveBeenCalledExactlyOnceWith("R_123", "test", true);
+  });
+  it("rejects model requests for threads outside the project", async () => {
     const rpc = vi.spyOn(CodexClient.prototype, "request");
-    await expect(
-      request("existing", { repositoryId: "R_123", archived: "yes" }),
-    ).rejects.toThrow("archive filter");
-    await expect(
-      request("existing", { repositoryId: "R_123", cursor: 7 }),
-    ).rejects.toThrow("cursor");
-    await expect(
-      request("adopt", {
-        repositoryId: "R_123",
-        serverId: "../sessions/other",
-        archived: false,
-      }),
-    ).rejects.toThrow("thread ID");
-    await expect(
-      request("adopt", {
-        repositoryId: "R_123",
-        serverId: "valid-id",
-        archived: "yes",
-      }),
-    ).rejects.toThrow("archive state");
-    await expect(
-      request("adopt", {
-        repositoryId: "R_123",
-        serverId: "valid-id",
-        archived: false,
-        cwd: "/arbitrary",
-        home: "/arbitrary",
-      }),
-    ).rejects.toThrow("local Git folder");
     await expect(
       request("models", { repositoryId: "R_123", id: "not-owned" }),
     ).rejects.toThrow("does not belong");

@@ -170,17 +170,6 @@ export class CodexClient implements CodexTransport {
       assertCapabilities(
         readFileSync(path.join(schemaDir, "ClientRequest.json"), "utf8"),
       );
-      if (this.sharedHome) {
-        const schema = readFileSync(
-          path.join(schemaDir, "ClientRequest.json"),
-          "utf8",
-        );
-        for (const method of ["thread/list", "thread/read"])
-          if (!schema.includes(`"${method}"`))
-            throw new Error(
-              `Installed Codex CLI does not support ${method}. Update Codex CLI to browse existing threads.`,
-            );
-      }
     } finally {
       rmSync(schemaDir, { recursive: true, force: true });
     }

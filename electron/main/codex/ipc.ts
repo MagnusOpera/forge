@@ -10,7 +10,6 @@ import { readFileSync, existsSync, copyFileSync, statSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { openInTextEditor, validateEditor } from "./editor.js";
-import { ExistingThreads } from "./existing.js";
 import { CodexClient, object, text } from "./client.js";
 import {
   checkEnvironment,
@@ -58,10 +57,6 @@ export function registerCodexIpc(
     client: CodexClient | undefined,
     manager: ThreadManager | undefined,
     terminals: TerminalManager | undefined;
-  let existing: ExistingThreads | undefined;
-  const sourceHome = path.resolve(
-    process.env.CODEX_HOME || path.join(os.homedir(), ".codex"),
-  );
   const logins = new Map<string, string>();
   const checkoutReviews = new Map<string, { preview: CodexCheckoutPreview; validationKey: string; sender: unknown; expires: number }>();
   let loginStarting = false;
@@ -113,7 +108,6 @@ export function registerCodexIpc(
           return { client: account, models: () => account.models() };
         },
       );
-      existing = new ExistingThreads(manager, sourceHome);
       terminals = new TerminalManager(
         (event) => windows.broadcast("codex:terminal", event),
         undefined,
@@ -536,24 +530,10 @@ export function registerCodexIpc(
         changed({ repositoryId: projectId });
         return store.configuration;
       }
-      if (method === "existing") {
-        if (input.archived !== undefined && typeof input.archived !== "boolean")
-          throw new Error("Invalid archive filter.");
-        return existing!.list(
-          projectId,
-          input.cursor === undefined
-            ? undefined
-            : string(input.cursor, "thread cursor", 4096),
-          input.archived === true,
-        );
-      }
-      if (method === "adopt") {
-        const serverId = string(input.serverId, "Codex thread ID");
-        if (!/^[a-zA-Z0-9_-]+$/.test(serverId))
-          throw new Error("Invalid Codex thread ID.");
-        if (typeof input.archived !== "boolean")
-          throw new Error("Invalid archive state.");
-        return existing!.adopt(projectId, serverId, input.archived);
+      if (method === "search") {
+        const query = string(input.query, "search query", 1000);
+        if (typeof input.archived !== "boolean") throw new Error("Invalid archive filter.");
+        return store.search(projectId, query, input.archived);
       }
       if (method === "list") return store.list(projectId);
       if (method === "startOptions") return manager.startOptions(projectId, input.id === undefined ? undefined : store.get(projectId, string(input.id, "thread ID")));
@@ -853,6 +833,7 @@ export function registerCodexIpc(
     windows.quitting = true;
     terminals?.dispose();
     manager?.flush();
+    store?.close();
   });
   return {
     mainWindowClosed: () =>

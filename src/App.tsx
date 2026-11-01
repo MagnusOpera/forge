@@ -1,5 +1,6 @@
+import { useContentAttachmentShortcut } from "./content-attachment-shortcut";
 import { contentItemKey, retainedContentItems } from "./content-items";
-import { isDomNode, isHtmlElement } from "./dom";
+import { hasOpenKeyboardOverlay, isDomNode, isHtmlElement } from "./dom";
 import { displayPath, displayPathText } from "./paths";
 import { DetachablePane, useDetachablePane } from "./detachable-pane";
 import { usePaneSurface } from "./pane-surface";
@@ -3111,7 +3112,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     if (initialItem) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (isHtmlElement(event.target) && event.target.closest(".codex-terminal-screen")) return;
-      if ((event.target as Node | null)?.ownerDocument?.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      if (hasOpenKeyboardOverlay((event.target as Node | null)?.ownerDocument ?? (event.currentTarget as Window).document)) return;
       if (isTabNavigation(event) && (projectFocusView === "codex" || settingsScope)) return;
       if (isTabNavigation(event)) {
         event.preventDefault();
@@ -4667,6 +4668,7 @@ function ContentPane(props: {
   onRunWorkflow(workflow: WorkflowSummary): void;
   onRunWorkflowWithArguments(workflow: WorkflowSummary): void;
 }) {
+  useContentAttachmentShortcut(props.onToggleAttachment, !props.attachmentOpening);
   const reviewPr = props.selection.kind === "pr" ? props.prDetail ?? props.selection.pr : null;
   const showTitleAction =
     props.repo && reviewPr && canUpdatePullRequestTitle(props.repo, reviewPr, props.auth?.viewerLogin);
@@ -4865,7 +4867,7 @@ function ContentPane(props: {
         </div>
         <div className="header-actions">
           {props.codexActions}
-          <button className="icon-button" aria-label={props.detached ? "Reattach content pane" : "Detach content pane"} title={props.detached ? "Reattach content pane" : "Detach content pane"} disabled={props.attachmentOpening} onClick={props.onToggleAttachment}>{props.detached ? <AppWindowMac size={16} /> : <PictureInPicture2 size={16} />}</button>
+          <button className="icon-button" aria-label={props.detached ? "Reattach content pane" : "Detach content pane"} title={props.detached ? "Reattach content pane (⌘⇧D)" : "Detach content pane (⌘⇧D)"} aria-keyshortcuts="Meta+Shift+D Control+Shift+D" disabled={props.attachmentOpening} onClick={props.onToggleAttachment}>{props.detached ? <AppWindowMac size={16} /> : <PictureInPicture2 size={16} />}</button>
         </div>
       </div>
       {props.codexContent ? props.codexContent : props.error ? (

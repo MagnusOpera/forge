@@ -3717,11 +3717,6 @@ code {
 
 .codex-start-logo { display: block; width: 96px; height: 96px; margin: 0 auto 16px; object-fit: contain; }
 
-.codex-existing-dialog { width: min(850px, 100%); }
-.codex-existing-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
-.codex-existing-row .focus-main { flex: 1; min-width: 0; }
-.codex-existing-row small { color: var(--text-muted); font-size: 11px; }
-.codex-existing-row .ghost-button { flex-shrink: 0; }
 .codex-external-note { color: var(--text-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; padding: 0 8px; }
 
 .codex-markdown-editor { margin-top: 8px; }
@@ -3931,3 +3926,7 @@ code {
 .codex-branch-status { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); display: flex; color: var(--text-muted); }
 .codex-branch-status.valid { color: var(--good-text); }
 .codex-branch-status.invalid { color: var(--danger-text); }
+
+.codex-conversation-search { margin: 4px 8px 8px; }
+.codex-search-status { margin: 8px 12px; color: var(--text-muted); font-size: 12px; }
+.codex-search-snippet { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; color: var(--text-muted); font-size: 12px; line-height: 1.5; }

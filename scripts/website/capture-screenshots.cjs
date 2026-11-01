@@ -35,8 +35,26 @@ app.whenReady().then(async () => {
         partition: "screenshot-" + theme
       }
     });
+    let detached;
+    win.webContents.setWindowOpenHandler(({ url }) => ({
+      action: url === new URL("content-window.html", win.webContents.getURL()).href ? "allow" : "deny",
+      overrideBrowserWindowOptions: {
+        width: 980, height: 920, useContentSize: true, show: false,
+        titleBarStyle: "hiddenInset", trafficLightPosition: trafficLightPosition(zoomFactor),
+        webPreferences: { zoomFactor, contextIsolation: false, sandbox: false }
+      }
+    }));
+    win.webContents.on("did-create-window", child => { detached = child; });
     await win.loadFile(path.join(root, "dist/renderer/index.html"));
     await waitFor(win, "!!document.querySelector('.codex-thread-select')");
+    await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Search conversations\"]').click()");
+    await waitFor(win, "!!document.querySelector('[aria-label=\"Search conversation text\"]')");
+    await win.webContents.executeJavaScript(`{
+      const input = document.querySelector('[aria-label="Search conversation text"]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "workflow");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }`);
+    await waitFor(win, "document.querySelector('.codex-search-status')?.textContent === '1 matching thread'");
     await win.webContents.executeJavaScript("document.querySelector('.codex-thread-select').click()");
     await waitFor(win, "!!document.querySelector('.codex-edited-files')");
     await win.webContents.executeJavaScript("document.fonts.ready");
@@ -52,8 +70,26 @@ app.whenReady().then(async () => {
     // Capture the actual window, including native traffic lights, without its shadow.
     execFileSync("/usr/sbin/screencapture", ["-x", "-o", "-l", windowId,
       path.join(root, "website/screenshots/forge-" + theme + ".png")]);
+    await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Detach content pane\"]').click()");
+    for (let attempt = 0; !detached && attempt < 100; attempt++)
+      await new Promise(resolve => setTimeout(resolve, 100));
+    if (!detached) throw new Error("Detached window did not open");
+    await waitFor(detached, "!!document.querySelector('[aria-label=\"Reattach content pane\"]') && !!document.querySelector('.codex-edited-files')");
+    // Match the two navigation panes retained by the shipping main window.
+    win.setContentSize(Math.round(641 * zoomFactor), 920);
+    await new Promise(resolve => setTimeout(resolve, 400));
+    for (const [target, name] of [[win, "navigation"], [detached, "detached"]]) {
+      target.setWindowButtonPosition(trafficLightPosition(zoomFactor));
+      target.show();
+      target.focus();
+      await new Promise(resolve => setTimeout(resolve, 400));
+      const id = target.getMediaSourceId().split(":")[1];
+      execFileSync("/usr/sbin/screencapture", ["-x", "-o", "-l", id,
+        path.join(root, "website/screenshots/forge-" + name + "-" + theme + ".png")]);
+    }
+    detached.destroy();
     win.destroy();
-    console.log("Captured " + theme + " preview");
+    console.log("Captured " + theme + " workspace and detached window previews");
   }
 }).then(() => app.quit()).catch(error => { console.error(error); app.exit(1); });
 app.on("window-all-closed", () => {});

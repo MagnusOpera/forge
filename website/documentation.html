@@ -75,47 +75,126 @@
         <p class="eyebrow">Documentation</p>
         <h1>Documentation</h1>
         <p class="lead">
-          Learn the keyboard commands that keep Forge fast and focused.
+          Set up your workspace, navigate with the keyboard, and keep conversations and code together.
         </p>
       </section>
 
-      <section class="keyboard-section" id="shortcuts" aria-labelledby="shortcuts-title">
+      <section class="keyboard-section documentation-shortcuts" id="shortcuts" aria-labelledby="shortcuts-title">
         <div class="keyboard-copy">
-          <p class="eyebrow">Keyboard shortcuts</p>
+          <p class="eyebrow">Keyboard shortcuts · macOS</p>
           <h2 id="shortcuts-title">Stay in flow.</h2>
-          <p>
-            Refresh, move between favorite repositories, and change project views
-            without reaching for the pointer.
-          </p>
+          <p>⌘ means Command and ⇧ means Shift. Plain navigation keys apply outside text fields;
+            the terminal keeps its own key handling, and dialogs temporarily take precedence.</p>
+          <p>Project views cycle in this order: Codex, Pull Requests, Workflows, Issues, Workflow Runs.
+            The current bindings use ← for the next view and → for the previous view.</p>
         </div>
         <div class="shortcut-groups">
           <article class="shortcut-group">
-            <h3>Repository</h3>
+            <h3>Workspace</h3>
             <dl class="shortcut-list">
-              <div><dt>Refresh repository</dt><dd><kbd>⌘</kbd><kbd>R</kbd></dd></div>
-              <div><dt>Previous favorite</dt><dd><kbd>⌘</kbd><kbd>↑</kbd></dd></div>
-              <div><dt>Next favorite</dt><dd><kbd>⌘</kbd><kbd>↓</kbd></dd></div>
+              <div><dt>Toggle repository sidebar</dt><dd><kbd>⌘</kbd><kbd>B</kbd></dd></div>
+              <div><dt>Back</dt><dd><kbd>⌘</kbd><kbd>[</kbd></dd></div>
+              <div><dt>Forward</dt><dd><kbd>⌘</kbd><kbd>]</kbd></dd></div>
+              <div><dt>Refresh current content</dt><dd><kbd>⌘</kbd><kbd>R</kbd></dd></div>
+              <div><dt>Open in GitHub (press G twice)</dt><dd><kbd>G</kbd><kbd>G</kbd></dd></div>
             </dl>
           </article>
           <article class="shortcut-group">
-            <h3>Project view</h3>
+            <h3>Repositories and views</h3>
             <dl class="shortcut-list">
-              <div><dt>Next view</dt><dd><kbd>←</kbd></dd></div>
-              <div><dt>Previous view</dt><dd><kbd>→</kbd></dd></div>
+              <div><dt>Previous favorite</dt><dd><kbd>⌘</kbd><kbd>↑</kbd></dd></div>
+              <div><dt>Next favorite</dt><dd><kbd>⌘</kbd><kbd>↓</kbd></dd></div>
+              <div><dt>Codex</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>C</kbd></dd></div>
               <div><dt>Open pull requests</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>P</kbd></dd></div>
               <div><dt>Workflow runs</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>R</kbd></dd></div>
               <div><dt>Issues</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>I</kbd></dd></div>
               <div><dt>Workflows</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>W</kbd></dd></div>
+              <div><dt>Next project view</dt><dd><kbd>←</kbd></dd></div>
+              <div><dt>Previous project view</dt><dd><kbd>→</kbd></dd></div>
             </dl>
           </article>
           <article class="shortcut-group">
-            <h3>Selection</h3>
+            <h3>List navigation</h3>
             <dl class="shortcut-list">
-              <div><dt>Previous item</dt><dd><kbd>↑</kbd></dd></div>
-              <div><dt>Next item</dt><dd><kbd>↓</kbd></dd></div>
+              <div><dt>Previous item</dt><dd><kbd>↑</kbd><span aria-hidden="true"> / </span><kbd>K</kbd></dd></div>
+              <div><dt>Next item</dt><dd><kbd>↓</kbd><span aria-hidden="true"> / </span><kbd>J</kbd></dd></div>
+              <div><dt>Clear selection outside fields</dt><dd><kbd>Esc</kbd></dd></div>
+              <div><dt>Navigate Codex threads</dt><dd>Focus the thread list</dd></div>
+            </dl>
+          </article>
+          <article class="shortcut-group">
+            <h3>Search</h3>
+            <dl class="shortcut-list">
+              <div><dt>Repositories and loaded project items</dt><dd><kbd>⌘</kbd><kbd>K</kbd></dd></div>
+              <div><dt>Conversation text</dt><dd>Search beside New thread</dd></div>
+              <div><dt>Choose palette result</dt><dd><kbd>↑</kbd><span aria-hidden="true"> / </span><kbd>↓</kbd></dd></div>
+              <div><dt>Open palette result</dt><dd><kbd>Enter</kbd></dd></div>
+              <div><dt>Close palette or conversation search</dt><dd><kbd>Esc</kbd></dd></div>
+              <div><dt>Focus first conversation search result</dt><dd><kbd>↓</kbd></dd></div>
+            </dl>
+          </article>
+          <article class="shortcut-group">
+            <h3>Windows and zoom</h3>
+            <dl class="shortcut-list">
+              <div><dt>Detach / reattach content pane</dt><dd><kbd>⌘</kbd><kbd>⇧</kbd><kbd>D</kbd></dd></div>
+              <div><dt>Close focused window</dt><dd><kbd>⌘</kbd><kbd>W</kbd></dd></div>
+              <div><dt>Zoom in</dt><dd><kbd>⌘</kbd><kbd>+</kbd></dd></div>
+              <div><dt>Zoom out</dt><dd><kbd>⌘</kbd><kbd>−</kbd></dd></div>
+              <div><dt>Reset to default app zoom</dt><dd><kbd>⌘</kbd><kbd>0</kbd></dd></div>
             </dl>
           </article>
         </div>
+      </section>
+
+      <section class="codex-section" id="windows" aria-labelledby="windows-title">
+        <div class="codex-intro">
+          <p class="eyebrow">Detachable windows</p>
+          <h2 id="windows-title">Keep a task in view.</h2>
+          <p>Use <strong>Detach content pane</strong> in the content toolbar to move a conversation, pull request,
+            issue, workflow run, or workflow into its own native window. Narrow toolbars may place it in the overflow menu.</p>
+          <p>Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>D</kbd> to detach the current content pane. Use the same shortcut in its detached window to reattach it. It also works while editing a message; dialogs and the command palette take precedence.</p>
+        </div>
+        <div class="codex-features">
+          <article>
+            <h3>Reattach or close.</h3>
+            <p>Use <strong>Reattach content pane</strong> to bring the item back and select it in the main workspace.
+              Closing the detached window with its close button or ⌘W also returns its content, while preserving the main window’s current selection.</p>
+          </article>
+          <article>
+            <h3>Keep your place.</h3>
+            <p>The live content moves between windows, preserving drafts and view state. Other items stay available in the main workspace,
+              and you can detach multiple items independently. Codex turns and terminal sessions continue when a detached window closes.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="codex-section" aria-labelledby="workspace-title">
+        <div class="codex-intro">
+          <p class="eyebrow">Codex workspace</p>
+          <h2 id="workspace-title">Choose where to work.</h2>
+          <p>Install a compatible Codex CLI and sign in through global configuration.
+            Open global configuration from the gear in the expanded repository sidebar;
+            the gear beside a project’s name opens project configuration.</p>
+        </div>
+        <div class="codex-features">
+          <article>
+            <h3>Checkouts and environments.</h3>
+            <p>Configure a local Git checkout or an SSH environment in project configuration.
+              Before a thread starts, choose an isolated worktree, the default branch, a new named branch, or the current branch.</p>
+          </article>
+          <article>
+            <h3>Find earlier work.</h3>
+            <p>The search button beside New thread searches titles and user/assistant messages stored in Forge.
+              Results are ranked with excerpts; Active and Archived filter the results. Escape closes the search.</p>
+          </article>
+          <article>
+            <h3>Review and integrate.</h3>
+            <p>Inspect changed files and diffs, then review a squash merge or merge into the default branch.
+              After successful local integration, Forge removes the clean merged worktree and continues the same chat on the default checkout.</p>
+          </article>
+        </div>
+        <p class="codex-setup">For account settings, permissions, terminal behavior, and remote-host setup,
+          see the <a href="https://github.com/MagnusOpera/forge#codex-workspace">full workspace guide</a>.</p>
       </section>
     </main>
 

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Install Forge for macOS and configure the GitHub token."
+      content="Install Forge for macOS, connect GitHub, sign in to Codex with ChatGPT, and configure remote development over SSH."
     />
     <title>Install Forge</title>
     <link rel="icon" href="assets/forge-icon.svg" type="image/svg+xml" />
@@ -180,20 +180,108 @@ brew install forge</code></pre>
         </div>
       </section>
 
-      <section class="token-section" id="token">
+      <nav class="setup-links" aria-label="Setup steps">
+        <a href="#token">1. Connect GitHub</a>
+        <a href="#codex-auth">2. Sign in to Codex</a>
+        <a href="#local-project">3. Choose a checkout</a>
+        <a href="#remote-codex">Remote Codex over SSH</a>
+      </nav>
+
+      <section class="token-section setup-section" id="token" aria-labelledby="token-title">
         <div>
-          <p class="eyebrow">Token configuration</p>
-          <h2>A GitHub token. Nothing else.</h2>
-          <p>
-            Forge asks for one classic GitHub personal access token. It requires
-            <strong>repo</strong> and <strong>read:project</strong> permissions so it
-            can read private repositories, list work, and operate on pull requests,
-            labels, issues, and workflows using the GitHub API.
-          </p>
-          <p>
-            The token is stored locally with Electron <code>safeStorage</code>.
-            Forge refuses to save it when secure storage is unavailable.
-          </p>
+          <p class="eyebrow">1 · GitHub access</p>
+          <h2 id="token-title">Connect your repositories.</h2>
+          <ol>
+            <li>Create a <a href="https://github.com/settings/tokens">classic GitHub personal access token</a>
+              with <strong>repo</strong> and <strong>read:project</strong> scopes.</li>
+            <li>Paste it into Forge’s initial setup and save it. To replace it later, use the gear in the
+              expanded repository sidebar, then <strong>Global configuration → GitHub → Save token</strong>.</li>
+          </ol>
+          <p>The token enables repository, pull request, issue, and workflow access. Forge stores it locally using
+            encrypted secure storage and requires secure storage to be available before saving it.</p>
+        </div>
+      </section>
+
+      <section class="token-section setup-section" id="codex-auth" aria-labelledby="codex-auth-title">
+        <div>
+          <p class="eyebrow">2 · OpenAI authentication</p>
+          <h2 id="codex-auth-title">Sign in to Codex with ChatGPT.</h2>
+          <p>Codex needs its own OpenAI authentication, separate from your GitHub token.
+            Use a ChatGPT account with access to Codex.</p>
+          <ol>
+            <li>Install the official Codex CLI on your Mac. Forge uses it to run conversations:
+              <pre class="command"><code>brew install --cask codex</code></pre>
+              Other installation methods are in the <a href="https://developers.openai.com/codex/cli/">official Codex CLI guide</a>.</li>
+            <li>Open <strong>Global configuration → Codex</strong>. Leave <strong>Executable path</strong> blank
+              for automatic discovery, or enter an absolute path to <code>codex</code>. Save a changed path, then click <strong>Refresh</strong>.</li>
+            <li>Click <strong>Sign in with ChatGPT</strong> and finish the OpenAI sign-in in your browser.
+              Return to Forge and confirm the account shows <strong>Signed in</strong>.</li>
+          </ol>
+          <p>Forge keeps its local Codex sign-in in a separate Codex home. Complete this sign-in in Forge even if you
+            already use Codex in another app. To use a different account for one project, open
+            <strong>Project configuration → Codex overrides</strong> and enable
+            <strong>Use a separate Codex account for this project</strong>.</p>
+          <p>ChatGPT access is governed by your account and workspace permissions.
+            See <a href="https://developers.openai.com/codex/auth/">OpenAI’s authentication guide</a> for browser and device sign-in details.</p>
+        </div>
+      </section>
+
+      <section class="token-section setup-section" id="local-project" aria-labelledby="local-project-title">
+        <div>
+          <p class="eyebrow">3 · Your first project</p>
+          <h2 id="local-project-title">Choose a Git checkout.</h2>
+          <ol>
+            <li>Select a repository and open the gear beside the project’s name.</li>
+            <li>Under <strong>Checkouts</strong>, choose its local Git folder and confirm the checkout check succeeds.</li>
+            <li>Open <strong>Codex</strong> with <kbd>⌘</kbd><kbd>⇧</kbd><kbd>C</kbd> and create a thread.
+              Choose its environment and starting branch or worktree before sending your first prompt.</li>
+          </ol>
+          <p>New threads use an isolated worktree by default. You can also start on the default branch,
+            a new named branch, or the current branch. Your conversations, drafts, and project configuration stay on your computer.</p>
+        </div>
+      </section>
+
+      <section class="token-section setup-section" id="remote-codex" aria-labelledby="remote-codex-title">
+        <div>
+          <p class="eyebrow">Optional · Remote development</p>
+          <h2 id="remote-codex-title">Run Codex on your own SSH host.</h2>
+          <p>Forge connects to a Linux or macOS development machine over SSH. Codex and project tools run there,
+            using that host’s Codex account and Git checkout.</p>
+          <h3>Prepare the remote host</h3>
+          <ol>
+            <li>Install a compatible Codex CLI, Git, and your project’s build tools as the development user.
+              Clone or prepare a writable Git checkout with at least one commit.</li>
+            <li>Set up SSH keys or an agent and connect once from your Mac to confirm the host key:
+              <pre class="command"><code>ssh devbox</code></pre>
+              Replace <code>devbox</code> with your SSH alias or <code>user@hostname</code>. Configure keys and ports in <code>~/.ssh/config</code>.
+              Forge requires non-interactive SSH authentication and a known host key.</li>
+            <li>In that SSH session, authenticate Codex as the same development user:
+              <pre class="command"><code>codex login --device-auth
+codex login status</code></pre>
+              Open the displayed link in your browser and enter the one-time code. Device code login may need to be enabled
+              in your ChatGPT account or workspace permissions; see the <a href="https://developers.openai.com/codex/auth/#login-on-headless-devices">headless sign-in guide</a>.</li>
+            <li>Prepare and start the managed app-server daemon on the remote host:
+              <pre class="command"><code>codex app-server daemon bootstrap
+codex app-server daemon start</code></pre>
+              The remote CLI must support daemon/proxy connections and <code>command/exec</code>.
+              Verify the daemon remains running after SSH logout; a headless Linux user service may need administrator-enabled lingering.</li>
+          </ol>
+          <h3>Connect it in Forge</h3>
+          <ol>
+            <li>Open <strong>Global configuration → Environments → Add environment…</strong>.
+              Set a name, SSH host, and <strong>Remote Codex executable</strong> (<code>codex</code> or its absolute path on the host).</li>
+            <li>Edits save automatically.
+              Wait for the green connection check, or click the status icon beside the host to retry. Failed checks include a setup procedure.</li>
+            <li>Open <strong>Project configuration → Checkouts</strong> and enter that environment’s Git checkout path on the remote host.
+              Wait for the checkout check to pass. Optionally choose it as the project’s <strong>Default environment</strong>.</li>
+            <li>Create a new thread and select the remote environment before starting it.
+              Started threads retain their environment and account selection.</li>
+          </ol>
+          <p>Forge connects to the existing daemon; it does not install or start it for you. Keep the host awake and reachable.
+            Remote Codex sign-in stays on that host. Remote terminals use SSH login shells; reconnecting after a disconnect starts a fresh shell.</p>
+          <p>If the connection drops, use <strong>Reconnect</strong> on the interrupted or failed thread.
+            Local Finder/editor actions, diff and merge tools, and attachments are unavailable for remote threads.
+            See <a href="https://github.com/MagnusOpera/forge#remote-codex-environments">the remote workspace guide</a> for detailed behavior.</p>
         </div>
       </section>
     </main>

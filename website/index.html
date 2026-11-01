@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Forge brings GitHub and Codex together on macOS. Work through pull requests, issues, and workflows, then plan, implement, and review changes with Codex."
+      content="Forge is an AI Development Environment for macOS. Bring Codex, GitHub, worktrees, terminals, and code review together to plan, build, and merge locally or over SSH."
     />
-    <title>Forge — GitHub and Codex, focused</title>
+    <title>Forge — AI Development Environment for macOS</title>
     <link rel="icon" href="assets/forge-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/forge-icon.png" />
     <link rel="stylesheet" href="styles.css" />
@@ -73,11 +73,11 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow hero-eyebrow"><span></span>GitHub + Codex for macOS</p>
-          <h1>From GitHub context<br /><em>to working code.</em></h1>
+          <p class="eyebrow hero-eyebrow"><span></span>Built for macOS · Powered by Codex</p>
+          <h1>Your AI Development<br /><em>Environment.</em></h1>
           <p class="lead">
-            Your repositories, pull requests, issues, and workflows, with Codex built in.
-            Plan a change, implement it in a dedicated worktree, and review the diff—all in one focused desktop app.
+            Codex, GitHub, worktrees, terminals, and code review in one desktop workspace.
+            Plan a change, build locally or over SSH, and take it from first prompt to merge.
           </p>
           <div class="actions hero-actions">
             <a class="primary-action" href="install.html">
@@ -93,12 +93,7 @@
           <p class="hero-note">Apple Silicon · Open source · No Forge backend</p>
         </div>
 
-        <figure class="preview" aria-labelledby="preview-title">
-          <div class="preview-bar">
-            <div class="window-controls" aria-hidden="true"><span></span><span></span><span></span></div>
-            <span id="preview-title">Forge · <strong data-preview-theme>dark</strong> mode</span>
-            <span class="preview-caption">Sample Codex workspace</span>
-          </div>
+        <figure class="preview" id="preview" aria-label="Forge desktop workspace">
           <div class="preview-image-window">
             <img
               data-preview-image
@@ -109,27 +104,36 @@
         </figure>
       </section>
 
-      <section class="section-grid" id="focus">
+      <section class="section-grid" id="focus" aria-label="Forge features">
         <article>
-          <h2>See the whole picture.</h2>
-          <p>
-            Repositories, pull requests, issues, checks, and workflows stay connected
-            alongside your Codex threads in a permanent three-pane workspace built for flow.
-          </p>
+          <h2>GitHub, ready to act.</h2>
+          <p>Review pull requests, comment, manage labels, and enable auto-merge.
+            Track issues, trigger workflows, and inspect failed jobs and logs without leaving your workspace.</p>
         </article>
         <article>
-          <h2>Act without the detour.</h2>
-          <p>
-            Review code, update metadata, trigger workflows, and move between active
-            work with keyboard-first speed.
-          </p>
+          <h2>Codex, under your control.</h2>
+          <p>Plan or implement with your choice of model and reasoning effort.
+            Steer a running task, queue follow-ups, and handle questions and approvals in the conversation.</p>
         </article>
         <article>
-          <h2>Your machine. Your token.</h2>
-          <p>
-            Your GitHub token stays protected by macOS secure storage. Forge has no
-            backend: GitHub requests go to GitHub, and Codex uses OpenAI for inference.
-          </p>
+          <h2>Find the conversation.</h2>
+          <p>Search thread titles and conversation text across active or archived work.
+            Ranked matches and excerpts help you pick up the right discussion without scrolling through history.</p>
+        </article>
+        <article>
+          <h2>From branch to merge.</h2>
+          <p>Start in an isolated worktree or choose a repository branch.
+            Review diffs, squash or merge into the default branch, and resolve conflicts with Codex while keeping the same chat.</p>
+        </article>
+        <article>
+          <h2>Local or over SSH.</h2>
+          <p>Choose a local checkout or a remote environment for each new thread.
+            Use an integrated terminal in the thread’s checkout and keep its output alongside the conversation.</p>
+        </article>
+        <article>
+          <h2>Give each task a window.</h2>
+          <p>Detach conversations, pull requests, issues, or workflow views into independent native windows.
+            Keep browsing in the main workspace and reattach an item when you’re ready.</p>
         </article>
       </section>
 
@@ -138,13 +142,13 @@
           <p class="eyebrow">Codex, inside Forge</p>
           <h2 id="codex-title">Keep the context.<br />Build the change.</h2>
           <p>Go from understanding a repository to working on it without leaving your workspace.
-            Each new local Codex thread starts in its own branch and worktree, keeping your original checkout untouched.</p>
+            Choose a starting branch or an isolated worktree, then keep the conversation, terminal, and code review together.</p>
           <a class="secondary-action" href="https://github.com/MagnusOpera/forge#codex-workspace">Set up Codex <span aria-hidden="true">→</span></a>
         </div>
         <div class="codex-features">
           <article>
             <h3>Plan, then implement.</h3>
-            <p>Choose Plan or Implement mode, adjust model and reasoning settings, and answer questions or approval requests in the conversation.</p>
+            <p>Choose Plan or Implement mode, adjust model and reasoning settings, and answer questions or approval requests in the conversation. Steer ongoing work or queue your next instructions.</p>
           </article>
           <article>
             <h3>Review what changed.</h3>
@@ -159,9 +163,31 @@
           Conversations and project settings are stored on your machine; Codex uses OpenAI for inference.</p>
       </section>
 
+      <section class="detached-section" aria-labelledby="detached-title">
+        <div class="detached-intro">
+          <p class="eyebrow">Detachable windows</p>
+          <h2 id="detached-title">Give your work room.</h2>
+          <p>Move a conversation into its own window while keeping your repositories and threads close by.
+            Keep it on another display, or reattach it to the main workspace when you’re ready.</p>
+        </div>
+        <figure class="detached-showcase">
+          <div class="detached-windows">
+            <a class="navigation-window" href="screenshots/forge-navigation-dark.png" data-showcase-link="navigation" aria-label="View the main workspace screenshot at full size">
+              <img data-showcase-image="navigation" src="screenshots/forge-navigation-dark.png" loading="lazy" width="1410" height="1840"
+                alt="Forge’s main window keeps anonymous acme repositories and searchable threads available after detaching a conversation." />
+            </a>
+            <a class="conversation-window" href="screenshots/forge-detached-dark.png" data-showcase-link="detached" aria-label="View the detached conversation screenshot at full size">
+              <img data-showcase-image="detached" src="screenshots/forge-detached-dark.png" loading="lazy" width="1960" height="1840"
+                alt="A separate native Forge window shows the conversation, edited files, composer, and workspace controls." />
+            </a>
+          </div>
+          <figcaption>Same conversation. Its own window. Your draft and view stay with it.</figcaption>
+        </figure>
+      </section>
+
       <section class="closing-cta" aria-labelledby="closing-title">
-        <p class="eyebrow">Ready when you are</p>
-        <h2 id="closing-title">Less browser.<br />More momentum.</h2>
+        <p class="eyebrow">Your next change</p>
+        <h2 id="closing-title">From idea to merge.<br />All in Forge.</h2>
         <a class="primary-action" href="install.html">Download Forge <span aria-hidden="true">→</span></a>
       </section>
     </main>

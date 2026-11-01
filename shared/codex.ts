@@ -176,6 +176,7 @@ export type CodexThread = CodexThreadSummary & {
   draftAttachments: CodexAttachment[];
   attachmentNames?: Record<string, string>;
 };
+export type CodexThreadSearchResult = { id: string; snippet: string };
 export type CodexThreadPage = { thread: CodexThread; before: number | null };
 export type CodexGitInfo = {
   status: string;
@@ -201,15 +202,6 @@ export type CodexCheckoutReview = {
   summary: string;
 };
 export type CodexCheckoutPreview = CodexCheckoutReview & { token: string; message: string };
-export type CodexExistingThread = {
-  id: string;
-  title: string;
-  cwd: string;
-  updatedAt: string;
-  active: boolean;
-  archived: boolean;
-  attachedId?: string;
-};
 type Command<I, O> = { input: I; output: O };
 type ThreadInput = { repositoryId: string; id: string };
 export type CodexThreadWindow = ThreadInput & {
@@ -280,13 +272,9 @@ export type CodexCommands = {
     { repositoryId?: string; id?: string; accountOverride?: boolean },
     CodexModel[]
   >;
-  existing: Command<
-    { repositoryId: string; cursor?: string; archived?: boolean },
-    { home: string; threads: CodexExistingThread[]; nextCursor: string | null }
-  >;
-  adopt: Command<
-    { repositoryId: string; serverId: string; archived: boolean },
-    CodexThreadSummary
+  search: Command<
+    { repositoryId: string; query: string; archived: boolean },
+    CodexThreadSearchResult[]
   >;
   list: Command<{ repositoryId: string }, CodexThreadSummary[]>;
   startOptions: Command<{ repositoryId: string; id?: string }, CodexStartOptions>;

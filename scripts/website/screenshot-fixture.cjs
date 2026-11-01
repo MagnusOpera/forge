@@ -25,6 +25,11 @@ const thread = {
       text: "Failed jobs now appear first, so you can jump straight to the relevant logs.\n\n- Kept **Open in GitHub** available for every job.\n- Added a regression test for job ordering.\n- Left successful runs in their original order.\n\n**Checks:** workflow detail tests passed.\n\nReady for your review. No commit or push was made." }
   ]
 };
+const threads = [
+  thread,
+  { ...thread, id: "plan-demo", title: "Plan keyboard navigation improvements", settings: { ...settings, mode: "plan" }, items: [] },
+  { ...thread, id: "docs-demo", title: "Document local development setup", items: [] }
+];
 const envelope = data => ({ data, fetchedAt: "2026-10-01T10:02:00Z", stale: false, source: "cache" });
 window.githubFocus = {
   platform: "darwin",
@@ -44,10 +49,16 @@ window.githubFocus = {
 };
 window.forgeCodex = {
   onChanged: () => () => {},
-  request: async (method) => {
+  request: async (method, input) => {
     switch (method) {
       case "configuration": return { editor: "Visual Studio Code", executable: "codex", defaults: settings, projects: { [repo.id]: { repositoryId: repo.id, path: "/demo/workspace", overrides: {} } } };
-      case "list": return [thread, { ...thread, id: "plan-demo", title: "Plan keyboard navigation improvements", settings: { ...settings, mode: "plan" } }, { ...thread, id: "docs-demo", title: "Document local development setup" }];
+      case "list": return threads;
+      case "search": return threads.filter(item => item.archived === input.archived).flatMap(item => {
+        const messages = item.items.filter(message => ["userMessage", "agentMessage"].includes(message.kind));
+        const text = [item.title, ...messages.map(message => message.text)].join("\n").toLowerCase();
+        if (!input.query.toLowerCase().split(/\s+/).every(word => text.includes(word))) return [];
+        return [{ id: item.id, snippet: messages[0]?.text || item.title }];
+      });
       case "thread": return { thread, before: null };
       case "threadWindows": return [];
       case "models": return [];
