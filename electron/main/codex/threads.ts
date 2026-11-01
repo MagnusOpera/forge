@@ -12,6 +12,7 @@ import {
   codexEnvironmentIsFixed,
   latestCodexUserMessage,
   effectiveCodexPreferences,
+  effectiveThreadStartKind,
   resolveModelPreferences,
   type CodexThreadStart,
   type CodexAttachment,
@@ -305,6 +306,17 @@ export class ThreadManager {
         "Configure the default environment's checkout in project configuration before creating a thread.",
       );
     if (start) await validateThreadStart(await this.startGit(repositoryId), start);
+    else {
+      const kind = effectiveThreadStartKind(this.store.configuration, project);
+      start = { kind, branch: "" };
+      if (kind === "default" || kind === "current") {
+        const run = await this.startGit(repositoryId);
+        const options = await threadStartOptions(run);
+        start.branch = kind === "current" ? options.currentBranch : options.defaultBranch;
+        if (!start.branch) throw new Error(kind === "current" ? "The repository has no current branch. Choose another starting point in GitHub settings." : "The repository default branch could not be determined.");
+        await validateThreadStart(run, start);
+      }
+    }
     // Resolve against the selected target's catalog when execution starts.
     const defaults = effectiveCodexPreferences(
       this.store.configuration.defaults,

@@ -483,12 +483,8 @@ input {
   z-index: 2;
   flex: 0 0 var(--titlebar-height);
   padding-left: 76px;
+  justify-content: flex-end;
   background: transparent;
-}
-
-.sidebar .pane-header .brand-mark {
-  min-width: 0;
-  overflow: hidden;
 }
 
 .sidebar .pane-header .header-actions {
@@ -539,7 +535,6 @@ input {
   }
 }
 
-.brand-mark,
 .pane-title,
 .content-header-left,
 .content-title,
@@ -567,31 +562,11 @@ input {
   height: 28px;
 }
 
-.brand-mark span,
 .pane-title span,
 .content-title span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.brand-mark {
-  font-size: 13px;
-  color: var(--text-strong);
-  font-weight: 650;
-}
-
-.brand-logo {
-  display: inline-grid;
-  width: 18px;
-  height: 22px;
-  padding: 0;
-  place-items: center;
-  color: inherit;
-}
-
-.brand-logo svg {
-  pointer-events: none;
 }
 
 .pane-title,
@@ -608,7 +583,6 @@ input {
   -webkit-app-region: no-drag;
 }
 
-.pane-header > .brand-mark,
 .pane-header > .pane-title,
 .pane-header > .header-actions,
 .content-header > .content-header-left,

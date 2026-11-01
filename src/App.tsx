@@ -3820,12 +3820,6 @@ function Sidebar(props: SidebarProps) {
       aria-hidden={props.collapsed}
     >
       <div className="pane-header app-drag">
-        <div className="brand-mark">
-          <span className="brand-logo" aria-hidden="true">
-            <Github size={18} />
-          </span>
-          <span>Forge</span>
-        </div>
         <div className="header-actions">
           {!props.collapsed && props.headerActions}
           <button className="icon-button" aria-label="Collapse sidebar" onClick={props.onToggle}>

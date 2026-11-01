@@ -823,6 +823,39 @@ describe("isolated worktrees", () => {
   });
 });
 describe("thread lifecycle", () => {
+  it("inherits global starting points, honors project and explicit choices, and preserves existing threads", async () => {
+    const { manager, store, repo, thread: original } = await setup();
+    await git(repo, ["switch", "-c", "feature"]);
+    expect(original.start).toEqual({ kind: "worktree", branch: "" });
+    store.configuration.defaultThreadStart = "current";
+    const inherited = await manager.create("R_123");
+    expect(inherited.start).toEqual({ kind: "current", branch: "feature" });
+    store.configuration.projects.R_123.defaultThreadStart = "default";
+    const overridden = await manager.create("R_123");
+    expect(overridden.start).toEqual({ kind: "default", branch: "main" });
+    expect(await manager.create("R_123", { kind: "new", branch: "codex/explicit" })).toMatchObject({ start: { kind: "new", branch: "codex/explicit" } });
+    store.configuration.projects.R_123.defaultThreadStart = "worktree";
+    expect(await manager.create("R_123")).toMatchObject({ start: { kind: "worktree", branch: "" } });
+    delete store.configuration.projects.R_123.defaultThreadStart;
+    expect(await manager.create("R_123")).toMatchObject({ start: { kind: "current", branch: "feature" } });
+    expect(original.start).toEqual({ kind: "worktree", branch: "" });
+    expect(store.get("R_123", overridden.id).start).toEqual({ kind: "default", branch: "main" });
+    store.saveConfiguration();
+    expect(new CodexStore(store.root).configuration.defaultThreadStart).toBe("current");
+  });
+  it("requires a branch name for a New branch default before preparing any checkout", async () => {
+    const { manager, store } = await setup();
+    store.configuration.defaultThreadStart = "new";
+    const summary = await manager.create("R_123");
+    const thread = store.get("R_123", summary.id);
+    expect(summary.start).toEqual({ kind: "new", branch: "" });
+    await expect(manager.prepareTerminalCheckout(thread)).rejects.toThrow("Choose a branch name");
+    expect(thread.worktree).toBe("");
+    await manager.setStart(thread, { kind: "new", branch: "codex/configured" });
+    await manager.prepareTerminalCheckout(thread);
+    expect(thread.branch).toBe("codex/configured");
+  });
+
   it("updates the starting point only before checkout creation and resets it when changing environment", async () => {
     const { manager, thread } = await setup();
     await manager.setStart(thread, { kind: "new", branch: "codex/task" });

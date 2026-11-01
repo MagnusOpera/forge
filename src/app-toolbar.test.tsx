@@ -40,7 +40,10 @@ afterEach(async () => {
 });
 
 it("places working global controls before collapse and hides them while collapsed", async () => {
-  const actions = container.querySelector(".sidebar .header-actions")!;
+  const header = container.querySelector(".sidebar .pane-header")!;
+  expect(header.querySelector(".brand-mark, .brand-logo")).toBeNull();
+  expect(header.textContent).not.toContain("Forge");
+  const actions = header.querySelector(".header-actions")!;
   expect([...actions.children].map(node => node.getAttribute("aria-label") ?? node.className)).toEqual([
     "Global configuration", "theme-accent-control", "Collapse sidebar",
   ]);

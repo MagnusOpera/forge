@@ -36,6 +36,7 @@ export type CodexProject = {
   remotePaths?: Record<string, string>;
   accountOverride?: boolean;
   defaultEnvironment?: string;
+  defaultThreadStart?: CodexThreadStartKind;
   warning?: string;
   dirty?: boolean;
 };
@@ -45,6 +46,7 @@ export type CodexConfiguration = {
   version?: number;
   environments?: CodexEnvironment[];
   sendShortcut?: CodexSendShortcut;
+  defaultThreadStart?: CodexThreadStartKind;
   editor: string;
   defaults: CodexPreferences;
   executable: string;
@@ -124,7 +126,15 @@ export type CodexMessage = {
 };
 export type CodexThreadState =
   "idle" | "starting" | "running" | "waiting" | "interrupted" | "failed";
-export type CodexThreadStart = { kind: "worktree" | "default" | "new" | "current"; branch: string };
+export type CodexThreadStartKind = "worktree" | "default" | "new" | "current";
+export const DEFAULT_THREAD_START: CodexThreadStartKind = "worktree";
+export function isThreadStartKind(value: unknown): value is CodexThreadStartKind {
+  return ["worktree", "default", "new", "current"].includes(value as string);
+}
+export function effectiveThreadStartKind(configuration: CodexConfiguration, project?: CodexProject): CodexThreadStartKind {
+  return project?.defaultThreadStart ?? configuration.defaultThreadStart ?? DEFAULT_THREAD_START;
+}
+export type CodexThreadStart = { kind: CodexThreadStartKind; branch: string };
 export type CodexStartOptions = { defaultBranch: string; currentBranch: string };
 export type CodexThreadSummary = {
   start?: CodexThreadStart;
@@ -248,6 +258,7 @@ export type CodexCommands = {
       executable: string;
       editor?: string;
       sendShortcut?: CodexSendShortcut;
+      defaultThreadStart?: CodexThreadStartKind;
     },
     CodexConfiguration
   >;
@@ -258,6 +269,7 @@ export type CodexCommands = {
       remotePaths?: Record<string, string>;
       accountOverride?: boolean;
       defaultEnvironment?: string;
+      defaultThreadStart?: CodexThreadStartKind | null;
       fullName?: string;
     },
     CodexConfiguration

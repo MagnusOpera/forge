@@ -9,12 +9,20 @@ import type {
   CodexConfiguration,
   CodexSendShortcut,
   CodexPreferences,
+  CodexThreadStartKind,
   CodexStatus,
 } from "../../shared/codex";
-import { DEFAULT_TEXT_EDITOR, MINIMUM_CODEX_VERSION } from "../../shared/codex";
+import { isThreadStartKind, DEFAULT_THREAD_START, DEFAULT_TEXT_EDITOR, MINIMUM_CODEX_VERSION } from "../../shared/codex";
 import { CLASSIC_TOKEN_SETTINGS_URL } from "../../shared/auth";
 import { codexApi, errorMessage } from "./api";
 import { PreferencesEditor, useCodexModels } from "./preferences";
+const threadStartLabels: Record<CodexThreadStartKind, string> = {
+  worktree: "Worktree from default branch HEAD",
+  default: "Default branch checkout",
+  new: "New branch from default branch",
+  current: "Current repository branch",
+};
+
 export function CodexSettingsDialog({
   project,
   auth,
@@ -31,9 +39,10 @@ export function CodexSettingsDialog({
   onOpenUrl: (url: string) => void;
 }) {
   const { document } = usePaneSurface();
-  const [section, setSection] = useState(project ? "checkouts" : "general");
+  const [section, setSection] = useState(project ? "github" : "general");
   const [homeRelativePath, setHomeRelativePath] = useState<string | null>(null);
   const [defaultEnvironment, setDefaultEnvironment] = useState("local");
+  const [defaultThreadStart, setDefaultThreadStart] = useState<CodexThreadStartKind | "">(project ? "" : DEFAULT_THREAD_START);
   const [remotePaths, setRemotePaths] = useState<Record<string, string>>({});
   const [configuration, setConfiguration] = useState<CodexConfiguration | null>(
     null,
@@ -106,7 +115,7 @@ export function CodexSettingsDialog({
   }, [document]);
   useEffect(() => {
     let active = true;
-    setSection(project ? "checkouts" : "general");
+    setSection(project ? "github" : "general");
     if (!window.forgeCodex) {
       setError("Codex requires the Forge desktop app.");
       return;
@@ -121,6 +130,9 @@ export function CodexSettingsDialog({
             ? (c.projects[project.id]?.defaultEnvironment ?? "local")
             : "local",
         );
+        setDefaultThreadStart(project
+          ? c.projects[project.id]?.defaultThreadStart ?? ""
+          : c.defaultThreadStart ?? DEFAULT_THREAD_START);
         setAccountOverride(
           Boolean(project && c.projects[project.id]?.accountOverride),
         );
@@ -204,7 +216,7 @@ export function CodexSettingsDialog({
     };
   }, [project?.id, binding?.path]);
   useEffect(() => {
-    if (section !== "checkouts" || !homeRelativePath) return;
+    if (section !== "github" || !homeRelativePath) return;
     setRemotePaths((current) => {
       const next = { ...current };
       for (const environment of configuration?.environments ?? []) {
@@ -247,8 +259,8 @@ export function CodexSettingsDialog({
           >
             {(project
               ? [
-                  ["checkouts", "Checkouts"],
-                  ["codex", "Codex overrides"],
+                  ["github", "GitHub"],
+                  ["codex", "Codex"],
                 ]
               : [
                   ["general", "General"],
@@ -334,6 +346,28 @@ export function CodexSettingsDialog({
                 </form>
                 <p className="codex-muted">
                   The token stays encrypted in Forge's main process.
+                </p>
+              </section>
+            )}
+            {section === "github" && configuration && (
+              <section>
+                <h3>Thread starting point</h3>
+                <div className="codex-field">
+                  <span>Default starting point</span>
+                  <Combobox
+                    label="Default thread starting point"
+                    value={defaultThreadStart}
+                    disabled={busy}
+                    options={[
+                      ...(project ? [{ value: "", label: `Use global default (${threadStartLabels[configuration.defaultThreadStart ?? DEFAULT_THREAD_START]})` }] : []),
+                      ...Object.entries(threadStartLabels).map(([value, label]) => ({ value, label })),
+                    ]}
+                    onChange={value => { if (value === "" || isThreadStartKind(value)) setDefaultThreadStart(value); }}
+                  />
+                </div>
+                <p className="codex-muted">
+                  Applies to new threads. You can change the starting point in each thread before it starts.
+                  New branch requires a branch name in the thread. Worktree excludes uncommitted checkout changes.
                 </p>
               </section>
             )}
@@ -443,7 +477,7 @@ export function CodexSettingsDialog({
                 </p>
               </section>
             )}
-            {project && section === "checkouts" && configuration && (
+            {project && section === "github" && configuration && (
               <section>
                 <h3>Checkouts</h3>
                 <div className="codex-field">
@@ -470,7 +504,7 @@ export function CodexSettingsDialog({
                 </p>
               </section>
             )}
-            {project && section === "checkouts" && (
+            {project && section === "github" && (
               <section>
                 <h3>Local Git folder</h3>
                 <p className="codex-path" title={displayPath(binding?.path ?? "")}>
@@ -495,13 +529,12 @@ export function CodexSettingsDialog({
                 </button>
                 {binding?.warning && <p role="note">{displayPathText(binding.warning)}</p>}
                 <p className="codex-muted">
-                  New threads start from committed HEAD in a separate worktree.
-                  Uncommitted checkout changes are excluded. Existing threads
-                  retain their original folder.
+                  New threads use the starting point selected above. Worktrees exclude
+                  uncommitted checkout changes. Existing threads retain their original folder.
                 </p>
               </section>
             )}
-            {project && section === "checkouts" && configuration && (
+            {project && section === "github" && configuration && (
               <ProjectEnvironments
                 configuration={configuration}
                 paths={remotePaths}
@@ -510,7 +543,7 @@ export function CodexSettingsDialog({
             )}
             {configuration && section === "codex" && (
               <section>
-                <h3>{project ? "Codex overrides" : "Codex defaults"}</h3>
+                <h3>{project ? "Codex" : "Codex defaults"}</h3>
                 <p className="codex-muted">
                   {project
                     ? "Each setting inherits the global value until overridden."
@@ -623,7 +656,7 @@ export function CodexSettingsDialog({
           <button className="ghost-button" onClick={onClose} disabled={busy}>
             Close
           </button>
-          {(project || ["general", "codex"].includes(section)) && (
+          {(project || ["general", "github", "codex"].includes(section)) && (
             <button
               className="ghost-button"
               disabled={busy || !configuration}
@@ -637,12 +670,14 @@ export function CodexSettingsDialog({
                         remotePaths,
                         accountOverride,
                         defaultEnvironment,
+                        defaultThreadStart: defaultThreadStart || null,
                       })
                     : await codexApi().request("saveConfiguration", {
                         defaults: preferences as CodexPreferences,
                         executable,
                         editor,
                         sendShortcut,
+                        defaultThreadStart: defaultThreadStart || DEFAULT_THREAD_START,
                       });
                   setConfiguration(next);
                   onClose();

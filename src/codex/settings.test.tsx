@@ -88,10 +88,10 @@ it("keeps environment definitions global and edits existing checkout mappings on
   await act(async () =>
     root.render(<CodexSettingsDialog {...props} project={project} />),
   );
-  expect(labels()).toEqual(["Checkouts", "Codex overrides"]);
+  expect(labels()).toEqual(["GitHub", "Codex"]);
   const remote = [
     ...container.querySelectorAll<HTMLButtonElement>("nav button"),
-  ].find((button) => button.textContent === "Checkouts")!;
+  ].find((button) => button.textContent === "GitHub")!;
   await act(async () => remote.click());
   expect(
     container.querySelector<HTMLInputElement>(
@@ -109,6 +109,7 @@ it("keeps environment definitions global and edits existing checkout mappings on
     remotePaths: { ghoulix: "/srv/forge" },
     accountOverride: false,
     defaultEnvironment: "local",
+    defaultThreadStart: null,
   });
   expect(props.onClose).toHaveBeenCalledOnce();
 });
@@ -141,7 +142,7 @@ it("suggests the local home-relative layout for unmapped environments and shows 
   );
   const remote = [
     ...container.querySelectorAll<HTMLButtonElement>("nav button"),
-  ].find((button) => button.textContent === "Checkouts")!;
+  ].find((button) => button.textContent === "GitHub")!;
   await act(async () => remote.click());
   expect(
     container.querySelector<HTMLInputElement>(
@@ -178,7 +179,7 @@ it("requires a local checkout before suggesting a remote layout", async () => {
   );
   const remote = [
     ...container.querySelectorAll<HTMLButtonElement>("nav button"),
-  ].find((button) => button.textContent === "Checkouts")!;
+  ].find((button) => button.textContent === "GitHub")!;
   await act(async () => remote.click());
   expect(
     container.querySelector<HTMLInputElement>(
@@ -274,7 +275,7 @@ it("signs in to a project account separately and saves its override", async () =
   await act(async () =>
     root.render(<CodexSettingsDialog {...props} project={project} />),
   );
-  await navigate("Codex overrides");
+  await navigate("Codex");
   expect(container.textContent).toContain("the global account");
   expect(container.textContent).not.toContain("Sign in with ChatGPT");
   await act(async () =>
@@ -330,7 +331,7 @@ it("restores a saved account override and routes project sign-out correctly", as
   await act(async () =>
     root.render(<CodexSettingsDialog {...props} project={project} />),
   );
-  await navigate("Codex overrides");
+  await navigate("Codex");
   expect(
     container.querySelector<HTMLInputElement>('input[type="checkbox"]')!
       .checked,
@@ -362,7 +363,7 @@ it("groups local and remote checkouts and saves the project's selected default e
     [...container.querySelectorAll("nav button")].map(
       (button) => button.textContent,
     ),
-  ).toEqual(["Checkouts", "Codex overrides"]);
+  ).toEqual(["GitHub", "Codex"]);
   expect(container.textContent).toContain("Local Git folder");
   expect(
     container.querySelector('[aria-label="Ghoulix checkout path"]'),
@@ -390,4 +391,39 @@ it("groups local and remote checkouts and saves the project's selected default e
       defaultEnvironment: "local",
     }),
   );
+});
+
+const settingsProps = { auth: null, onClose: () => {}, onSaveGithub: async () => {}, onRemoveGithub: () => {}, onOpenUrl: () => {} };
+async function selectStart(label: string) {
+  const field = container.querySelector('[aria-label="Default thread starting point"]')!.closest(".combobox")!;
+  await act(async () => [...field.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === label)!.click());
+}
+async function saveSettings() {
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Save configuration")!.click());
+}
+it("keeps Worktree as the global default and saves the starting point from GitHub settings", async () => {
+  await act(async () => root.render(<CodexSettingsDialog {...settingsProps} />));
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("nav button")].find(button => button.textContent === "GitHub")!.click());
+  expect(container.querySelector('[aria-label="Default thread starting point"]')?.textContent).toContain("Worktree from default branch HEAD");
+  await selectStart("Current repository branch");
+  await saveSettings();
+  expect(request).toHaveBeenCalledWith("saveConfiguration", expect.objectContaining({ defaultThreadStart: "current" }));
+});
+it("shows the inherited global default, saves a project choice, and can reset it to inheritance", async () => {
+  const config = { ...configuration, defaultThreadStart: "current" };
+  request.mockImplementation(async method => method === "models" ? [] : config);
+  await act(async () => root.render(<CodexSettingsDialog {...settingsProps} project={project} />));
+  expect(container.querySelector('[aria-label="Default thread starting point"]')?.textContent).toContain("Use global default (Current repository branch)");
+  await selectStart("New branch from default branch");
+  await saveSettings();
+  expect(request).toHaveBeenCalledWith("saveProject", expect.objectContaining({ defaultThreadStart: "new" }));
+  await selectStart("Use global default (Current repository branch)");
+  await saveSettings();
+  expect(request).toHaveBeenCalledWith("saveProject", expect.objectContaining({ defaultThreadStart: null }));
+});
+it("restores a saved project starting point", async () => {
+  const config = { ...configuration, defaultThreadStart: "current", projects: { repo: { ...configuration.projects.repo, defaultThreadStart: "default" } } };
+  request.mockImplementation(async method => method === "models" ? [] : config);
+  await act(async () => root.render(<CodexSettingsDialog {...settingsProps} project={project} />));
+  expect(container.querySelector('[aria-label="Default thread starting point"]')?.textContent).toBe("Default branch checkout");
 });

@@ -24,6 +24,8 @@ import { ThreadManager } from "./threads.js";
 import { assertWorktree, gitInfo, inspectRepository } from "./git.js";
 import {
   validatePreferences,
+  isThreadStartKind,
+  DEFAULT_THREAD_START,
   type CodexAttachment,
   type CodexChange,
   type CodexPreferences,
@@ -242,11 +244,15 @@ export function registerCodexIpc(
           input.sendShortcut ?? store.configuration.sendShortcut ?? "enter";
         if (sendShortcut !== "enter" && sendShortcut !== "command-enter")
           throw new Error("Invalid send shortcut.");
+        const defaultThreadStart = input.defaultThreadStart === undefined
+          ? store.configuration.defaultThreadStart ?? DEFAULT_THREAD_START : input.defaultThreadStart;
+        if (!isThreadStartKind(defaultThreadStart)) throw new Error("Invalid default thread starting point.");
         const restart = executable !== store.configuration.executable;
         store.configuration.defaults = defaults;
         store.configuration.executable = executable;
         store.configuration.editor = editor;
         store.configuration.sendShortcut = sendShortcut;
+        store.configuration.defaultThreadStart = defaultThreadStart;
         store.saveConfiguration();
         if (restart) {
           client.stop();
@@ -462,6 +468,13 @@ export function registerCodexIpc(
             throw new Error("Invalid Codex account override.");
           project.accountOverride = input.accountOverride;
         }
+        if (input.defaultThreadStart !== undefined) {
+          if (input.defaultThreadStart === null) delete project.defaultThreadStart;
+          else {
+            if (!isThreadStartKind(input.defaultThreadStart)) throw new Error("Invalid default thread starting point.");
+            project.defaultThreadStart = input.defaultThreadStart;
+          }
+        }
         if (input.remotePaths !== undefined) {
           const placements: Record<string, string> = {};
           for (const [id, folder] of Object.entries(
@@ -524,6 +537,7 @@ export function registerCodexIpc(
           remotePaths: previous?.remotePaths,
           accountOverride: previous?.accountOverride,
           defaultEnvironment: previous?.defaultEnvironment,
+          defaultThreadStart: previous?.defaultThreadStart,
           ...inspected,
         };
         store.saveConfiguration();

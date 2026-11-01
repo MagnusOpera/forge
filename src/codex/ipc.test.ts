@@ -782,3 +782,21 @@ it("trusts registered thread windows, restricts their thread access, and grants 
   await request("update", { ...args, draft: "main draft after closing" });
   expect(await request("thread", args)).toMatchObject({ thread: { draft: "main draft after closing" } });
 });
+
+it("persists global and project thread starting defaults, preserves omitted values, and clears inheritance", async () => {
+  expect(await request("configuration")).toMatchObject({ defaultThreadStart: "worktree" });
+  const globalInput = { defaults: defaultCodexPreferences, executable: "" };
+  await request("saveConfiguration", { ...globalInput, defaultThreadStart: "current" });
+  await request("saveConfiguration", globalInput);
+  expect(new CodexStore(path.join(mock.root, "codex")).configuration.defaultThreadStart).toBe("current");
+  await request("saveProject", { repositoryId: "R_123", overrides: {}, defaultThreadStart: "default" });
+  await request("saveProject", { repositoryId: "R_123", overrides: {} });
+  expect(new CodexStore(path.join(mock.root, "codex")).configuration.projects.R_123.defaultThreadStart).toBe("default");
+  await request("saveProject", { repositoryId: "R_123", overrides: {}, defaultThreadStart: null });
+  expect(new CodexStore(path.join(mock.root, "codex")).configuration.projects.R_123.defaultThreadStart).toBeUndefined();
+  for (const invalid of ["invalid", false, {}, 1]) {
+    await expect(request("saveConfiguration", { ...globalInput, defaultThreadStart: invalid })).rejects.toThrow("starting point");
+    await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, defaultThreadStart: invalid })).rejects.toThrow("starting point");
+  }
+  expect(await request("configuration")).toMatchObject({ defaultThreadStart: "current" });
+});

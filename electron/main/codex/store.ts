@@ -17,6 +17,7 @@ import path from "node:path";
 import {
   defaultCodexPreferences,
   DEFAULT_TEXT_EDITOR,
+  DEFAULT_THREAD_START,
   codexIsActive,
   type CodexConfiguration,
   type CodexItem,
@@ -120,6 +121,7 @@ export class CodexStore {
     this.configuration.environments ??= [];
     this.configuration.editor ??= DEFAULT_TEXT_EDITOR;
     this.configuration.sendShortcut ??= "enter";
+    this.configuration.defaultThreadStart ??= DEFAULT_THREAD_START;
     const directory = path.join(root, "threads");
     if (existsSync(directory))
       for (const name of readdirSync(directory).filter((name) =>

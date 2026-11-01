@@ -4,6 +4,10 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Set a global default thread starting point and project-specific choices under GitHub settings.
+
+- Remove the Octocat and Forge titlebar label and refresh website screenshots.
+
 ## [0.15.0]
 
 
