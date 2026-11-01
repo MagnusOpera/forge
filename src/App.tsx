@@ -1,6 +1,8 @@
+import { contentItemKey, retainedContentItems } from "./content-items";
+import { isDomNode, isHtmlElement } from "./dom";
 import { displayPath, displayPathText } from "./paths";
-import { useThreadWindows } from "./codex/api";
-import { flushThreadDraft } from "./codex/thread-drafts";
+import { DetachablePane, useDetachablePane } from "./detachable-pane";
+import { usePaneSurface } from "./pane-surface";
 import { ThreadWorkspace } from "./codex/thread-workspace";
 import { Combobox } from "./components/combobox";
 import { useSlidingUnderline } from "./useSlidingUnderline";
@@ -20,7 +22,7 @@ import {
   Command,
   Construction,
   TerminalSquare,
-  AppWindow,
+  AppWindowMac,
   createLucideIcon,
   ExternalLink,
   FileCode2,
@@ -34,6 +36,7 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  PictureInPicture2,
   Orbit,
   Pencil,
   Play,
@@ -55,7 +58,7 @@ import {
 } from "lucide-react";
 import { Github } from "./GithubIcon";
 import type { PatchDiffProps } from "@pierre/diffs/react";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
@@ -275,8 +278,9 @@ function useAdaptivePolling(
   callback: () => Promise<void>,
   intervalMs: number,
   enabled: boolean,
-  options: { immediately?: boolean } = {}
+  options: { immediately?: boolean; document?: Document } = {}
 ): void {
+  const document = options.document ?? globalThis.document;
   const callbackRef = useRef(callback);
   const immediately = Boolean(options.immediately);
 
@@ -349,7 +353,7 @@ function useAdaptivePolling(
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("online", resume);
     };
-  }, [enabled, immediately, intervalMs]);
+  }, [enabled, immediately, intervalMs, document]);
 }
 
 function clearPointerActivatedControlFocus(event: React.MouseEvent<HTMLElement>): void {
@@ -358,12 +362,12 @@ function clearPointerActivatedControlFocus(event: React.MouseEvent<HTMLElement>)
   }
 
   const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  if (!isHtmlElement(target)) {
     return;
   }
 
   const control = target.closest("button, [role='button'], a[href], input, textarea, select, [contenteditable='true']");
-  if (!(control instanceof HTMLElement)) {
+  if (!isHtmlElement(control)) {
     return;
   }
 
@@ -377,8 +381,8 @@ function clearPointerActivatedControlFocus(event: React.MouseEvent<HTMLElement>)
     return;
   }
 
-  const activeElement = document.activeElement;
-  if (activeElement instanceof HTMLElement && (activeElement === control || control.contains(activeElement))) {
+  const activeElement = control.ownerDocument.activeElement;
+  if (isHtmlElement(activeElement) && (activeElement === control || control.contains(activeElement))) {
     activeElement.blur();
   }
 }
@@ -389,12 +393,12 @@ function preventTitlebarPointerControlFocus(event: React.MouseEvent<HTMLElement>
   }
 
   const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  if (!isHtmlElement(target)) {
     return;
   }
 
   const control = target.closest("button, [role='button'], a[href]");
-  if (!(control instanceof HTMLElement)) {
+  if (!isHtmlElement(control)) {
     return;
   }
 
@@ -785,14 +789,14 @@ function cx(...values: Array<string | false | null | undefined>): string {
 }
 
 function blurFocusedElementIn(container: HTMLElement): void {
-  const activeElement = document.activeElement;
-  if (activeElement instanceof HTMLElement && container.contains(activeElement)) {
+  const activeElement = container.ownerDocument.activeElement;
+  if (isHtmlElement(activeElement) && container.contains(activeElement)) {
     activeElement.blur();
   }
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
+  if (!isHtmlElement(target)) {
     return false;
   }
 
@@ -1129,13 +1133,40 @@ function CommitActionButton(props: {
   );
 }
 
-export function App() {
-  const threadWindows = useThreadWindows();
-  const [openingThreadWindow, setOpeningThreadWindow] = useState(false);
-  const [threadWindowError, setThreadWindowError] = useState("");
+type ContentItemTarget = { key: string; repo: RepoSummary | null; selection: ContentSelection; focusView: ProjectFocusView };
+type ItemPaneControl = ReturnType<typeof useDetachablePane>;
+type ItemAppearance = { themePreference: ThemePreference; theme: ThemeMode; sidebarAppearance: SidebarAppearanceMode; accent: string; onToggleTheme(): void; onToggleSidebarAppearance(): void; onAccentChange(color: string): void };
+type WorkspaceProps = {
+  item?: ContentItemTarget;
+  sharedAuth?: AuthStatus | null;
+  onAuthChange?: (auth: AuthStatus) => void;
+  appearance?: ItemAppearance;
+  onPaneState?: (target: ContentItemTarget, pane: ItemPaneControl) => void;
+  onNavigateItem?: (target: ContentItemTarget) => void;
+  history?: { back: boolean; forward: boolean; navigate(delta: -1 | 1): void };
+};
+export function App() { return <ForgeWorkspace />; }
+
+function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneState, onNavigateItem, history }: WorkspaceProps) {
+  const initialItem = useRef(item).current;
+  const contentPane = useDetachablePane({ onReattach: () => { if (initialItem) onNavigateItem?.(initialItem); } });
+  const [detachedItems, setDetachedItems] = useState<Map<string, { target: ContentItemTarget; pane: ItemPaneControl }>>(new Map());
+  const reportItemPane = useCallback((target: ContentItemTarget, pane: ItemPaneControl) => {
+    setDetachedItems(current => {
+      const previous = current.get(target.key);
+      if (!pane.detached && !pane.opening) {
+        if (!previous) return current;
+        const next = new Map(current); next.delete(target.key); return next;
+      }
+      if (previous?.pane.surface === pane.surface && previous.pane.opening === pane.opening && previous.pane.detached === pane.detached) return current;
+      return new Map(current).set(target.key, { target, pane });
+    });
+  }, []);
+  useLayoutEffect(() => { if (initialItem) onPaneState?.(initialItem, contentPane); }, [initialItem, onPaneState, contentPane.detached, contentPane.opening, contentPane.surface]);
   const [openTerminals, setOpenTerminals] = useState<Record<string, boolean>>({});
-  const [auth, setAuth] = useState<AuthStatus | null>(null);
-  const [authChecking, setAuthChecking] = useState(true);
+  const [auth, setAuth] = useState<AuthStatus | null>(sharedAuth ?? null);
+  const [authChecking, setAuthChecking] = useState(!initialItem);
+  useEffect(() => { if (auth && !auth.configured) contentPane.reattach(); }, [auth?.configured, contentPane.reattach]);
   const [tokenDraft, setTokenDraft] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(false);
@@ -1147,7 +1178,7 @@ export function App() {
   const [starredRepos, setStarredRepos] = useState<RepoSummary[]>([]);
   const [recentRepos, setRecentRepos] = useState<RepoSummary[]>([]);
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
-  const [selectedRepo, setSelectedRepo] = useState<RepoSummary | null>(null);
+  const [selectedRepo, setSelectedRepo] = useState<RepoSummary | null>(initialItem?.repo ?? null);
   const [settingsScope, setSettingsScope] = useState<"global" | "project" | null>(null);
   const codexThreads = useCodexThreads(selectedRepo?.id);
   useEffect(() => {
@@ -1167,7 +1198,10 @@ export function App() {
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunSummary[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
 
-  const [selection, setSelection] = useState<ContentSelection>({ kind: "repo" });
+  const [selection, setSelection] = useState<ContentSelection>(initialItem?.selection ?? { kind: "repo" });
+  useEffect(() => {
+    if (!initialItem && auth && !auth.configured) { setSelectedRepo(null); setSelection({ kind: "repo" }); }
+  }, [auth?.configured]);
   const [prDetail, setPrDetail] = useState<PullRequestDetail | null>(null);
   const [runDetail, setRunDetail] = useState<WorkflowRunDetail | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
@@ -1200,9 +1234,9 @@ export function App() {
     "favorites"
   );
   const [storedThemePreference, setStoredThemePreference] = useStoredState<ThemePreference>("github-focus:theme", "system");
-  const themePreference = normalizeThemePreference(storedThemePreference);
+  const themePreference = appearance?.themePreference ?? normalizeThemePreference(storedThemePreference);
   const systemTheme = useSystemTheme();
-  const activeTheme: ThemeMode = themePreference === "system" ? systemTheme : themePreference;
+  const activeTheme: ThemeMode = appearance?.theme ?? (themePreference === "system" ? systemTheme : themePreference);
   const nativeThemeSource: NativeThemeSource = themePreference === "system" ? "system" : activeTheme;
   const legacySidebarAppearance = useMemo(() => readStoredSidebarAppearance("github-focus:sidebar-appearance"), []);
   const [darkSidebarAppearance, setDarkSidebarAppearance] = useStoredState<SidebarAppearanceMode>(
@@ -1213,7 +1247,7 @@ export function App() {
     "github-focus:sidebar-appearance:light",
     legacySidebarAppearance ?? DEFAULT_SIDEBAR_APPEARANCE_MODE
   );
-  const sidebarAppearance = normalizeSidebarAppearanceMode(
+  const sidebarAppearance = appearance?.sidebarAppearance ?? normalizeSidebarAppearanceMode(
     activeTheme === "dark" ? darkSidebarAppearance : lightSidebarAppearance
   );
   const legacyAccentColor = useMemo(() => readStoredAccentColor("github-focus:accent-color"), []);
@@ -1264,6 +1298,7 @@ export function App() {
   );
 
   useEffect(() => {
+    if (initialItem) return;
     setFavoriteRepoSnapshots((current) => mergeFavoriteRepoSnapshots(current, favoriteKeys, loadedRepos));
   }, [favoriteKeys, loadedRepos, setFavoriteRepoSnapshots]);
 
@@ -1302,7 +1337,7 @@ export function App() {
     [selectedWorkflowStars, workflowsById]
   );
   const projectFocusView: ProjectFocusView =
-    storedProjectFocusView === "starred-actions" ? "workflows" : storedProjectFocusView;
+    initialItem?.focusView ?? (storedProjectFocusView === "starred-actions" ? "workflows" : storedProjectFocusView);
   const openPullRequests = useMemo(
     () => pullRequests.filter((pr) => pr.state !== "CLOSED" && pr.state !== "MERGED"),
     [pullRequests]
@@ -1499,7 +1534,7 @@ export function App() {
         window.clearTimeout(themeTransitionTimer.current);
         themeTransitionTimer.current = null;
       }
-      document.documentElement.classList.remove(themeTransitionClass);
+      if (!initialItem) document.documentElement.classList.remove(themeTransitionClass);
     };
   }, []);
 
@@ -1963,6 +1998,14 @@ export function App() {
     }
   }, [loadProject, selectedRepo, selection]);
 
+  useEffect(() => {
+    if (!initialItem) return;
+    const refresh = () => { void refreshActivePane(); };
+    const host = contentPane.host;
+    host.addEventListener("forge:refresh-item", refresh);
+    return () => host.removeEventListener("forge:refresh-item", refresh);
+  }, [refreshActivePane, contentPane.host]);
+
   const submitPullRequestReview = useCallback(
     (pr: PullRequestSummary, event: PullRequestReviewEvent) => {
       if (!selectedRepo) {
@@ -2413,11 +2456,15 @@ export function App() {
 
   const selectRun = useCallback(
     (run: WorkflowRunSummary) => {
+      if (initialItem) {
+        onNavigateItem?.({ key: contentItemKey(selectedRepo?.id, `run:${run.id}`), repo: selectedRepo, selection: { kind: "run", run }, focusView: "workflow-runs" });
+        return;
+      }
       setStoredProjectFocusView("workflow-runs");
       setSelection({ kind: "run", run });
       setRunTab("Jobs");
     },
-    [setStoredProjectFocusView]
+    [setStoredProjectFocusView, selectedRepo, onNavigateItem]
   );
 
   const selectMiddleItem = useCallback(
@@ -2599,6 +2646,22 @@ export function App() {
       return;
     }
 
+    if (initialItem) {
+      // Detached items refresh only their own content; navigation owns project lists.
+      if (selection.kind === "pr") {
+        const [detail, runs] = await Promise.all([api.getPullRequest(repo, selection.pr.number, { force: true }), api.getWorkflowRuns(repo)]);
+        setPrDetail(detail.data); setWorkflowRuns(runs.data);
+      } else if (selection.kind === "run") {
+        setRunDetail((await api.getWorkflowRun(repo, selection.run.id, { force: true })).data);
+      } else if (selection.kind === "workflow") {
+        setWorkflowRuns((await api.getWorkflowRuns(repo, { force: true })).data);
+      } else if (selection.kind === "issue") {
+        const refreshed = (await api.getIssues(repo, { force: true })).data.find(issue => issue.id === selection.issue.id);
+        if (refreshed) setSelection({ kind: "issue", issue: refreshed });
+      }
+      return;
+    }
+
     const key = repoKey(repo);
     const now = Date.now();
     const shouldRefreshFullProject =
@@ -2609,10 +2672,10 @@ export function App() {
     const issuesPromise = shouldRefreshFullProject
       ? api.getIssues(repo, { force: true })
       : Promise.resolve(null);
-    const pullRequestDetailPromise = shouldRefreshFullProject && selectedPullRequestNumber !== null
+    const pullRequestDetailPromise = initialItem && shouldRefreshFullProject && selectedPullRequestNumber !== null
       ? api.getPullRequest(repo, selectedPullRequestNumber, { force: true })
       : Promise.resolve(null);
-    const workflowRunDetailPromise = selectedWorkflowRunId !== null
+    const workflowRunDetailPromise = initialItem && selectedWorkflowRunId !== null
       ? api.getWorkflowRun(repo, selectedWorkflowRunId, { force: true })
       : Promise.resolve(null);
 
@@ -2659,19 +2722,20 @@ export function App() {
       }
       return current;
     });
-  }, [hasLiveWorkflow, selectedPullRequestNumber, selectedWorkflowRunId]);
+  }, [hasLiveWorkflow, selectedPullRequestNumber, selectedWorkflowRunId, initialItem ? selection : null]);
 
   useAdaptivePolling(
     refreshSelectedProjectForPolling,
     pollingIntervalMs(hasLiveWorkflow),
-    Boolean(auth?.configured && selectedRepoKey)
+    Boolean(auth?.configured && selectedRepoKey),
+    { document: contentPane.surface.document }
   );
 
   useAdaptivePolling(
     refreshFavoriteProjectsForNotifications,
     favoriteProjectPollingIntervalMs,
-    Boolean(auth?.configured && favoriteProjectRefreshKey),
-    { immediately: true }
+    Boolean(!initialItem && auth?.configured && favoriteProjectRefreshKey),
+    { immediately: true, document: contentPane.surface.document }
   );
 
   const openGithub = useCallback(() => {
@@ -2741,12 +2805,16 @@ export function App() {
       const run =
         workflowRuns.find((item) => item.id === check.workflowRunId)
         ?? workflowRunFallbackFromCheck(selectedRepo, check);
+      if (initialItem) {
+        onNavigateItem?.({ key: contentItemKey(selectedRepo.id, `run:${run.id}`), repo: selectedRepo, selection: { kind: "run", run, focusedJobId: check.jobId ?? null }, focusView: "workflow-runs" });
+        return;
+      }
       setStoredProjectFocusView("workflow-runs");
       setWorkflowRuns((current) => (current.some((item) => item.id === run.id) ? current : [run, ...current]));
       setSelection({ kind: "run", run, focusedJobId: check.jobId ?? null });
       setRunTab("Jobs");
     },
-    [selectedRepo, setStoredProjectFocusView, workflowRuns]
+    [selectedRepo, setStoredProjectFocusView, workflowRuns, onNavigateItem]
   );
 
   const moveMiddleSelection = useCallback(
@@ -2881,6 +2949,7 @@ export function App() {
   }, [paletteItems, paletteQuery]);
 
   useEffect(() => {
+    if (initialItem) { setAuth(sharedAuth ?? null); return; }
     let cancelled = false;
 
     void (async () => {
@@ -2904,7 +2973,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [sharedAuth]);
 
   useEffect(
     () => () => {
@@ -2916,7 +2985,7 @@ export function App() {
   );
 
   useEffect(() => {
-    if (auth?.configured) {
+    if (auth?.configured && !initialItem) {
       void loadInitial();
     }
   }, [auth?.configured, loadInitial]);
@@ -2955,7 +3024,7 @@ export function App() {
   }, [auth?.configured, loadProject, selectedRepoKey]);
 
   useEffect(() => {
-    if (!selectedRepo || selectedPullRequestNumber === null) {
+    if (!initialItem || !selectedRepo || selectedPullRequestNumber === null) {
       return;
     }
 
@@ -2987,7 +3056,7 @@ export function App() {
   }, [selectedPullRequestNumber, selectedRepoKey]);
 
   useEffect(() => {
-    if (!selectedRepo || selectedWorkflowRunId === null) {
+    if (!initialItem || !selectedRepo || selectedWorkflowRunId === null) {
       return;
     }
 
@@ -3020,7 +3089,7 @@ export function App() {
 
   useEffect(() => {
     const unsubscribe = api.onCacheUpdated((key) => {
-      if (key.startsWith("viewer:")) {
+      if (!initialItem && key.startsWith("viewer:")) {
         void loadInitial(false);
       }
       if (selectedRepo && key.startsWith(`repo:${repoKey(selectedRepo)}`) && !isPullRequestCacheUpdate(key)) {
@@ -3030,7 +3099,7 @@ export function App() {
     return unsubscribe;
   }, [loadInitial, loadProject, selectedRepo]);
 
-  useEffect(() => api.onNativeNotificationClicked(focusNotificationSource), [focusNotificationSource]);
+  useEffect(() => initialItem ? undefined : api.onNativeNotificationClicked(focusNotificationSource), [focusNotificationSource]);
 
   useEffect(() => {
     if (paletteIndex >= filteredPaletteItems.length) {
@@ -3039,9 +3108,10 @@ export function App() {
   }, [filteredPaletteItems.length, paletteIndex]);
 
   useEffect(() => {
+    if (initialItem) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof Element && event.target.closest(".codex-terminal-screen")) return;
-      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      if (isHtmlElement(event.target) && event.target.closest(".codex-terminal-screen")) return;
+      if ((event.target as Node | null)?.ownerDocument?.querySelector('[role="dialog"], [role="alertdialog"]')) return;
       if (isTabNavigation(event) && (projectFocusView === "codex" || settingsScope)) return;
       if (isTabNavigation(event)) {
         event.preventDefault();
@@ -3053,7 +3123,9 @@ export function App() {
         event.preventDefault();
 
         if (shortcut === "refresh-repository") {
-          void refreshActivePane();
+          const source = [...detachedItems.values()].find(entry => entry.pane.surface.document === (event.target as Node | null)?.ownerDocument);
+          if (source) source.pane.host.dispatchEvent(new Event("forge:refresh-item"));
+          else void refreshActivePane();
           return;
         }
 
@@ -3140,7 +3212,9 @@ export function App() {
         const now = Date.now();
         if (now - lastGPress.current < 650) {
           event.preventDefault();
-          openGithub();
+          const source = [...detachedItems.values()].find(entry => entry.pane.surface.document === (event.target as Node | null)?.ownerDocument);
+          const url = source ? openUrlForSelection(source.target.selection, source.target.repo) : currentGithubUrl;
+          if (url) openGithubUrl(url);
           lastGPress.current = 0;
         } else {
           lastGPress.current = now;
@@ -3148,9 +3222,11 @@ export function App() {
       }
     };
 
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    const targets = [window, ...[...detachedItems.values()].map(entry => entry.pane.surface).filter(surface => surface !== window)];
+    targets.forEach(target => target.addEventListener("keydown", onKeyDown, true));
+    return () => targets.forEach(target => target.removeEventListener("keydown", onKeyDown, true));
   }, [
+    detachedItems,
     favoriteKeys,
     moveMiddleSelection,
     navigateHistory,
@@ -3185,6 +3261,7 @@ export function App() {
     try {
       const nextAuth = await api.clearToken();
       setAuth(nextAuth);
+      onAuthChange?.(nextAuth);
       setRepositories([]);
       setStarredRepos([]);
       setRecentRepos([]);
@@ -3201,7 +3278,7 @@ export function App() {
       flash(userFacingError(error, "Unable to remove the stored token."));
       return false;
     }
-  }, [flash]);
+  }, [flash, onAuthChange]);
 
   const requestClearStoredToken = useCallback(() => {
     openConfirmation({
@@ -3237,24 +3314,50 @@ export function App() {
   };
 
   const terminalThread = selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined;
-  const threadDetached = Boolean(terminalThread && threadWindows.some(target => target.repositoryId === selectedRepo?.id && target.id === terminalThread.id));
-  const openThreadWindow = async () => {
-    if (!terminalThread || !selectedRepo || !window.forgeCodex) return;
-    setOpeningThreadWindow(true);
-    setThreadWindowError("");
+  const toggleContentAttachment = () => {
     try {
-      await flushThreadDraft(selectedRepo.id, terminalThread.id);
-      await window.forgeCodex.request("openThreadWindow", { repositoryId: selectedRepo.id, id: terminalThread.id, fullName: selectedRepo.fullName, defaultBranch: selectedRepo.defaultBranch, terminalOpen });
-    } catch (error) { setThreadWindowError(error instanceof Error ? error.message : String(error)); }
-    finally { setOpeningThreadWindow(false); }
+      if (contentPane.detached) contentPane.reattach();
+      else contentPane.detach();
+    } catch (error) { flash(error instanceof Error ? error.message : String(error)); }
   };
+  const contentRoute = `${selectedRepo?.id}:${selectionRouteKey(selection)}`;
+  const contentTitle = selection.kind === "codex" ? terminalThread?.title
+    : selection.kind === "pr" ? selection.pr.title
+    : selection.kind === "issue" ? selection.issue.title
+    : selection.kind === "run" ? workflowRunDisplayName(selection.run)
+    : selection.kind === "workflow" ? selection.workflow.name
+    : selectedRepo?.fullName;
+  const activeTarget: ContentItemTarget = {
+    key: contentItemKey(selectedRepo?.id, projectFocusView === "codex" && selection.kind !== "codex" ? "codex-empty" : selectionRouteKey(selection)),
+    repo: selectedRepo,
+    selection: projectFocusView === "codex" && selection.kind !== "codex" ? { kind: "repo" } : selection,
+    focusView: projectFocusView,
+  };
+  const activeDetached = !initialItem && Boolean(detachedItems.get(activeTarget.key)?.pane.detached);
+  const focusSelectedItem = (targetSelection: ContentSelection) => detachedItems.get(contentItemKey(selectedRepo?.id, selectionRouteKey(targetSelection)))?.pane.focus();
+  const navigateToItem = useCallback((target: ContentItemTarget) => {
+    setSelectedRepo(target.repo); setSelection(target.selection); setStoredProjectFocusView(target.focusView);
+    if (target.selection.kind === "pr") setProjectPullRequestTab(pullRequestTabForState(target.selection.pr));
+    detachedItems.get(target.key)?.pane.focus();
+  }, [detachedItems, setStoredProjectFocusView, setProjectPullRequestTab]);
+  useEffect(() => { if (!initialItem) detachedItems.get(activeTarget.key)?.pane.focus(); }, [contentRoute]);
+  useEffect(() => { if (contentPane.error) flash(contentPane.error); }, [contentPane.error, flash]);
   const terminalKey = `${selectedRepo?.id}:${terminalThread?.id}`;
   const terminalOpen = Boolean(terminalThread && !terminalThread.archived && openTerminals[terminalKey]);
   const toggleTerminal = () => { if (terminalThread) setOpenTerminals((current) => ({ ...current, [terminalKey]: !current[terminalKey] })); };
-  const gridTemplateColumns = sidebarCollapsed
+  useEffect(() => {
+    if (initialItem) return;
+    void api.setContentPaneLayout?.({
+      detached: activeDetached,
+      cssWidth: middleWidth + (sidebarCollapsed ? 0 : leftWidth + 1),
+    }).catch(error => console.warn("Unable to resize the content layout", error));
+  }, [activeDetached, sidebarCollapsed, leftWidth, middleWidth]);
+  const gridTemplateColumns = activeDetached
+    ? (sidebarCollapsed ? "0px 0px minmax(0, 1fr)" : `${leftWidth}px 1px minmax(0, 1fr)`)
+    : sidebarCollapsed
     ? `0px 0px ${middleWidth}px 1px minmax(0, 1fr)`
     : `${leftWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`;
-  const activeAccentColor = activeTheme === "dark" ? darkAccentColor : lightAccentColor;
+  const activeAccentColor = appearance?.accent ?? (activeTheme === "dark" ? darkAccentColor : lightAccentColor);
   const selectedAccent = normalizeAccentColor(activeAccentColor, defaultAccentByTheme[activeTheme]);
   const appStyle: AppCssVars = {
     gridTemplateColumns,
@@ -3269,6 +3372,7 @@ export function App() {
   }, [activeTheme, setDarkSidebarAppearance, setLightSidebarAppearance]);
 
   useEffect(() => {
+    if (initialItem) return;
     if (nativeSidebarAppearanceTimer.current) {
       window.clearTimeout(nativeSidebarAppearanceTimer.current);
       nativeSidebarAppearanceTimer.current = null;
@@ -3303,8 +3407,130 @@ export function App() {
   }, [sidebarAppearance]);
 
   useEffect(() => {
+    if (initialItem) return;
     void api.setNativeThemeSource(nativeThemeSource).catch(() => undefined);
   }, [nativeThemeSource]);
+
+  const overlays = <>{settingsScope && (
+        <CodexSettingsDialog
+          project={settingsScope === "project" ? selectedRepo ?? undefined : undefined}
+          auth={auth}
+          onClose={() => setSettingsScope(null)}
+          onSaveGithub={async (token) => {
+            const next = await api.saveToken(token);
+            setAuth(next);
+            onAuthChange?.(next);
+          }}
+          onRemoveGithub={() => {
+            setSettingsScope(null);
+            requestClearStoredToken();
+          }}
+          onOpenUrl={openGithubUrl}
+        />
+      )}
+      {confirmationDialog && (
+        <ConfirmationDialog
+          title={confirmationDialog.title}
+          message={confirmationDialog.message}
+          confirmLabel={confirmationDialog.confirmLabel}
+          submitting={confirmationSubmitting}
+          onClose={closeConfirmation}
+          onConfirm={() => void submitConfirmation()}
+        />
+      )}
+      {workflowDispatchDialog && selectedRepo && (
+        <WorkflowDispatchDialog
+          repo={selectedRepo}
+          state={workflowDispatchDialog}
+          onClose={closeWorkflowDispatchDialog}
+          onChangeValue={updateWorkflowDispatchDialogValue}
+          onSubmit={() => void submitWorkflowDispatchDialog()}
+        />
+      )}
+      {paletteOpen && (
+        <CommandPalette
+          query={paletteQuery}
+          items={filteredPaletteItems}
+          index={paletteIndex}
+          onQuery={setPaletteQuery}
+          onIndex={setPaletteIndex}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
+      {toast && <div className="toast">{toast}</div>}</>;
+  if (initialItem) return (
+    <DetachablePane pane={contentPane} theme={activeTheme} accent={selectedAccent} appearance={sidebarAppearance} title={displayPathText(contentTitle ?? "Forge", Boolean(terminalThread?.environment))}>
+      <ContentPane
+        detached={contentPane.detached}
+        attachmentOpening={contentPane.opening || !selectedRepo || (projectFocusView === "codex" && selection.kind !== "codex")}
+        onToggleAttachment={toggleContentAttachment}
+        onGlobalConfiguration={() => setSettingsScope("global")}
+        codexActions={projectFocusView === "codex" ? (
+          <>
+            <CodexQuickActions
+              key={`${selectedRepo?.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
+              thread={selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
+              theme={activeTheme}
+              group="checkout"
+            />
+            <button className="icon-button codex-terminal-toggle" aria-label="Toggle terminal" title={terminalThread ? "Toggle terminal" : "Select a chat to open its terminal"} aria-pressed={terminalOpen} disabled={!terminalThread || terminalThread.archived} onClick={toggleTerminal}>
+              <TerminalSquare size={16} />
+            </button>
+            <span className="toolbar-divider" />
+          </>
+        ) : undefined}
+        codexContent={projectFocusView === "codex" && selectedRepo ? (
+          <ThreadWorkspace repositoryId={selectedRepo.id} id={selection.kind === "codex" ? selection.threadId : undefined}
+            thread={terminalThread} theme={activeTheme} terminalOpen={terminalOpen} loading={projectLoading}
+            onConfigure={() => setSettingsScope("project")} onHideTerminal={() => setOpenTerminals(current => ({ ...current, [terminalKey]: false }))}
+            quickActions={<CodexQuickActions group="git" thread={terminalThread} theme={activeTheme} defaultBranch={selectedRepo.defaultBranch} />} />
+        ) : undefined}
+        auth={auth}
+        repo={selectedRepo}
+        selection={projectFocusView === "codex" && selection.kind !== "codex" ? { kind: "repo" } : selection}
+        prDetail={prDetail}
+        runDetail={runDetail}
+        prTab={prTab}
+        runTab={runTab}
+        repoLabels={repoLabels}
+        onPrTabChange={setPrTab}
+        onRunTabChange={setRunTab}
+        loading={contentLoading}
+        error={contentError}
+        prActionSubmitting={prActionSubmitting}
+        theme={activeTheme}
+        themePreference={themePreference}
+        systemTheme={systemTheme}
+        sidebarAppearance={sidebarAppearance}
+        canNavigateBack={history?.back ?? canNavigateBack}
+        canNavigateForward={history?.forward ?? canNavigateForward}
+        accentColor={selectedAccent}
+        onNavigateBack={() => (history?.navigate ?? navigateHistory)(-1)}
+        onNavigateForward={() => (history?.navigate ?? navigateHistory)(1)}
+        onToggleTheme={appearance?.onToggleTheme ?? toggleThemePreference}
+        onToggleSidebarAppearance={appearance?.onToggleSidebarAppearance ?? toggleSidebarAppearance}
+        onAccentChange={appearance?.onAccentChange ?? setActiveAccentColor}
+        onOpenGithubUrl={openGithubUrl}
+        onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
+        onCopyText={copyToClipboard}
+        onSubmitPullRequestReview={submitPullRequestReview}
+        onAddPullRequestComment={addPullRequestComment}
+        onUpdatePullRequestTitle={updatePullRequestTitle}
+        onUpdatePullRequestDraftState={updatePullRequestDraftState}
+        onAddPullRequestLabel={addPullRequestLabel}
+        onRemovePullRequestLabel={removePullRequestLabel}
+        onEnablePullRequestAutoMerge={enablePullRequestAutoMerge}
+        onDisablePullRequestAutoMerge={disablePullRequestAutoMerge}
+        onMergePullRequest={mergePullRequest}
+        onClosePullRequest={closePullRequest}
+        onSelectRun={selectRun}
+        onRunWorkflow={runWorkflow}
+        onRunWorkflowWithArguments={runWorkflowWithArguments}
+        workflowRuns={workflowRuns}
+      />
+      {overlays}
+    </DetachablePane>
+  );
 
   if (authChecking || !auth?.configured) {
     return (
@@ -3374,7 +3600,7 @@ export function App() {
         }}
       />
       <ProjectPane
-        onProjectConfiguration={() => setSettingsScope("project")}
+        onProjectConfiguration={() => { setSettingsScope("project"); }}
         codexCount={codexThreads.threads.filter((thread) => !thread.archived).length}
         codexList={selectedRepo ? (
           <CodexThreadList
@@ -3383,7 +3609,7 @@ export function App() {
             loading={projectLoading}
             threads={codexThreads.threads}
             selectedId={selection.kind === "codex" ? selection.threadId : undefined}
-            onSelect={(threadId) => setSelection({ kind: "codex", threadId })}
+            onSelect={(threadId) => { setSelection({ kind: "codex", threadId }); focusSelectedItem({ kind: "codex", threadId }); }}
             onConfigure={() => setSettingsScope("project")}
             configurationOpen={settingsScope !== null}
             error={codexThreads.error}
@@ -3417,127 +3643,22 @@ export function App() {
         onSelectPr={(pr) => {
           setProjectPullRequestTab(pullRequestTabForState(pr));
           setSelection({ kind: "pr", pr });
+          focusSelectedItem({ kind: "pr", pr });
         }}
-        onSelectIssue={(issue) => setSelection({ kind: "issue", issue })}
-        onSelectRun={selectRun}
-        onSelectWorkflow={(workflow) => setSelection({ kind: "workflow", workflow })}
+        onSelectIssue={(issue) => { setSelection({ kind: "issue", issue }); focusSelectedItem({ kind: "issue", issue }); }}
+        onSelectRun={(run) => { selectRun(run); focusSelectedItem({ kind: "run", run }); }}
+        onSelectWorkflow={(workflow) => { setSelection({ kind: "workflow", workflow }); focusSelectedItem({ kind: "workflow", workflow }); }}
         onToggleWorkflowStar={toggleWorkflowStar}
         onReorderFavoriteWorkflow={reorderFavoriteWorkflows}
       />
-      <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />
-      <ContentPane
-        onGlobalConfiguration={() => setSettingsScope("global")}
-        codexActions={projectFocusView === "codex" ? (
-          <>
-            <CodexQuickActions
-              key={`${selectedRepo?.id}:${selection.kind === "codex" ? selection.threadId : "none"}`}
-              thread={!threadDetached && selection.kind === "codex" ? codexThreads.threads.find((thread) => thread.id === selection.threadId) : undefined}
-              theme={activeTheme}
-              group="checkout"
-            />
-            <button className="icon-button codex-terminal-toggle" aria-label="Toggle terminal" title={terminalThread ? "Toggle terminal" : "Select a chat to open its terminal"} aria-pressed={terminalOpen && !threadDetached} disabled={!terminalThread || terminalThread.archived || threadDetached} onClick={toggleTerminal}>
-              <TerminalSquare size={16} />
-            </button>
-            <button className="icon-button" aria-label="Open thread in new window" title={threadDetached ? "Focus thread window" : "Open thread in new window"} disabled={!terminalThread || openingThreadWindow} onClick={() => void openThreadWindow()}><AppWindow size={16} /></button>
-            <span className="toolbar-divider" />
-          </>
-        ) : undefined}
-        codexContent={projectFocusView === "codex" && selectedRepo ? (
-          <ThreadWorkspace repositoryId={selectedRepo.id} id={selection.kind === "codex" ? selection.threadId : undefined}
-            thread={terminalThread} theme={activeTheme} terminalOpen={terminalOpen} detached={threadDetached} loading={projectLoading}
-            interactionDisabled={openingThreadWindow} error={threadWindowError} onOpen={() => void openThreadWindow()}
-            onConfigure={() => setSettingsScope("project")} onHideTerminal={() => setOpenTerminals(current => ({ ...current, [terminalKey]: false }))}
-            quickActions={<CodexQuickActions group="git" thread={terminalThread} theme={activeTheme} defaultBranch={selectedRepo.defaultBranch} />} />
-        ) : undefined}
-        auth={auth}
-        repo={selectedRepo}
-        selection={projectFocusView === "codex" && selection.kind !== "codex" ? { kind: "repo" } : selection}
-        prDetail={prDetail}
-        runDetail={runDetail}
-        prTab={prTab}
-        runTab={runTab}
-        repoLabels={repoLabels}
-        onPrTabChange={setPrTab}
-        onRunTabChange={setRunTab}
-        loading={contentLoading}
-        error={contentError}
-        prActionSubmitting={prActionSubmitting}
-        theme={activeTheme}
-        themePreference={themePreference}
-        systemTheme={systemTheme}
-        sidebarAppearance={sidebarAppearance}
-        canNavigateBack={canNavigateBack}
-        canNavigateForward={canNavigateForward}
-        accentColor={selectedAccent}
-        onNavigateBack={() => navigateHistory(-1)}
-        onNavigateForward={() => navigateHistory(1)}
-        onToggleTheme={toggleThemePreference}
-        onToggleSidebarAppearance={toggleSidebarAppearance}
-        onAccentChange={setActiveAccentColor}
-        onOpenGithubUrl={openGithubUrl}
-        onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
-        onCopyText={copyToClipboard}
-        onSubmitPullRequestReview={submitPullRequestReview}
-        onAddPullRequestComment={addPullRequestComment}
-        onUpdatePullRequestTitle={updatePullRequestTitle}
-        onUpdatePullRequestDraftState={updatePullRequestDraftState}
-        onAddPullRequestLabel={addPullRequestLabel}
-        onRemovePullRequestLabel={removePullRequestLabel}
-        onEnablePullRequestAutoMerge={enablePullRequestAutoMerge}
-        onDisablePullRequestAutoMerge={disablePullRequestAutoMerge}
-        onMergePullRequest={mergePullRequest}
-        onClosePullRequest={closePullRequest}
-        onSelectRun={selectRun}
-        onRunWorkflow={runWorkflow}
-        onRunWorkflowWithArguments={runWorkflowWithArguments}
-        workflowRuns={workflowRuns}
-      />
-      {settingsScope && (
-        <CodexSettingsDialog
-          project={settingsScope === "project" ? selectedRepo ?? undefined : undefined}
-          auth={auth}
-          onClose={() => setSettingsScope(null)}
-          onSaveGithub={async (token) => {
-            const next = await api.saveToken(token);
-            setAuth(next);
-          }}
-          onRemoveGithub={() => {
-            setSettingsScope(null);
-            requestClearStoredToken();
-          }}
-          onOpenUrl={openGithubUrl}
-        />
-      )}
-      {confirmationDialog && (
-        <ConfirmationDialog
-          title={confirmationDialog.title}
-          message={confirmationDialog.message}
-          confirmLabel={confirmationDialog.confirmLabel}
-          submitting={confirmationSubmitting}
-          onClose={closeConfirmation}
-          onConfirm={() => void submitConfirmation()}
-        />
-      )}
-      {workflowDispatchDialog && selectedRepo && (
-        <WorkflowDispatchDialog
-          repo={selectedRepo}
-          state={workflowDispatchDialog}
-          onClose={closeWorkflowDispatchDialog}
-          onChangeValue={updateWorkflowDispatchDialogValue}
-          onSubmit={() => void submitWorkflowDispatchDialog()}
-        />
-      )}
-      {paletteOpen && (
-        <CommandPalette
-          query={paletteQuery}
-          items={filteredPaletteItems}
-          index={paletteIndex}
-          onQuery={setPaletteQuery}
-          onIndex={setPaletteIndex}
-          onClose={() => setPaletteOpen(false)}
-        />
-      )}
-      {toast && <div className="toast">{toast}</div>}
+      {!activeDetached && <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />}
+      {retainedContentItems(activeTarget, [...detachedItems.values()].map(entry => entry.target)).map(target => (
+        <ForgeWorkspace key={target.key} item={target} sharedAuth={auth} onAuthChange={setAuth}
+          appearance={{ themePreference, theme: activeTheme, sidebarAppearance, accent: selectedAccent, onToggleTheme: toggleThemePreference, onToggleSidebarAppearance: toggleSidebarAppearance, onAccentChange: setActiveAccentColor }}
+          onPaneState={reportItemPane} onNavigateItem={navigateToItem}
+          history={{ back: canNavigateBack, forward: canNavigateForward, navigate: navigateHistory }} />
+      ))}
+      {overlays}
     </div>
   );
 }
@@ -4422,7 +4543,7 @@ function WorkflowRunSplitButton(props: {
 
   const handleBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const nextFocused = event.relatedTarget;
-    if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+    if (isDomNode(nextFocused) && event.currentTarget.contains(nextFocused)) {
       return;
     }
 
@@ -4432,7 +4553,7 @@ function WorkflowRunSplitButton(props: {
   const runWithArguments = useCallback(() => {
     setOpen(false);
     props.onRunWithArguments();
-  }, [props]);
+  }, [props, window]);
 
   return (
     <div className={cx("workflow-run-split", open && "open")} onBlur={handleBlur}>
@@ -4466,6 +4587,9 @@ function WorkflowRunSplitButton(props: {
 }
 
 function ContentPane(props: {
+  detached: boolean;
+  attachmentOpening: boolean;
+  onToggleAttachment(): void;
   onGlobalConfiguration(): void;
   codexContent?: React.ReactNode;
   codexActions?: React.ReactNode;
@@ -4710,6 +4834,7 @@ function ContentPane(props: {
         </div>
         <div className="header-actions">
           {props.codexActions}
+          <button className="icon-button" aria-label={props.detached ? "Reattach content pane" : "Detach content pane"} title={props.detached ? "Reattach content pane" : "Detach content pane"} disabled={props.attachmentOpening} onClick={props.onToggleAttachment}>{props.detached ? <AppWindowMac size={16} /> : <PictureInPicture2 size={16} />}</button>
           <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={props.onGlobalConfiguration}>
             <Settings size={17} />
           </button>
@@ -5360,7 +5485,7 @@ function PullRequestContent(props: {
   const handleTitleEditBlur = useCallback(
     (event: React.FocusEvent<HTMLFormElement>) => {
       const nextFocused = event.relatedTarget;
-      if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+      if (isDomNode(nextFocused) && event.currentTarget.contains(nextFocused)) {
         return;
       }
 
@@ -5388,7 +5513,7 @@ function PullRequestContent(props: {
 
   const handleCommentComposerBlur = useCallback((event: React.FocusEvent<HTMLFormElement>) => {
     const nextFocused = event.relatedTarget;
-    if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+    if (isDomNode(nextFocused) && event.currentTarget.contains(nextFocused)) {
       return;
     }
 
@@ -5679,7 +5804,7 @@ function PullRequestLabelPicker(props: {
 
   const handleBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const nextFocused = event.relatedTarget;
-    if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+    if (isDomNode(nextFocused) && event.currentTarget.contains(nextFocused)) {
       return;
     }
 
@@ -6220,6 +6345,7 @@ function WorkflowJobsList({
   jobs: WorkflowRunDetail["jobs"];
   repo: RepoRef;
 }) {
+  const { document, window } = usePaneSurface();
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [details, setDetails] = useState<Record<string, WorkflowJobLogLoadState>>({});
   const detailsRef = useRef(details);
@@ -6304,7 +6430,7 @@ function WorkflowJobsList({
     }, 6000);
 
     return () => window.clearInterval(interval);
-  }, [expandedSteps, jobs, loadJob]);
+  }, [expandedSteps, jobs, loadJob, document, window]);
 
   if (!jobs.length) {
     return <div className="empty-content">No jobs</div>;
@@ -6499,6 +6625,7 @@ function ConfirmationDialog(props: {
   onClose(): void;
   onConfirm(): void;
 }) {
+  const { window } = usePaneSurface();
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !props.submitting) {
@@ -6509,7 +6636,7 @@ function ConfirmationDialog(props: {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [props]);
+  }, [props, window]);
 
   const close = () => {
     if (!props.submitting) {
@@ -6551,6 +6678,7 @@ function WorkflowDispatchDialog(props: {
   onChangeValue(key: string, value: string): void;
   onSubmit(): void;
 }) {
+  const { window } = usePaneSurface();
   const firstFieldRef = useRef<HTMLInputElement | HTMLButtonElement | null>(null);
   const setFirstFieldRef = useCallback((element: HTMLInputElement | HTMLButtonElement | null) => {
     firstFieldRef.current = element;
@@ -6575,7 +6703,7 @@ function WorkflowDispatchDialog(props: {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [props]);
+  }, [props, window]);
 
   const config = props.state.config;
   const inputs = config?.inputs ?? [];

@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { Check, ChevronDown, ChevronLeft, RotateCcw, Zap } from "lucide-react";
 import type { CodexModel, CodexPreferences } from "../../shared/codex";
@@ -31,6 +32,7 @@ export function ModelPicker({
   disabled: boolean;
   onChange: (value: CodexPreferences) => void;
 }) {
+  const { window } = usePaneSurface();
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -73,7 +75,7 @@ export function ModelPicker({
     };
     window.addEventListener("resize", close);
     return () => window.removeEventListener("resize", close);
-  }, []);
+  }, [window]);
   const commitEffort = (index: string) => {
     clearTimeout(effortTimer.current);
     const selected = efforts[Number(index)];

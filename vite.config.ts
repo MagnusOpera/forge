@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist/renderer",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rolldownOptions: { input: { main: "index.html", content: "content-window.html" } }
   },
   server: {
     host: "127.0.0.1",

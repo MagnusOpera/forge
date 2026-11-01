@@ -4,6 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Use distinct picture-in-picture and app-window icons for detaching and reattaching content.
+
+- Open detached items at the exact screen position and size of their original content pane.
+
+- Shrink Forge to its two navigation panes for detached items and restore its previous size when the third pane returns.
+
+- Detach individual items into independent windows while keeping other content in the main window’s third pane.
+
 ## [0.10.4]
 
 

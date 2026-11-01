@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import {
   useEffect,
   useRef,
@@ -23,6 +24,7 @@ export function TerminalPanel({
   theme: "light" | "dark";
   onHide: () => void;
 }) {
+  const { document, window } = usePaneSurface();
   const root = useRef<HTMLElement>(null),
     mount = useRef<HTMLDivElement>(null),
     term = useRef<Terminal | null>(null);
@@ -186,7 +188,7 @@ export function TerminalPanel({
       try {
         const { loadTerminalEngine } = await import("./terminal-engine");
         if (cancelled) return;
-        const module = await loadTerminalEngine();
+        const module = await (window.forgeContentTerminalEngine ?? loadTerminalEngine)();
         if (cancelled || !mount.current) return;
         terminal = new module.Terminal({
           ghostty: module.ghostty,
@@ -326,7 +328,7 @@ export function TerminalPanel({
       terminal?.dispose();
       if (term.current === terminal) term.current = null;
     };
-  }, [thread.id, thread.repositoryId, thread.worktree, generation, theme]);
+  }, [thread.id, thread.repositoryId, thread.worktree, generation, theme, document, window]);
   const startDrag = (event: ReactPointerEvent) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);

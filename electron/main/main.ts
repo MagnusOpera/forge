@@ -1,3 +1,5 @@
+import { MainContentLayout } from "./content-layout.js";
+import { contentPaneWindowBounds, isContentWindowName, isContentWindowRequest } from "../../shared/content-window.js";
 import {
   app,
   BrowserWindow,
@@ -99,6 +101,9 @@ app.setName(appDisplayName);
 app.setAppUserModelId("com.magnusopera.forge");
 
 let mainWindow: BrowserWindow | null = null;
+let mainContentLayout: MainContentLayout | null = null;
+const contentWindows = new Map<string, BrowserWindow>();
+const focusedContentWindow = () => [...contentWindows.values()].find(window => !window.isDestroyed() && window.isFocused()) ?? null;
 let aboutWindow: BrowserWindow | null = null;
 let octokitClient: Octokit | null = null;
 let graphqlClient: GraphqlClient | null = null;
@@ -318,7 +323,7 @@ async function confirmPullRequestApproval(event: IpcMainInvokeEvent, rawPullNumb
   }
 
   const icon = nativeImage.createFromPath(appIconPath("png"));
-  const parent = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+  const parent = focusedContentWindow() ?? BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
   const options = {
     type: "question" as const,
     buttons: ["Cancel", "OK"],
@@ -2364,13 +2369,51 @@ function createWindow(): void {
     }
   });
 
+  mainContentLayout = new MainContentLayout(mainWindow);
+  mainWindow.on("leave-full-screen", () => mainContentLayout?.apply());
+
   if (isDev) {
     void mainWindow.loadURL(devServerUrl);
   } else {
     void mainWindow.loadFile(path.join(app.getAppPath(), "dist/renderer/index.html"));
   }
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.on("did-create-window", (child, details) => {
+    if (!isContentWindowName(details.frameName)) return;
+    contentWindows.set(details.frameName, child);
+    const owner = mainWindow;
+    owner?.webContents.setBackgroundThrottling(false);
+    child.once("ready-to-show", () => { child.show(); child.focus(); });
+    child.on("closed", () => {
+      if (contentWindows.get(details.frameName) === child) contentWindows.delete(details.frameName);
+      if (!contentWindows.size && owner && !owner.isDestroyed()) owner.webContents.setBackgroundThrottling(true);
+    });
+    child.webContents.on("will-navigate", (event, url) => {
+      if (!isContentWindowRequest(url, details.frameName, mainWindow?.webContents.getURL() ?? "")) event.preventDefault();
+    });
+    child.webContents.on("before-input-event", (event, input) => {
+      if (isThreadWindowCloseShortcut(input)) { event.preventDefault(); child.close(); }
+    });
+    child.webContents.setWindowOpenHandler(({ url }) => {
+      try {
+        const parsed = new URL(url);
+        if (["https:", "http:", "mailto:"].includes(parsed.protocol)) void shell.openExternal(parsed.toString());
+      } catch { /* Ignore malformed external links. */ }
+      return { action: "deny" };
+    });
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url, frameName, features }) => {
+    if (isContentWindowRequest(url, frameName, mainWindow?.webContents.getURL() ?? "")) {
+      const zoomFactor = mainWindow!.webContents.getZoomFactor();
+      const bounds = contentPaneWindowBounds(features, mainWindow!.getContentBounds(), zoomFactor) ?? { width: 980, height: 900 };
+      return { action: "allow", overrideBrowserWindowOptions: {
+        ...bounds, useContentSize: true, show: false,
+        minWidth: Math.min(540, bounds.width), minHeight: Math.min(480, bounds.height),
+        title: "Forge", icon: appIconPath("png"), backgroundColor: normalWindowBackground,
+        titleBarStyle: "hiddenInset", trafficLightPosition: { x: 14, y: 14 },
+        webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, zoomFactor },
+      } };
+    }
     try {
       const parsedUrl = new URL(url);
       if (["https:", "http:", "mailto:"].includes(parsedUrl.protocol)) {
@@ -2383,7 +2426,10 @@ function createWindow(): void {
   });
 
   mainWindow.on("closed", () => {
+    for (const child of contentWindows.values()) child.destroy();
+    contentWindows.clear();
     mainWindow = null;
+    mainContentLayout = null;
     codexWindows.mainWindowClosed();
   });
 }
@@ -2574,6 +2620,17 @@ function registerIpc(): void {
   ipcMain.handle("notifications:show", (_event, payload: NativeNotificationPayload) =>
     showNativeNotification(payload)
   );
+  ipcMain.handle("window:content-layout", (event, layout) => {
+    if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return;
+    mainContentLayout?.update(layout);
+  });
+  ipcMain.handle("window:focus-content", (event, name: unknown) => {
+    const contentWindow = typeof name === "string" ? contentWindows.get(name) : undefined;
+    if (event.sender !== mainWindow?.webContents || !contentWindow || contentWindow.isDestroyed()) return;
+    if (contentWindow.isMinimized()) contentWindow.restore();
+    contentWindow.show();
+    contentWindow.focus();
+  });
   ipcMain.handle("window:set-native-theme-source", (_event, source: NativeThemeSource) => {
     setNativeThemeSource(normalizeNativeThemeSource(source));
   });
@@ -2583,7 +2640,7 @@ function registerIpc(): void {
 }
 
 registerIpc();
-const codexWindows = registerCodexIpc(() => mainWindow, createThreadWindow);
+const codexWindows = registerCodexIpc(() => mainWindow, createThreadWindow, focusedContentWindow);
 
 app.whenReady().then(async () => {
   await migrateLegacyUserData();

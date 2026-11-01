@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import { displayPath, displayPathText } from "../paths";
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
@@ -10,6 +11,7 @@ export function CheckoutDialog({ preview, onConfirm, onReview, onClose }: {
   onReview: () => Promise<void>;
   onClose: () => void;
 }) {
+  const { document } = usePaneSurface();
   const [method, setMethod] = useState<CodexMergeChoice["method"]>("squash");
   const [message, setMessage] = useState(preview.message);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -35,7 +37,7 @@ export function CheckoutDialog({ preview, onConfirm, onReview, onClose }: {
     };
     document.addEventListener("keydown", keydown, true);
     return () => { document.removeEventListener("keydown", keydown, true); previous?.focus(); };
-  }, []);
+  }, [document]);
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     try { await action(); }

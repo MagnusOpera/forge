@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import { displayPath } from "../paths";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Columns2, List, Loader2, RefreshCw, X } from "lucide-react";
@@ -18,6 +19,7 @@ export function CodexDiffDialog({
   changes?: CodexFileChange[];
   filePath?: string;
 }) {
+  const { document } = usePaneSurface();
   const [info, setInfo] = useState<CodexGitInfo | null>(null),
     [error, setError] = useState("");
   const [loading, setLoading] = useState(true),
@@ -53,7 +55,7 @@ export function CodexDiffDialog({
       document.removeEventListener("keydown", handler, true);
       previous?.focus();
     };
-  }, []);
+  }, [document]);
   useEffect(() => {
     let active = true;
     setLoading(true);

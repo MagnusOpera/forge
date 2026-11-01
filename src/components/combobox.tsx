@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import { useEffect, useId, useRef, useState, type Ref } from "react";
 import { Check, ChevronDown } from "lucide-react";
 export type ComboboxOption<Value extends string> = {
@@ -26,6 +27,7 @@ export function Combobox<Value extends string>({
   title?: string;
   triggerRef?: Ref<HTMLButtonElement>;
 }) {
+  const { window } = usePaneSurface();
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null),
     panel = useRef<HTMLDivElement>(null);

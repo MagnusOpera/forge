@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import { useEffect, useRef } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -130,6 +131,7 @@ export function ComposerEditor({
   placeholder: string;
   sendShortcut?: CodexSendShortcut;
 }) {
+  const { document } = usePaneSurface();
   const callbacks = useRef({ onChange, onSend, sendShortcut });
   callbacks.current = { onChange, onSend, sendShortcut };
   const editorRef = useRef<Editor | null>(null);
@@ -171,6 +173,10 @@ export function ComposerEditor({
     },
   });
   editorRef.current = editor;
+  useEffect(() => {
+    // ProseMirror caches its document root; the live editor moves with the pane.
+    editor?.view.updateRoot();
+  }, [editor, document]);
   useEffect(() => {
     // A busy-state change must not emit the previous document as a new draft.
     editor?.setEditable(!disabled, false);

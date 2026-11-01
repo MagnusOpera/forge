@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import { useEffect, useMemo, useState } from "react";
 import { displayPath } from "../paths";
 import { createPortal } from "react-dom";
@@ -137,6 +138,7 @@ export function TranscriptView({
   editable?: boolean;
   theme?: "light" | "dark";
 }) {
+  const { document, portalRoot } = usePaneSurface();
   const entries = groupTranscript(thread.items, thread.turns);
   const trailing = entries.at(-1);
   const finalReply = trailing?.type === "message" &&
@@ -258,7 +260,7 @@ export function TranscriptView({
       })}
       {diff && createPortal(
         <CodexDiffDialog thread={thread} theme={theme} changes={diff.changes} filePath={diff.filePath} onClose={() => setDiff(null)} />,
-        document.querySelector(".app-shell") ?? document.body,
+        portalRoot ?? document.querySelector(".app-shell") ?? document.body,
       )}
     </div>
   );

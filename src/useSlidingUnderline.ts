@@ -1,9 +1,11 @@
+import { usePaneSurface } from "./pane-surface";
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 type SlidingUnderlineVars = CSSProperties &
   Record<"--tab-underline-left" | "--tab-underline-width", string>;
 
 export function useSlidingUnderline(layoutKey: string) {
+  const { window } = usePaneSurface();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [underlineStyle, setUnderlineStyle] = useState<SlidingUnderlineVars>({
     "--tab-underline-left": "0px",
@@ -53,7 +55,7 @@ export function useSlidingUnderline(layoutKey: string) {
       observer?.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [layoutKey]);
+  }, [layoutKey, window]);
 
   return { containerRef, underlineStyle };
 }

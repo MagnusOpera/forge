@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import { displayPath, displayPathText, expandDisplayPath } from "../paths";
 import { EnvironmentsEditor, ProjectEnvironments } from "./environments";
 import { Combobox } from "../components/combobox";
@@ -29,6 +30,7 @@ export function CodexSettingsDialog({
   onRemoveGithub: () => void;
   onOpenUrl: (url: string) => void;
 }) {
+  const { document } = usePaneSurface();
   const [section, setSection] = useState(project ? "checkouts" : "general");
   const [homeRelativePath, setHomeRelativePath] = useState<string | null>(null);
   const [defaultEnvironment, setDefaultEnvironment] = useState("local");
@@ -101,7 +103,7 @@ export function CodexSettingsDialog({
       document.removeEventListener("keydown", key, true);
       previous?.focus();
     };
-  }, []);
+  }, [document]);
   useEffect(() => {
     let active = true;
     setSection(project ? "checkouts" : "general");

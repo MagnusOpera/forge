@@ -52,6 +52,7 @@ function repositoryId(value: unknown): string {
 export function registerCodexIpc(
   window: () => BrowserWindow | null,
   createThreadWindow?: (target: CodexThreadWindow) => BrowserWindow,
+  focusedContentWindow: () => BrowserWindow | null = () => null,
 ): { mainWindowClosed(): void } {
   let store: CodexStore | undefined,
     client: CodexClient | undefined,
@@ -137,6 +138,7 @@ export function registerCodexIpc(
         )
       )
         throw new Error("Untrusted Codex caller.");
+      const dialogTarget = (event.sender === window()?.webContents ? focusedContentWindow() : null) ?? target;
       const input = object(raw);
       if (method === "displayContext") return { homeDirectory: os.homedir(), platform: process.platform };
       const { store, client, manager, terminals } = services();
@@ -300,7 +302,7 @@ export function registerCodexIpc(
         return store.configuration;
       }
       if (method === "pickEditor") {
-        const result = await dialog.showOpenDialog(target, {
+        const result = await dialog.showOpenDialog(dialogTarget, {
           title: "Choose text editor application",
           defaultPath: "/Applications",
           properties: ["openFile"],
@@ -510,7 +512,7 @@ export function registerCodexIpc(
       }
       if (method === "pickFolder") {
         const fullName = string(input.fullName, "GitHub repository name");
-        const result = await dialog.showOpenDialog(target, {
+        const result = await dialog.showOpenDialog(dialogTarget, {
           title: "Select local Git folder",
           properties: ["openDirectory"],
         });
@@ -795,7 +797,7 @@ export function registerCodexIpc(
           return null;
         }
         if (input.action === "save") {
-          const result = await dialog.showSaveDialog(target, {
+          const result = await dialog.showSaveDialog(dialogTarget, {
             title: "Save document",
             defaultPath: path.basename(file),
           });
@@ -824,7 +826,7 @@ export function registerCodexIpc(
             string(file, "attachment path", 8192),
           );
         } else {
-          const result = await dialog.showOpenDialog(target, {
+          const result = await dialog.showOpenDialog(dialogTarget, {
             title: "Attach documents or images",
             properties: ["openFile", "multiSelections"],
           });

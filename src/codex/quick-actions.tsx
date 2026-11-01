@@ -1,3 +1,4 @@
+import { usePaneSurface } from "../pane-surface";
 import { displayPath, displayPathText } from "../paths";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
@@ -32,6 +33,7 @@ export function CodexQuickActions({
   defaultBranch?: string | null;
   group?: "all" | "checkout" | "git";
 }) {
+  const { document, portalRoot } = usePaneSurface();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [copied, setCopied] = useState(false),
@@ -275,7 +277,7 @@ export function CodexQuickActions({
             theme={theme}
             onClose={() => setDiff(false)}
           />,
-          document.querySelector(".app-shell") ?? document.body,
+          portalRoot ?? document.querySelector(".app-shell") ?? document.body,
         )}
       {checkoutReview && thread && createPortal(
         <CheckoutDialog
@@ -291,7 +293,7 @@ export function CodexQuickActions({
             if (result?.conflict) setMergeConflict(result.conflict);
           }}
         />,
-        document.querySelector(".app-shell") ?? document.body,
+        portalRoot ?? document.querySelector(".app-shell") ?? document.body,
       )}
     </>
   );

@@ -382,6 +382,8 @@ export interface GithubFocusApi {
   showNativeNotification(payload: NativeNotificationPayload): Promise<boolean>;
   onNativeNotificationClicked(callback: (source: NativeNotificationSource) => void): () => void;
   onCacheUpdated(callback: (key: string) => void): () => void;
+  setContentPaneLayout?(layout: { detached: boolean; cssWidth: number }): Promise<void>;
+  focusContentWindow?(name: string): Promise<void>;
   setNativeThemeSource(source: NativeThemeSource): Promise<void>;
   setSidebarAppearanceMode(mode: SidebarAppearanceMode): Promise<void>;
   platform: string;

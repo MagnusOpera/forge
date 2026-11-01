@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { PaneSurfaceContext } from "../pane-surface";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -319,4 +320,28 @@ it("connects a new shell with an empty initial buffer and accepts its later prom
     "terminalWrite",
     expect.objectContaining({ sessionId: "session-chat-a", data: "pwd\r" }),
   );
+});
+
+it("changes terminal renderers with the pane window while preserving the running session", async () => {
+  const frame = document.createElement("iframe");document.body.append(frame);
+  const child = frame.contentWindow!;
+  const load = vi.fn(async () => (await import("./terminal-engine")).loadTerminalEngine());
+  child.forgeContentTerminalEngine = load;
+  const render = (target: Window) => act(async () => {
+    root.render(<PaneSurfaceContext.Provider value={{ window: target, document: target.document, portalRoot: null }}><TerminalPanel thread={thread} theme="light" onHide={() => {}} /></PaneSurfaceContext.Provider>);
+  });
+  try {
+    await render(window);
+    await vi.waitFor(() => expect(request.mock.calls.some(([method]) => method === "terminalOpen")).toBe(true));
+    await render(child);
+    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(request.mock.calls.filter(([method]) => method === "terminalOpen")).toHaveLength(2));
+    expect(request.mock.calls.some(([method]) => method === "terminalClose")).toBe(false);
+    expect(fake.terms.at(-1).write).toHaveBeenCalledWith("history", expect.any(Function));
+    await render(window);
+    await vi.waitFor(() => expect(request.mock.calls.filter(([method]) => method === "terminalOpen")).toHaveLength(3));
+    expect(request.mock.calls.some(([method]) => method === "terminalClose")).toBe(false);
+  } finally {
+    await act(async () => root.render(null));frame.remove();
+  }
 });

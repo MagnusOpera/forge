@@ -105,6 +105,8 @@ const api: GithubFocusApi = {
     ipcRenderer.on("github:cache-updated", listener);
     return () => ipcRenderer.removeListener("github:cache-updated", listener);
   },
+  setContentPaneLayout: (layout) => ipcRenderer.invoke("window:content-layout", layout),
+  focusContentWindow: (name) => ipcRenderer.invoke("window:focus-content", name),
   setNativeThemeSource: (source) => ipcRenderer.invoke("window:set-native-theme-source", source),
   setSidebarAppearanceMode: (mode) => ipcRenderer.invoke("window:set-sidebar-appearance-mode", mode)
 };
