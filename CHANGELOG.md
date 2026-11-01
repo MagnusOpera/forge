@@ -6,6 +6,8 @@ All notable changes to Forge are documented in this file.
 
 - Keep detached windows aligned with Forge when its bottom edge extends offscreen.
 
+- Remove secure token storage deprecation warnings when signing in and loading saved credentials.
+
 - Refine Codex conversations with rounded message bubbles, balanced spacing, and a jump-to-latest control that preserves your reading position.
 
 ## [0.11.0]

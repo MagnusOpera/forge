@@ -1,6 +1,7 @@
-import { showContentWindow } from "./content-window.js";
+import { readStoredToken, writeStoredToken } from "./token-storage.js";
 import { MainContentLayout } from "./content-layout.js";
 import { contentPaneWindowBounds, isContentWindowName, isContentWindowRequest } from "../../shared/content-window.js";
+import { showContentWindow } from "./content-window.js";
 import {
   app,
   BrowserWindow,
@@ -604,27 +605,11 @@ async function clearCache(): Promise<void> {
 }
 
 async function readToken(): Promise<string | null> {
-  try {
-    const encrypted = await fs.readFile(tokenPath());
-    if (!safeStorage.isEncryptionAvailable()) {
-      throw new Error("Secure storage is not available on this machine.");
-    }
-    return safeStorage.decryptString(encrypted);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return null;
-    }
-    throw error;
-  }
+  return readStoredToken(tokenPath(), safeStorage);
 }
 
 async function writeToken(token: string): Promise<void> {
-  if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error("Secure token storage is not available.");
-  }
-
-  await fs.mkdir(path.dirname(tokenPath()), { recursive: true });
-  await fs.writeFile(tokenPath(), safeStorage.encryptString(token), { mode: 0o600 });
+  await writeStoredToken(tokenPath(), token, safeStorage);
   octokitClient = null;
   graphqlClient = null;
   activeTokenHash = null;
@@ -686,13 +671,13 @@ async function getAuthStatus(): Promise<AuthStatus> {
 
   return {
     configured,
-    encryptionAvailable: safeStorage.isEncryptionAvailable(),
+    encryptionAvailable: await safeStorage.isAsyncEncryptionAvailable(),
     viewerLogin: await getViewerLogin(configured)
   };
 }
 
 async function getViewerLogin(configured: boolean): Promise<string | null> {
-  if (!configured || !safeStorage.isEncryptionAvailable()) {
+  if (!configured || !(await safeStorage.isAsyncEncryptionAvailable())) {
     return null;
   }
 
