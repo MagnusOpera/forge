@@ -1135,7 +1135,7 @@ function CommitActionButton(props: {
 
 type ContentItemTarget = { key: string; repo: RepoSummary | null; selection: ContentSelection; focusView: ProjectFocusView };
 type ItemPaneControl = ReturnType<typeof useDetachablePane>;
-type ItemAppearance = { themePreference: ThemePreference; theme: ThemeMode; sidebarAppearance: SidebarAppearanceMode; accent: string; onToggleTheme(): void; onToggleSidebarAppearance(): void; onAccentChange(color: string): void };
+type ItemAppearance = { themePreference: ThemePreference; theme: ThemeMode; sidebarAppearance: SidebarAppearanceMode; accent: string };
 type WorkspaceProps = {
   item?: ContentItemTarget;
   sharedAuth?: AuthStatus | null;
@@ -3464,7 +3464,6 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         detached={contentPane.detached}
         attachmentOpening={contentPane.opening || !selectedRepo || (projectFocusView === "codex" && selection.kind !== "codex")}
         onToggleAttachment={toggleContentAttachment}
-        onGlobalConfiguration={() => setSettingsScope("global")}
         codexActions={projectFocusView === "codex" ? (
           <>
             <CodexQuickActions
@@ -3476,7 +3475,6 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
             <button className="icon-button codex-terminal-toggle" aria-label="Toggle terminal" title={terminalThread ? "Toggle terminal" : "Select a chat to open its terminal"} aria-pressed={terminalOpen} disabled={!terminalThread || terminalThread.archived} onClick={toggleTerminal}>
               <TerminalSquare size={16} />
             </button>
-            <span className="toolbar-divider" />
           </>
         ) : undefined}
         codexContent={projectFocusView === "codex" && selectedRepo ? (
@@ -3499,17 +3497,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         error={contentError}
         prActionSubmitting={prActionSubmitting}
         theme={activeTheme}
-        themePreference={themePreference}
-        systemTheme={systemTheme}
-        sidebarAppearance={sidebarAppearance}
         canNavigateBack={history?.back ?? canNavigateBack}
         canNavigateForward={history?.forward ?? canNavigateForward}
-        accentColor={selectedAccent}
         onNavigateBack={() => (history?.navigate ?? navigateHistory)(-1)}
         onNavigateForward={() => (history?.navigate ?? navigateHistory)(1)}
-        onToggleTheme={appearance?.onToggleTheme ?? toggleThemePreference}
-        onToggleSidebarAppearance={appearance?.onToggleSidebarAppearance ?? toggleSidebarAppearance}
-        onAccentChange={appearance?.onAccentChange ?? setActiveAccentColor}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
         onCopyText={copyToClipboard}
@@ -3576,6 +3567,50 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       style={appStyle}
     >
       <Sidebar
+        headerActions={<>
+          <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={() => setSettingsScope("global")}>
+            <Settings size={17} />
+          </button>
+          <div className="theme-accent-control">
+            <button
+              className="theme-toggle-button"
+              aria-label={`Current theme: ${themePreferenceLabel(themePreference, systemTheme)}. Switch to ${themePreferenceLabel(nextThemePreference(themePreference), systemTheme)} theme.`}
+              onClick={toggleThemePreference}
+            >
+              <ThemePreferenceIcon preference={themePreference} />
+            </button>
+            <div className="accent-picker" role="group" aria-label="Theme appearance">
+              <button
+                className={cx("accent-picker-glass-toggle", sidebarAppearance === "glass" && "active")}
+                type="button"
+                aria-label={`${sidebarAppearance === "glass" ? "Disable" : "Enable"} glass mode for ${activeTheme} theme`}
+                aria-pressed={sidebarAppearance === "glass"}
+                onClick={(event) => {
+                  toggleSidebarAppearance();
+                  event.currentTarget.blur();
+                }}
+              >
+                <SwatchBook size={16} />
+              </button>
+              <div className="accent-swatch-grid" role="radiogroup" aria-label="Accent color">
+                {accentColors.map((color, index) => (
+                  <button
+                    key={color}
+                    className={cx("accent-swatch", selectedAccent === color && "active")}
+                    style={{ "--swatch-color": color } as SwatchCssVars}
+                    role="radio"
+                    aria-checked={selectedAccent === color}
+                    aria-label={`Accent ${index + 1}`}
+                    onClick={(event) => {
+                      setActiveAccentColor(color);
+                      event.currentTarget.blur();
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </>}
         collapsed={sidebarCollapsed}
         favoriteRepos={favoriteRepos}
         repoGroups={repoGroups}
@@ -3654,7 +3689,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       {!activeDetached && <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />}
       {retainedContentItems(activeTarget, [...detachedItems.values()].map(entry => entry.target)).map(target => (
         <ForgeWorkspace key={target.key} item={target} sharedAuth={auth} onAuthChange={setAuth}
-          appearance={{ themePreference, theme: activeTheme, sidebarAppearance, accent: selectedAccent, onToggleTheme: toggleThemePreference, onToggleSidebarAppearance: toggleSidebarAppearance, onAccentChange: setActiveAccentColor }}
+          appearance={{ themePreference, theme: activeTheme, sidebarAppearance, accent: selectedAccent }}
           onPaneState={reportItemPane} onNavigateItem={navigateToItem}
           history={{ back: canNavigateBack, forward: canNavigateForward, navigate: navigateHistory }} />
       ))}
@@ -3664,6 +3699,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 }
 
 interface SidebarProps {
+  headerActions: React.ReactNode;
   collapsed: boolean;
   favoriteRepos: RepoSummary[];
   repoGroups: Array<[string, RepoSummary[]]>;
@@ -3723,9 +3759,12 @@ function Sidebar(props: SidebarProps) {
           </span>
           <span>Forge</span>
         </div>
-        <button className="icon-button" aria-label="Collapse sidebar" onClick={props.onToggle}>
-          <PanelLeftClose size={18} />
-        </button>
+        <div className="header-actions">
+          {!props.collapsed && props.headerActions}
+          <button className="icon-button" aria-label="Collapse sidebar" onClick={props.onToggle}>
+            <PanelLeftClose size={18} />
+          </button>
+        </div>
       </div>
       <div ref={repoTabsUnderline.containerRef} className="sidebar-tabs" role="tablist" aria-label="Repository view">
         <button
@@ -4590,7 +4629,6 @@ function ContentPane(props: {
   detached: boolean;
   attachmentOpening: boolean;
   onToggleAttachment(): void;
-  onGlobalConfiguration(): void;
   codexContent?: React.ReactNode;
   codexActions?: React.ReactNode;
   auth: AuthStatus | null;
@@ -4605,20 +4643,13 @@ function ContentPane(props: {
   error: string | null;
   prActionSubmitting: boolean;
   theme: ThemeMode;
-  themePreference: ThemePreference;
-  systemTheme: ThemeMode;
-  sidebarAppearance: SidebarAppearanceMode;
   workflowRuns: WorkflowRunSummary[];
   canNavigateBack: boolean;
   canNavigateForward: boolean;
-  accentColor: string;
   onPrTabChange(tab: string): void;
   onRunTabChange(tab: string): void;
   onNavigateBack(): void;
   onNavigateForward(): void;
-  onToggleTheme(): void;
-  onToggleSidebarAppearance(): void;
-  onAccentChange(color: string): void;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onCopyText(value: string): Promise<boolean>;
@@ -4835,48 +4866,6 @@ function ContentPane(props: {
         <div className="header-actions">
           {props.codexActions}
           <button className="icon-button" aria-label={props.detached ? "Reattach content pane" : "Detach content pane"} title={props.detached ? "Reattach content pane" : "Detach content pane"} disabled={props.attachmentOpening} onClick={props.onToggleAttachment}>{props.detached ? <AppWindowMac size={16} /> : <PictureInPicture2 size={16} />}</button>
-          <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={props.onGlobalConfiguration}>
-            <Settings size={17} />
-          </button>
-          <div className="theme-accent-control">
-            <button
-              className="theme-toggle-button"
-              aria-label={`Current theme: ${themePreferenceLabel(props.themePreference, props.systemTheme)}. Switch to ${themePreferenceLabel(nextThemePreference(props.themePreference), props.systemTheme)} theme.`}
-              onClick={props.onToggleTheme}
-            >
-              <ThemePreferenceIcon preference={props.themePreference} />
-            </button>
-            <div className="accent-picker" role="group" aria-label="Theme appearance">
-              <button
-                className={cx("accent-picker-glass-toggle", props.sidebarAppearance === "glass" && "active")}
-                type="button"
-                aria-label={`${props.sidebarAppearance === "glass" ? "Disable" : "Enable"} glass mode for ${props.theme} theme`}
-                aria-pressed={props.sidebarAppearance === "glass"}
-                onClick={(event) => {
-                  props.onToggleSidebarAppearance();
-                  event.currentTarget.blur();
-                }}
-              >
-                <SwatchBook size={16} />
-              </button>
-              <div className="accent-swatch-grid" role="radiogroup" aria-label="Accent color">
-                {accentColors.map((color, index) => (
-                  <button
-                    key={color}
-                    className={cx("accent-swatch", props.accentColor === color && "active")}
-                    style={{ "--swatch-color": color } as SwatchCssVars}
-                    role="radio"
-                    aria-checked={props.accentColor === color}
-                    aria-label={`Accent ${index + 1}`}
-                    onClick={(event) => {
-                      props.onAccentChange(color);
-                      event.currentTarget.blur();
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
       {props.codexContent ? props.codexContent : props.error ? (

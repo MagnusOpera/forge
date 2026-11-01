@@ -480,9 +480,19 @@ input {
 
 .sidebar .pane-header {
   position: relative;
+  z-index: 2;
   flex: 0 0 var(--titlebar-height);
   padding-left: 76px;
   background: transparent;
+}
+
+.sidebar .pane-header .brand-mark {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidebar .pane-header .header-actions {
+  flex-shrink: 0;
 }
 
 .sidebar .pane-header > * {

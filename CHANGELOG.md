@@ -4,6 +4,10 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Align macOS window controls with the header title and icons, including when changing zoom.
+
+- Move global settings and theme controls to the expanded repository pane and simplify content and detached window toolbars.
+
 ## [0.13.1]
 
 

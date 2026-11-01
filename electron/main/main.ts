@@ -1,3 +1,4 @@
+import { alignWindowButtons, trackWindowButtonAlignment, trafficLightPosition } from "./window-chrome.js";
 import { readStoredToken, writeStoredToken } from "./token-storage.js";
 import { MainContentLayout } from "./content-layout.js";
 import { contentPaneWindowBounds, isContentWindowName, isContentWindowRequest } from "../../shared/content-window.js";
@@ -501,6 +502,14 @@ function createApplicationMenu(): void {
   const resetZoomToAppDefault = (): void => {
     const focusedWindow = BrowserWindow.getFocusedWindow() ?? mainWindow;
     focusedWindow?.webContents.setZoomFactor(appDefaultZoomFactor);
+    if (focusedWindow && focusedWindow !== aboutWindow) alignWindowButtons(focusedWindow);
+  };
+
+  const changeZoom = (delta: number): void => {
+    const focusedWindow = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    if (!focusedWindow) return;
+    focusedWindow.webContents.setZoomLevel(focusedWindow.webContents.getZoomLevel() + delta);
+    if (focusedWindow !== aboutWindow) alignWindowButtons(focusedWindow);
   };
 
   const viewMenu: MenuItemConstructorOptions[] = [
@@ -519,8 +528,8 @@ function createApplicationMenu(): void {
         ] satisfies MenuItemConstructorOptions[])
       : []),
     { label: "Reset Zoom", accelerator: "CommandOrControl+0", click: resetZoomToAppDefault },
-    { role: "zoomIn" },
-    { role: "zoomOut" },
+    { label: "Zoom In", accelerator: "CommandOrControl+Plus", click: () => changeZoom(0.5) },
+    { label: "Zoom Out", accelerator: "CommandOrControl+-", click: () => changeZoom(-0.5) },
     { type: "separator" },
     { role: "togglefullscreen" }
   ];
@@ -2346,7 +2355,7 @@ function createWindow(): void {
     vibrancy: process.platform === "darwin" ? "sidebar" : undefined,
     visualEffectState: process.platform === "darwin" ? "followWindow" : undefined,
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 14, y: 14 },
+    trafficLightPosition: trafficLightPosition(appDefaultZoomFactor),
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.cjs"),
       contextIsolation: true,
@@ -2356,6 +2365,7 @@ function createWindow(): void {
     }
   });
 
+  trackWindowButtonAlignment(mainWindow);
   mainContentLayout = new MainContentLayout(mainWindow);
   mainWindow.on("leave-full-screen", () => mainContentLayout?.apply());
 
@@ -2367,6 +2377,7 @@ function createWindow(): void {
 
   mainWindow.webContents.on("did-create-window", (child, details) => {
     if (!isContentWindowName(details.frameName)) return;
+    trackWindowButtonAlignment(child);
     contentWindows.set(details.frameName, child);
     const owner = mainWindow;
     // Capture before the renderer collapses Forge to its two navigation panes.
@@ -2402,7 +2413,7 @@ function createWindow(): void {
         ...bounds, useContentSize: true, show: false,
         minWidth: Math.min(540, bounds.width), minHeight: Math.min(480, bounds.height),
         title: "Forge", icon: appIconPath("png"), backgroundColor: normalWindowBackground,
-        titleBarStyle: "hiddenInset", trafficLightPosition: { x: 14, y: 14 },
+        titleBarStyle: "hiddenInset", trafficLightPosition: trafficLightPosition(zoomFactor),
         webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, zoomFactor },
       } };
     }
@@ -2438,7 +2449,7 @@ function createThreadWindow(
     icon: appIconPath("png"),
     backgroundColor: normalWindowBackground,
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 14, y: 14 },
+    trafficLightPosition: trafficLightPosition(appDefaultZoomFactor),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.cjs"),
@@ -2448,6 +2459,7 @@ function createThreadWindow(
       zoomFactor: appDefaultZoomFactor,
     },
   });
+  trackWindowButtonAlignment(win);
   win.once("ready-to-show", () => {
     win.show();
     win.focus();
