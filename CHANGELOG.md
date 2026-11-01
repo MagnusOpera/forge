@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Check Codex at startup and automatically upgrade outdated Homebrew or global npm installations.
+
 ## [0.14.0]
 
 

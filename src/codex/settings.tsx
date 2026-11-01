@@ -11,7 +11,7 @@ import type {
   CodexPreferences,
   CodexStatus,
 } from "../../shared/codex";
-import { DEFAULT_TEXT_EDITOR } from "../../shared/codex";
+import { DEFAULT_TEXT_EDITOR, MINIMUM_CODEX_VERSION } from "../../shared/codex";
 import { CLASSIC_TOKEN_SETTINGS_URL } from "../../shared/auth";
 import { codexApi, errorMessage } from "./api";
 import { PreferencesEditor, useCodexModels } from "./preferences";
@@ -365,7 +365,9 @@ export function CodexSettingsDialog({
               <section>
                 <h3>{project ? "Project account" : "Codex account"}</h3>
                 <p>
-                  {status?.authenticated
+                  {!status
+                    ? "Checking Codex and updating if needed…"
+                    : status.authenticated
                     ? `Signed in${status.email ? ` as ${status.email}` : ""}${status.plan ? ` · ${status.plan}` : ""}`
                     : status?.connected
                       ? "Not signed in"
@@ -603,9 +605,10 @@ export function CodexSettingsDialog({
                   />
                 </label>
                 <p className="codex-muted">
-                  Install Codex CLI locally. Leave blank to search PATH and
-                  common macOS locations. Save a new path, then refresh the
-                  account status.
+                  Forge requires Codex CLI {MINIMUM_CODEX_VERSION} or newer. It checks at startup
+                  and upgrades older Homebrew or global npm installations automatically.
+                  Leave blank to search PATH and common macOS locations, or save
+                  a custom path and refresh the account status.
                 </p>
               </section>
             )}

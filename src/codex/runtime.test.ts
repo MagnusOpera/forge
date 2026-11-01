@@ -1227,7 +1227,7 @@ function fakeExecutable(root: string): string {
     executable,
     `#!/usr/bin/env node
 const fs = require('node:fs'); const path = require('node:path');
-if (process.argv.includes('--version')) { console.log('codex-cli test'); process.exit(0); }
+if (process.argv.includes('--version')) { console.log('codex-cli 0.164.0'); process.exit(0); }
 if (process.argv.includes('generate-json-schema')) { fs.writeFileSync(path.join(process.argv[process.argv.indexOf('--out') + 1], 'ClientRequest.json'), JSON.stringify(['thread/start','thread/resume','turn/start','turn/steer','turn/interrupt','model/list','collaborationMode/list','account/login/start'])); process.exit(0); }
 require('node:readline').createInterface({input: process.stdin}).on('line', line => {
  const m = JSON.parse(line); if (!m.id) return;

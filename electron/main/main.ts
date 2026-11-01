@@ -2651,6 +2651,7 @@ app.whenReady().then(async () => {
   configureAppPresentation();
   createApplicationMenu();
   createWindow();
+  void codexWindows.prepare();
   setTimeout(() => {
     void checkForUpdates({ manual: false });
   }, 30_000);

@@ -52,7 +52,7 @@ export function registerCodexIpc(
   window: () => BrowserWindow | null,
   createThreadWindow?: (target: CodexThreadWindow) => BrowserWindow,
   focusedContentWindow: () => BrowserWindow | null = () => null,
-): { mainWindowClosed(): void } {
+): { mainWindowClosed(): void; prepare(): Promise<void> } {
   let store: CodexStore | undefined,
     client: CodexClient | undefined,
     manager: ThreadManager | undefined,
@@ -836,6 +836,13 @@ export function registerCodexIpc(
     store?.close();
   });
   return {
+    prepare: async () => {
+      try {
+        await services().client.prepare();
+      } catch (error) {
+        changed({ connectionError: error instanceof Error ? error.message : String(error) });
+      }
+    },
     mainWindowClosed: () =>
       terminals?.detachAll(windows.list().map((target) => target.id)),
   };

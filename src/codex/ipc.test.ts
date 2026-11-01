@@ -52,6 +52,7 @@ import { ThreadManager } from "../../electron/main/codex/threads";
 import { registerCodexIpc } from "../../electron/main/codex/ipc";
 let frame: { url: string };
 let contents: { mainFrame: { url: string }; send: ReturnType<typeof vi.fn> };
+let controls: ReturnType<typeof registerCodexIpc>;
 function request(
   method: string,
   input: unknown = {},
@@ -69,7 +70,7 @@ beforeEach(() => {
   mock.root = mkdtempSync(path.join(os.tmpdir(), "forge-ipc-"));
   frame = { url: "http://127.0.0.1:5173/" };
   contents = { mainFrame: frame, send: vi.fn() };
-  registerCodexIpc(
+  controls = registerCodexIpc(
     () => ({ webContents: contents }) as unknown as BrowserWindow,
   );
 });
@@ -80,6 +81,19 @@ afterEach(() => {
   rmSync(mock.root, { recursive: true, force: true });
 });
 describe("Codex preload IPC handlers", () => {
+  it("checks the CLI at startup without starting an app-server or signing in", async () => {
+    const prepare = vi.spyOn(CodexClient.prototype, "prepare").mockResolvedValue("/bin/codex");
+    const start = vi.spyOn(CodexClient.prototype, "start");
+    await controls.prepare();
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(start).not.toHaveBeenCalled();
+  });
+  it("reports startup upgrade failures without blocking configuration", async () => {
+    vi.spyOn(CodexClient.prototype, "prepare").mockRejectedValue(new Error("Automatic upgrade failed"));
+    await expect(controls.prepare()).resolves.toBeUndefined();
+    expect(contents.send).toHaveBeenCalledWith("codex:changed", { connectionError: "Automatic upgrade failed" });
+    await expect(request("configuration")).resolves.toMatchObject({ executable: "" });
+  });
   it("provides the real display home and platform without accepting a renderer-supplied home", async () => {
     expect(await request("displayContext", { homeDirectory: "/forged" }))
       .toEqual({ homeDirectory: os.homedir(), platform: process.platform });

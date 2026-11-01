@@ -1,4 +1,6 @@
 export type JsonObject = Record<string, unknown>;
+// Raise when Forge's integration requires a newer Codex app-server release.
+export const MINIMUM_CODEX_VERSION = "0.164.0";
 export type CodexPreferences = {
   model: string;
   effort: string;

@@ -16,6 +16,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
+import { ensureCodexVersion } from "./version.js";
 import type {
   CodexModel,
   CodexStatus,
@@ -131,6 +132,12 @@ export class CodexClient implements CodexTransport {
     private timeoutMs = 30_000,
     private sharedHome = false,
   ) {}
+  /** Check the existing installation without starting an app-server or requiring sign-in. */
+  async prepare(): Promise<string> {
+    const executable = resolveCodexExecutable(this.executable());
+    this.version = await ensureCodexVersion(executable);
+    return executable;
+  }
   async start(): Promise<void> {
     if (this.starting) return this.starting;
     if (this.child) return;
@@ -145,13 +152,9 @@ export class CodexClient implements CodexTransport {
     return this.starting;
   }
   protected async launch(): Promise<void> {
-    const executable = resolveCodexExecutable(this.executable());
+    const executable = await this.prepare();
     const schemaDir = mkdtempSync(path.join(os.tmpdir(), "forge-codex-"));
     try {
-      const version = await exec(executable, ["--version"], {
-        timeout: 10_000,
-      });
-      this.version = version.stdout.trim();
       await exec(
         executable,
         [

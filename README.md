@@ -86,7 +86,7 @@ Forge is released under the MIT License. See [LICENSE](LICENSE).
 
 ## Codex workspace
 
-Install the official Codex CLI locally before using Codex in Forge. Forge finds `codex` on PATH or in common macOS installation directories. Global configuration also accepts an absolute executable path. Forge checks the installed app-server protocol before enabling conversations; an incompatible CLI needs updating. The CLI is not included in the Forge download.
+Install the official Codex CLI locally before using Codex in Forge. Forge finds `codex` on PATH or in common macOS installation directories. Global configuration also accepts an absolute executable path. On startup, Forge checks for Codex CLI 0.164.0 or newer and automatically upgrades older Homebrew or global npm installations through their original package manager. Compatible versions are left alone. Custom installations require updating with their original installer; upgrade failures and retry instructions appear in Global configuration → Codex. Forge also checks the app-server protocol before enabling conversations. The CLI is not included in the Forge download, and Forge does not keep its own installation. Remote hosts remain separately managed.
 
 Open the gear in the expanded repository sidebar for global configuration. It contains GitHub token management, ChatGPT sign-in, the Codex executable path, and defaults for model, reasoning effort, speed, Plan/Implement, Steer/Queue, and permissions. The model catalog and supported efforts come from the installed Codex runtime. Blank model and effort choices use the server's defaults.
 
