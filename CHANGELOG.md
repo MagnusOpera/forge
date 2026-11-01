@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.17.1]
+
+
 - Refresh website screenshots to show the streamlined project toolbar and sidebar refresh control.
 
 - Smooth project refresh feedback so the selected view underline stays visible after the animation.
@@ -11,6 +14,8 @@ All notable changes to Forge are documented in this file.
 - Restart the refresh of all favorite repositories from the sidebar monitoring icon.
 
 - Refresh the project by clicking its selected view icon, with animated feedback and a simpler toolbar.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.17.0...0.17.1
 
 ## [0.17.0]
 
