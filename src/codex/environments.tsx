@@ -157,7 +157,6 @@ export function EnvironmentsEditor({
                 name: "New environment",
                 host: "",
                 executable: "codex",
-                tmux: false,
               };
               setEnvironments((entries) => [...entries, entry]);
               setSelected(entry.id);
@@ -240,29 +239,15 @@ export function EnvironmentsEditor({
               </button>
             </div>
           </div>
-          <div className="codex-environment-runtime">
-            <label className="codex-field">
-              <span>Remote Codex executable</span>
-              <input
-                value={environment.executable}
-                spellCheck={false}
-                placeholder="/home/user/.local/bin/codex"
-                onChange={(event) => update({ executable: event.target.value })}
-              />
-            </label>
-            <div className="codex-field">
-              <span>Terminal persistence</span>
-              <Combobox
-                label="Terminal persistence"
-                value={environment.tmux ? "tmux" : "none"}
-                options={[
-                  { value: "none", label: "None" },
-                  { value: "tmux", label: "tmux" },
-                ]}
-                onChange={(value) => update({ tmux: value === "tmux" })}
-              />
-            </div>
-          </div>
+          <label className="codex-field">
+            <span>Remote Codex executable</span>
+            <input
+              value={environment.executable}
+              spellCheck={false}
+              placeholder="/home/user/.local/bin/codex"
+              onChange={(event) => update({ executable: event.target.value })}
+            />
+          </label>
           <p className="codex-muted">
             Use ~/.ssh/config for ports, keys and connection options. Connect
             once from your local terminal to trust the host key. Forge uses
@@ -300,7 +285,6 @@ export function EnvironmentsEditor({
                 Keep the machine awake and reachable. Configure a checkout path
                 per project.
               </li>
-              {environment.tmux && <li>Install tmux on the remote host.</li>}
             </ol>
             <p>
               Forge only connects to the daemon. It does not install, start, or

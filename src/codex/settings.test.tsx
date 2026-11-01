@@ -22,7 +22,6 @@ const configuration: CodexConfiguration = {
       name: "Ghoulix",
       host: "pct@ghoulix",
       executable: "codex",
-      tmux: false,
     },
   ],
   projects: {

@@ -84,7 +84,6 @@ it("disables remote desktop and Git actions in both themes", () => {
             name: "Linux",
             host: "dev",
             executable: "codex",
-            tmux: false,
           },
         }}
         theme={theme}

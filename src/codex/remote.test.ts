@@ -58,7 +58,6 @@ const environment: CodexEnvironment = {
   name: "Linux",
   host: "dev@build-box",
   executable: "/usr/local/bin/codex",
-  tmux: false,
 };
 function directory() {
   const root = realpathSync(
@@ -411,7 +410,7 @@ describe("target selection and remote reconnect", () => {
     release({ exitCode: 0, stdout: "", stderr: "" });
     await opening;
   });
-  it("validates authenticated daemon capabilities and reports optional tmux readiness", async () => {
+  it("validates authenticated daemon capabilities and command execution", async () => {
     vi.spyOn(RemoteCodexClient.prototype, "start").mockResolvedValue();
     vi.spyOn(RemoteCodexClient.prototype, "stop").mockImplementation(() => {});
     vi.spyOn(RemoteCodexClient.prototype, "status").mockResolvedValue({
@@ -436,38 +435,27 @@ describe("target selection and remote reconnect", () => {
       .spyOn(RemoteCodexClient.prototype, "request")
       .mockImplementation(async (method) =>
         method === "command/exec"
-          ? { exitCode: 0, stdout: "developer\ntmux=no\n", stderr: "" }
+          ? { exitCode: 0, stdout: "developer\n", stderr: "" }
           : {},
       );
     expect(await checkEnvironment(environment, "/srv/repo")).toMatchObject({
       ready: true,
-      tmux: false,
       message: expect.stringContaining("Connected as developer"),
     });
     expect(requests).toHaveBeenCalledWith("collaborationMode/list", {});
-    expect(
-      await checkEnvironment({ ...environment, tmux: true }),
-    ).toMatchObject({
-      ready: false,
-      message: expect.stringContaining("not installed"),
-    });
+    expect(requests).toHaveBeenCalledWith("command/exec", expect.objectContaining({ command: ["id", "-un"] }));
     models.mockResolvedValue([]);
     expect(await checkEnvironment(environment)).toMatchObject({
       ready: false,
       message: expect.stringContaining("no available models"),
     });
   });
-  it("builds SSH terminal commands with optional remote tmux and literal paths", () => {
+  it("builds SSH login-shell commands with literal working paths", () => {
     const item = thread("/srv/repo");
     item.worktree = "/srv/repo ' $(touch nope)";
-    expect(remoteTerminalCommand(item)).toContain(
-      'exec "${SHELL:-/bin/sh}" -l',
+    expect(remoteTerminalCommand(item)).toBe(
+      `cd ${shellQuote(item.worktree)} && exec "\${SHELL:-/bin/sh}" -l`,
     );
-    item.environment!.tmux = true;
-    expect(remoteTerminalCommand(item)).toContain(
-      `tmux new-session -A -s 'forge-${item.id}'`,
-    );
-    expect(remoteTerminalCommand(item)).toContain(shellQuote(item.worktree));
   });
 });
 
@@ -750,7 +738,7 @@ it.each([true, false])(
               : "Remote Git metadata is not writable by this user: .git",
           };
         }
-        return { exitCode: 0, stdout: "developer\ntmux=no\n", stderr: "" };
+        return { exitCode: 0, stdout: "developer\n", stderr: "" };
       });
     const result = await checkEnvironment(environment, "/srv/repo");
     expect(result.ready).toBe(writable);

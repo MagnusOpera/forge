@@ -16,7 +16,6 @@ const environment = {
   name: "Linux",
   host: "dev@host",
   executable: "codex",
-  tmux: true,
 };
 const item = (): CodexThread => ({
   id: "thread",

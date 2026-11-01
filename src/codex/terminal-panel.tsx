@@ -418,7 +418,7 @@ export function TerminalPanel({
           }
         >
           {thread.environment
-            ? `Terminal · ${thread.environment.host}${thread.environment.tmux ? " · tmux" : ""}`
+            ? `Terminal · ${thread.environment.host}`
             : "Terminal"}
         </span>
         {exited && (

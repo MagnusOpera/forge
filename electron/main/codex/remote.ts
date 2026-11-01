@@ -62,8 +62,7 @@ export function validateEnvironment(value: unknown): CodexEnvironment {
       "Remote Codex executable must be codex or an absolute POSIX path.",
     );
   }
-  if (typeof input.tmux !== "boolean") throw new Error("Invalid tmux setting.");
-  return { id, name: field("name", 100), host, executable, tmux: input.tmux };
+  return { id, name: field("name", 100), host, executable };
 }
 export function remotePath(value: unknown): string {
   if (
@@ -321,11 +320,7 @@ export async function checkEnvironment(
     if (!(await client.models()).length)
       throw new Error("Remote Codex returned no available models.");
     await client.request("collaborationMode/list", {});
-    const report = await remoteCommand(client, [
-      "/bin/sh",
-      "-c",
-      "id -un; if command -v tmux >/dev/null 2>&1; then printf 'tmux=yes\\n'; else printf 'tmux=no\\n'; fi",
-    ]);
+    const user = await remoteCommand(client, ["id", "-un"]);
     if (repositoryPath) {
       const folder = await resolveRemoteCheckoutPath(client, repositoryPath);
       await remoteCommand(client, [
@@ -356,16 +351,10 @@ export async function checkEnvironment(
         true,
       );
     }
-    const tmux = report.split("\n").includes("tmux=yes");
-    if (environment.tmux && !tmux)
-      throw new Error(
-        "tmux is enabled for this environment but is not installed on the remote host.",
-      );
     return {
       ready: true,
       version: status.version,
-      tmux,
-      message: `Connected as ${report.split("\n")[0]}. Daemon, authentication, model catalog and command execution are available.${repositoryPath ? " Checkout is writable." : " Validate each project checkout in project configuration."}`,
+      message: `Connected as ${user.trim()}. Daemon, authentication, model catalog and command execution are available.${repositoryPath ? " Checkout is writable." : " Validate each project checkout in project configuration."}`,
     };
   } catch (error) {
     return {
@@ -452,12 +441,5 @@ export async function prepareRemoteWorktree(
 export function remoteTerminalCommand(thread: CodexThread): string {
   if (!thread.environment || !thread.worktree)
     throw new Error("Remote terminal has no working folder.");
-  const q = shellQuote;
-  const session = `forge-${thread.id}`;
-  return (
-    `cd ${q(remotePath(thread.worktree))} && ` +
-    (thread.environment.tmux
-      ? `exec tmux new-session -A -s ${q(session)} -c ${q(thread.worktree)}`
-      : 'exec "${SHELL:-/bin/sh}" -l')
-  );
+  return `cd ${shellQuote(remotePath(thread.worktree))} && exec "\${SHELL:-/bin/sh}" -l`;
 }

@@ -20,13 +20,11 @@ export type CodexEnvironment = {
   name: string;
   host: string;
   executable: string;
-  tmux: boolean;
 };
 export type CodexEnvironmentCheck = {
   ready: boolean;
   message: string;
   version?: string;
-  tmux?: boolean;
 };
 export type CodexProject = {
   repositoryId: string;

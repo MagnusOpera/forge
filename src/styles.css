@@ -3885,7 +3885,6 @@ code {
   content: "";
   pointer-events: none;
 }
-.codex-environment-runtime { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 180px); align-items: start; gap: 12px; }
 .codex-environment-selector { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .codex-environment-fields { display: grid; gap: 10px; padding: 12px 0; }
 .codex-project-checkout-row { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; gap: 8px; }

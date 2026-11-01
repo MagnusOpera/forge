@@ -602,7 +602,7 @@ it("ends the terminal only after archiving succeeds, and does not revive it on r
 });
 
 it("stores remote environments and placements, snapshots targets, and rejects remote desktop operations at IPC", async () => {
-  const environment = { id: "linux", name: "Linux", host: "build-box", executable: "codex", tmux: false };
+  const environment = { id: "linux", name: "Linux", host: "build-box", executable: "codex" };
   await request("saveEnvironments", { environments: [environment] });
   await request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "/srv/repo" } });
   const summary = await request("create", { repositoryId: "R_123" }) as { id: string };
@@ -621,7 +621,7 @@ it("stores remote environments and placements, snapshots targets, and rejects re
 });
 
 it("rejects injected environment hosts and invalid or unknown checkout placements", async () => {
-  const environment = { id: "linux", name: "Linux", host: "-oProxyCommand=evil", executable: "codex", tmux: false };
+  const environment = { id: "linux", name: "Linux", host: "-oProxyCommand=evil", executable: "codex" };
   await expect(request("saveEnvironments", { environments: [environment] })).rejects.toThrow("SSH host alias");
   environment.host = "build-box";
   await expect(request("saveEnvironments", { environments: [environment, environment] })).rejects.toThrow("unique");
@@ -635,7 +635,7 @@ it("infers a checkout from the local home and saves remote paths in home-relativ
   store.configuration.projects.R_123 = { repositoryId: "R_123", path: path.join(os.homedir(), "src", "forge"), overrides: {} };
   store.saveConfiguration();
   expect(await request("inferRemotePath", { repositoryId: "R_123" })).toBe("~/src/forge");
-  await request("saveEnvironments", { environments: [{ id: "linux", name: "Linux", host: "dev@host", executable: "codex", tmux: false }] });
+  await request("saveEnvironments", { environments: [{ id: "linux", name: "Linux", host: "dev@host", executable: "codex" }] });
   const configuration = await request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "src/forge" } }) as { projects: Record<string, { remotePaths: Record<string, string> }> };
   expect(configuration.projects.R_123.remotePaths.linux).toBe("~/src/forge");
   await expect(request("saveProject", { repositoryId: "R_123", overrides: {}, remotePaths: { linux: "~/../elsewhere" } })).rejects.toThrow("inside the remote home");
@@ -720,7 +720,7 @@ it("checks configured local repositories before directing users to project confi
 
 it("validates a remote project's configured checkout on its selected environment", async () => {
   const store = new CodexStore(path.join(mock.root, "codex"));
-  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex", tmux: false };
+  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex" };
   store.configuration.environments = [environment];
   store.configuration.projects.R_123 = { repositoryId: "R_123", path: "", overrides: {}, remotePaths: { linux: "~/src/repo" } };
   store.saveConfiguration();
@@ -732,7 +732,7 @@ it("validates a remote project's configured checkout on its selected environment
 });
 
 it("persists a project default, applies it only to new threads, and resets it when the environment is removed", async () => {
-  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex", tmux: false };
+  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex" };
   await request("saveEnvironments", { environments: [environment] });
   const store = new CodexStore(path.join(mock.root, "codex"));
   // Configure through IPC before services read the project settings.
@@ -764,7 +764,7 @@ it("trusts registered thread windows, restricts their thread access, and grants 
   registerCodexIpc(() => ({ webContents: contents }) as unknown as BrowserWindow, factory);
   const invoke = (method: string, input: unknown = {}) => Promise.resolve(mock.handlers.get("codex:request")!({ sender: childContents, senderFrame: childFrame }, method, input));
   await expect(invoke("configuration")).rejects.toThrow("Untrusted");
-  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex", tmux: false };
+  const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex" };
   await request("saveEnvironments", { environments: [environment] });
   await request("saveProject", { repositoryId: "R_123", fullName: "owner/repo", overrides: {}, remotePaths: { linux: "~/repo" } });
   const thread = await request("create", { repositoryId: "R_123" }) as { id: string };

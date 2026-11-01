@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Remove tmux terminal persistence; remote terminals now use SSH login shells.
+
 - Refresh website screenshots with the latest interface, native macOS window controls, and anonymous demo repositories.
 
 ## [0.13.2]

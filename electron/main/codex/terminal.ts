@@ -1,6 +1,4 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { sshArgs, remoteTerminalCommand, shellQuote } from "./remote.js";
+import { sshArgs, remoteTerminalCommand } from "./remote.js";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -282,16 +280,6 @@ export class TerminalManager {
   }
   async terminate(thread: CodexThread, sessionId: string): Promise<void> {
     this.get(thread, sessionId);
-    if (thread.environment?.tmux) {
-      await promisify(execFile)(
-        "/usr/bin/ssh",
-        [
-          ...sshArgs(thread.environment.host),
-          `tmux kill-session -t ${shellQuote(`forge-${thread.id}`)}`,
-        ],
-        { timeout: 20_000 },
-      );
-    }
     this.close(thread, sessionId);
   }
   write(thread: CodexThread, sessionId: string, data: unknown) {

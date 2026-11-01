@@ -21,7 +21,6 @@ const configuration: CodexConfiguration = {
       name: "Linux",
       host: "dev@host",
       executable: "codex",
-      tmux: false,
     },
   ],
 };
@@ -82,7 +81,6 @@ it("creates and selects a new draft from the selector without replacing an exist
         name: "New environment",
         host: "new-host",
         executable: "codex",
-        tmux: false,
       }),
     ],
   });
@@ -328,15 +326,6 @@ it("debounces environment edits, saves automatically and shows readiness beside 
   expect(connectionButton().classList.contains("good")).toBe(true);
   expect(changed).toHaveBeenCalledOnce();
   expect(container.querySelector('[role="status"]')).toBeNull();
-  await act(async () =>
-    [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
-      .find((option) => option.textContent === "tmux")!
-      .click(),
-  );
-  await act(async () => vi.advanceTimersByTimeAsync(600));
-  expect(request).toHaveBeenLastCalledWith("saveEnvironments", {
-    environments: [{ ...environment, tmux: true }],
-  });
   await fill(
     container.querySelector<HTMLInputElement>(
       'input[placeholder="/home/user/.local/bin/codex"]',
@@ -345,7 +334,7 @@ it("debounces environment edits, saves automatically and shows readiness beside 
   );
   await act(async () => vi.advanceTimersByTimeAsync(600));
   expect(request).toHaveBeenCalledWith("checkEnvironment", {
-    environment: { ...environment, tmux: true, executable: "/opt/codex" },
+    environment: { ...environment, executable: "/opt/codex" },
   });
 });
 it("allows immediate checks, clears stale results on edits and ignores responses from another environment", async () => {
@@ -477,42 +466,4 @@ it("flushes pending valid edits when leaving settings and reports failed automat
   expect(container.querySelector('[role="alert"]')?.textContent).toBe(
     "Disk full",
   );
-});
-
-it("places terminal persistence beside the executable and preserves None as a valid saved choice", async () => {
-  mockEnvironmentRequests();
-  await act(async () =>
-    root.render(
-      <EnvironmentsEditor
-        configuration={{
-          ...configuration,
-          environments: [{ ...configuration.environments![0], tmux: true }],
-        }}
-        onChange={() => {}}
-      />,
-    ),
-  );
-  const row = container.querySelector(".codex-environment-runtime")!;
-  expect(
-    row.querySelector('input[placeholder="/home/user/.local/bin/codex"]'),
-  ).not.toBeNull();
-  expect(
-    row.querySelector('[aria-label="Terminal persistence"]')?.textContent,
-  ).toBe("tmux");
-  expect(row.querySelector('input[type="checkbox"]')).toBeNull();
-  await act(async () =>
-    [...row.querySelectorAll<HTMLButtonElement>('[role="option"]')]
-      .find((option) => option.textContent === "None")!
-      .click(),
-  );
-  expect(
-    row.querySelector('[aria-label="Terminal persistence"]')?.textContent,
-  ).toBe("None");
-  await act(async () => vi.advanceTimersByTimeAsync(600));
-  expect(request).toHaveBeenCalledWith("saveEnvironments", {
-    environments: configuration.environments,
-  });
-  expect(request).toHaveBeenCalledWith("checkEnvironment", {
-    environment: configuration.environments![0],
-  });
 });
