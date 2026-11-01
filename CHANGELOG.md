@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.13.1]
+
+
 - Preserve the main window’s selection when closing an external window; select its item only when using Reattach.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.13.0...0.13.1
 
 ## [0.13.0]
 
