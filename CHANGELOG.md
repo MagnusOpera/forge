@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Avoid compiler verification test timeouts on slower CI runners.
+
 ## [0.18.0]
 
 

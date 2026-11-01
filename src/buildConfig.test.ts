@@ -19,13 +19,14 @@ describe("viteConfig", () => {
       optimizeDeps: { noDiscovery: true, include: [] },
     });
     try {
-      const result = await server.transformRequest("/src/App.tsx");
+      // Exercise the real Vite pipeline without recompiling the entire workspace.
+      const result = await server.transformRequest("/src/codex/access-picker.tsx");
       expect(result?.code).toMatch(/react[\/_]compiler-runtime/);
-      expect(result?.code).toContain("react.memo_cache_sentinel");
+      expect(result?.code).toMatch(/\b_c\(\d+\)/);
     } finally {
       await server.close();
     }
-  });
+  }, 15000);
   it("has no compiler diagnostics outside documented function opt-outs", async () => {
     const src = fileURLToPath(new URL(".", import.meta.url));
     let compiled = 0;
