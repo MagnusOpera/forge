@@ -21,9 +21,8 @@ export function useDetachablePane(options: { onReattach?: () => void } = {}) {
   const pending = useRef<(() => void) | null>(null);
   const detached = surface !== window;
 
-  const reattach = useCallback(() => {
+  const restore = useCallback(() => {
     const child = external.current;
-    const wasDetached = host.ownerDocument !== document;
     external.current = null;
     pending.current?.();
     pending.current = null;
@@ -32,8 +31,13 @@ export function useDetachablePane(options: { onReattach?: () => void } = {}) {
     setSurface(window);
     setOpening(false);
     if (child && !child.closed) child.close();
-    if (wasDetached) onReattach.current?.();
   }, [host]);
+  // Only an explicit reattach should navigate the main workspace to this item.
+  const reattach = useCallback(() => {
+    const wasDetached = host.ownerDocument !== document;
+    restore();
+    if (wasDetached) onReattach.current?.();
+  }, [host, restore]);
   const focus = useCallback(() => {
     if (!external.current || external.current.closed) return;
     if (window.githubFocus?.focusContentWindow) void window.githubFocus.focusContentWindow(windowName);
@@ -57,18 +61,18 @@ export function useDetachablePane(options: { onReattach?: () => void } = {}) {
       // ProseMirror's existing selection observer belongs to the original realm.
       // Its view root is updated by ComposerEditor after the move.
       child.document.addEventListener("selectionchange", () => document.dispatchEvent(new Event("selectionchange")));
-      child.addEventListener("beforeunload", reattach);
+      child.addEventListener("beforeunload", restore);
       setSurface(child);
       setOpening(false);
       child.focus();
     };
     window.addEventListener("message", ready);
     const timeout = window.setTimeout(() => {
-      if (!moved) { reattach(); setError("The content window could not be loaded. Your content remains attached."); }
+      if (!moved) { restore(); setError("The content window could not be loaded. Your content remains attached."); }
     }, 10000);
-    const timer = window.setInterval(() => { if (child.closed) reattach(); }, 250);
-    pending.current = () => { window.removeEventListener("message", ready); window.clearInterval(timer); window.clearTimeout(timeout); child.removeEventListener("beforeunload", reattach); };
-  }, [host, focus, reattach, windowName]);
+    const timer = window.setInterval(() => { if (child.closed) restore(); }, 250);
+    pending.current = () => { window.removeEventListener("message", ready); window.clearInterval(timer); window.clearTimeout(timeout); child.removeEventListener("beforeunload", restore); };
+  }, [host, focus, restore, windowName]);
   useLayoutEffect(() => {
     slot.current?.append(host);
     return () => { host.remove(); };

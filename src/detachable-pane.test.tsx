@@ -7,6 +7,7 @@ import { usePaneSurface } from "./pane-surface";
 import { isContentWindowRequest } from "../shared/content-window";
 let container: HTMLDivElement, frame: HTMLIFrameElement, root: Root, pane: ReturnType<typeof useDetachablePane>;
 let mounts = 0;
+const onReattach = vi.fn();
 function StatefulContent() {
   const [draft, setDraft] = useState("unsent draft");
   const { document: current, portalRoot } = usePaneSurface();
@@ -14,12 +15,13 @@ function StatefulContent() {
   return <main><textarea value={draft} onChange={e => setDraft(e.target.value)} /><span data-surface={current === document ? "main" : "external"} data-root={Boolean(portalRoot)} /></main>;
 }
 function Harness() {
-  pane = useDetachablePane();
+  pane = useDetachablePane({ onReattach });
   return <DetachablePane pane={pane} theme="dark" accent="#123456" title="Issue #12"><StatefulContent /></DetachablePane>;
 }
 beforeEach(async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   mounts = 0;
+  onReattach.mockClear();
   container = document.createElement("div");frame = document.createElement("iframe");document.body.append(container, frame);
   vi.spyOn(window, "open").mockReturnValue(frame.contentWindow);
   vi.spyOn(frame.contentWindow!, "focus").mockImplementation(() => {});
@@ -49,12 +51,25 @@ it("moves one live tree, retaining editor/scroll state and routing surface and t
   expect(pane.host.dataset.theme).toBe("dark");expect(mounts).toBe(1);
   await act(async () => pane.reattach());
   expect(container.querySelector("main")).toBe(original);expect(pane.detached).toBe(false);expect(mounts).toBe(1);
+  expect(onReattach).toHaveBeenCalledTimes(1);
+  await act(async () => pane.reattach());
+  expect(onReattach).toHaveBeenCalledTimes(1);
 });
 it("reattaches on native close and reuses one external window when focused again", async () => {
   await detach();await act(async () => pane.detach());
   expect(window.open).toHaveBeenCalledTimes(1);
   await act(async () => frame.contentWindow!.dispatchEvent(new Event("beforeunload")));
   expect(pane.detached).toBe(false);expect(container.querySelector("main")).not.toBeNull();
+  expect(onReattach).not.toHaveBeenCalled();
+});
+it("preserves the main selection when a closed window is detected by polling", async () => {
+  vi.useFakeTimers();
+  await detach();
+  Object.defineProperty(frame.contentWindow!, "closed", { configurable: true, value: true });
+  await act(async () => vi.advanceTimersByTime(250));
+  expect(pane.detached).toBe(false);
+  expect(container.querySelector("main")).not.toBeNull();
+  expect(onReattach).not.toHaveBeenCalled();
 });
 it("ignores readiness from unrelated windows and keeps content attached when opening is denied", async () => {
   await act(async () => pane.detach());

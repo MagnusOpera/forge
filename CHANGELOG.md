@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Preserve the main window’s selection when closing an external window; select its item only when using Reattach.
+
 ## [0.13.0]
 
 
