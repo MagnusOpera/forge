@@ -1,3 +1,4 @@
+import { showContentWindow } from "./content-window.js";
 import { MainContentLayout } from "./content-layout.js";
 import { contentPaneWindowBounds, isContentWindowName, isContentWindowRequest } from "../../shared/content-window.js";
 import {
@@ -2347,6 +2348,7 @@ function showNativeNotification(payload: NativeNotificationPayload): boolean {
 }
 
 function createWindow(): void {
+  const pendingPaneBounds = new Map<string, NonNullable<ReturnType<typeof contentPaneWindowBounds>>>();
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -2382,8 +2384,11 @@ function createWindow(): void {
     if (!isContentWindowName(details.frameName)) return;
     contentWindows.set(details.frameName, child);
     const owner = mainWindow;
+    // Capture before the renderer collapses Forge to its two navigation panes.
+    const bounds = pendingPaneBounds.get(details.frameName) ?? null;
+    pendingPaneBounds.delete(details.frameName);
     owner?.webContents.setBackgroundThrottling(false);
-    child.once("ready-to-show", () => { child.show(); child.focus(); });
+    child.once("ready-to-show", () => showContentWindow(child, bounds));
     child.on("closed", () => {
       if (contentWindows.get(details.frameName) === child) contentWindows.delete(details.frameName);
       if (!contentWindows.size && owner && !owner.isDestroyed()) owner.webContents.setBackgroundThrottling(true);
@@ -2405,7 +2410,9 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler(({ url, frameName, features }) => {
     if (isContentWindowRequest(url, frameName, mainWindow?.webContents.getURL() ?? "")) {
       const zoomFactor = mainWindow!.webContents.getZoomFactor();
-      const bounds = contentPaneWindowBounds(features, mainWindow!.getContentBounds(), zoomFactor) ?? { width: 980, height: 900 };
+      const paneBounds = contentPaneWindowBounds(features, mainWindow!.getContentBounds(), zoomFactor);
+      if (paneBounds) pendingPaneBounds.set(frameName, paneBounds);
+      const bounds = paneBounds ?? { width: 980, height: 900 };
       return { action: "allow", overrideBrowserWindowOptions: {
         ...bounds, useContentSize: true, show: false,
         minWidth: Math.min(540, bounds.width), minHeight: Math.min(480, bounds.height),
