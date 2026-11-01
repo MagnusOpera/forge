@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.18.0]
+
+
 - Enable React Compiler to automatically memoize eligible components and hooks.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.17.1...0.18.0
 
 ## [0.17.1]
 
