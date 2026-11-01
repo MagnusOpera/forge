@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.15.1]
+
+
 - Set a global default thread starting point and project-specific choices under GitHub settings.
 
 - Remove the Octocat and Forge titlebar label and refresh website screenshots.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.15.0...0.15.1
 
 ## [0.15.0]
 
