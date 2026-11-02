@@ -12,6 +12,10 @@ const passthroughFiles = [
   ["styles.css", "styles.css"],
   ["site.js", "site.js"],
   ["assets/magnus-opera-logo.svg", "assets/magnus-opera-logo.svg"],
+  ...[32, 128, 180].map(size => {
+    const file = `assets/forge-ignition-${size}.png`;
+    return [file, file];
+  }),
   ["screenshots/forge-light.png", "screenshots/forge-light.png"],
   ["screenshots/forge-dark.png", "screenshots/forge-dark.png"],
   ...["navigation", "detached", "releases"].flatMap(kind => ["dark", "light"].map(theme => {

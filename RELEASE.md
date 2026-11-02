@@ -80,3 +80,13 @@ Existing-thread smoke checks should use a disposable Codex home and Git reposito
 The renderer uses Coder’s `ghostty-web` with its bundled Ghostty WASM; it loads locally without a CDN or a server. Microsoft’s `node-pty` runs only in Electron main and uses N-API prebuilds. `npm ci` runs `scripts/prepare-terminal.cjs` to mark the Unix spawn helper executable. Keep `node_modules/node-pty/prebuilds` in `asarUnpack` so the native addon and helper can load from the packaged app. No Electron ABI rebuild is needed for these N-API prebuilds.
 
 Before a release, verify a terminal in the unsigned macOS arm64 package: shell startup in the selected chat checkout, input and output, Ctrl+C, paste, resize, both themes, hiding/reopening, chat switching, session termination, and app shutdown. Confirm a checkout change closes its prior terminal session and reopening starts in the new folder. Terminal buffers and shell processes are in memory only and must not become release artifacts.
+
+## App icon assets
+
+The selected artwork is `assets/icon-proposals/forge-ignition.png`. Earlier concepts,
+including the diagonal GitHub/Codex design, remain in that directory.
+
+On macOS, run `bash scripts/generate-app-icons.sh` from the repository root to
+regenerate the transparent 1024px PNG, macOS ICNS, Windows ICO, SVG wrapper, and web-sized PNG assets.
+This uses AppKit, `sips`, `iconutil`, and Python 3. The SVG embeds the PNG losslessly;
+it is not vector artwork. Existing app and website paths remain unchanged.

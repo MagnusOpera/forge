@@ -65,3 +65,19 @@ describe("homepage Codex previews", () => {
   });
 
 });
+
+describe("website ignition branding", () => {
+  it.each(["index", "install", "documentation", "changelog"])("uses the new logo and icons on %s", page => {
+    const html = readFileSync(path.resolve(`website/${page}.html`), "utf8");
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    expect(doc.querySelector(".brand img")?.getAttribute("src")).toBe("assets/forge-ignition-128.png");
+    expect(doc.querySelector('link[rel="icon"]')?.getAttribute("href")).toBe("assets/forge-ignition-32.png");
+    expect(doc.querySelector('link[rel="apple-touch-icon"]')?.getAttribute("href")).toBe("assets/forge-ignition-180.png");
+  });
+
+  it.each([32, 128, 180])("ships a correctly sized %ipx PNG", size => {
+    const png = readFileSync(path.resolve(`website/assets/forge-ignition-${size}.png`));
+    expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([size, size]);
+  });
+});

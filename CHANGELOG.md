@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Update the website logo and browser icons to the new Forge spark design.
+
+- Refresh Forge's app icon with a glowing spark on a dark macOS-style tile.
 - Put Commit first in the Codex message toolbar.
 
 - Show the thread name in detached Codex window titles.
