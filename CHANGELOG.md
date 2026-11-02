@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.19.0]
+
+
 - Update the website logo and browser icons to the new Forge spark design.
 
 - Refresh Forge's app icon with a glowing spark on a dark macOS-style tile.
@@ -14,6 +17,8 @@ All notable changes to Forge are documented in this file.
 - Keep cursor arrow keys working in detached Codex message editors.
 - Paste clipboard images and files into Codex messages as attachments.
 - Confirm before quitting Forge while Codex threads or repository operations are running.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.18.1...0.19.0
 
 ## [0.18.1]
 
