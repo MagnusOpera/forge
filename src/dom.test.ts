@@ -1,6 +1,23 @@
 // @vitest-environment jsdom
 import { expect, it } from "vitest";
 import { hasOpenKeyboardOverlay, isDomNode, isHtmlElement } from "./dom";
+it("recognizes live editor nodes adopted into a detached window and back", () => {
+  const frame = document.createElement("iframe");
+  document.body.append(frame);
+  const editor = document.createElement("div");
+  editor.contentEditable = "true";
+  const text = document.createTextNode("draft");
+  editor.append(text);
+  try {
+    frame.contentDocument!.body.append(editor);
+    expect(editor instanceof frame.contentDocument!.defaultView!.HTMLElement).toBe(false);
+    expect(isHtmlElement(editor)).toBe(true);
+    expect(isDomNode(text)).toBe(true);
+    document.body.append(editor);
+    expect(isHtmlElement(editor)).toBe(true);
+    expect(isDomNode(text)).toBe(true);
+  } finally { editor.remove(); frame.remove(); }
+});
 it("recognizes controls from another window so typing and focus guards still work", () => {
   const frame = document.createElement("iframe");document.body.append(frame);
   try {

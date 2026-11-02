@@ -2690,7 +2690,9 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("before-quit", () => githubSignIn?.abort());
+app.on("before-quit", (event) => {
+  if (!event.defaultPrevented) githubSignIn?.abort();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

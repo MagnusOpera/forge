@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import {
   importAttachments,
+  importAttachmentData,
   resolveOutputFile,
   imageExtension,
   MAX_ATTACHMENT_BYTES,
@@ -823,6 +824,10 @@ export function registerCodexIpc(
       if (method === "attach") {
         if (thread.archived)
           throw new Error("Restore the thread before attaching files.");
+        if (input.files !== undefined) {
+          if (input.paths !== undefined) throw new Error("Invalid attachments.");
+          return importAttachmentData(store.root, input.files);
+        }
         let files: string[];
         if (input.paths !== undefined) {
           if (!Array.isArray(input.paths) || input.paths.length > 20)
@@ -843,7 +848,21 @@ export function registerCodexIpc(
       throw new Error("Unsupported Codex operation.");
     },
   );
-  app.on("before-quit", () => {
+  app.on("before-quit", (event) => {
+    if (event.defaultPrevented) return;
+    if (manager?.hasActive() && dialog.showMessageBoxSync({
+      type: "warning",
+      title: "Quit Forge?",
+      message: "Codex is still working. Quit Forge?",
+      detail: "Quitting will interrupt active Codex threads and repository operations.",
+      buttons: ["Cancel", "Quit Forge"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    }) !== 1) {
+      event.preventDefault();
+      return;
+    }
     windows.quitting = true;
     terminals?.dispose();
     manager?.flush();

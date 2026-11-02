@@ -3382,7 +3382,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     } catch (error) { flash(error instanceof Error ? error.message : String(error)); }
   };
   const contentRoute = `${selectedRepo?.id}:${selectionRouteKey(selection)}`;
-  const contentTitle = selection.kind === "codex" ? terminalThread?.title
+  const contentTitle = selection.kind === "codex" ? (terminalThread ? `Codex - ${terminalThread.title}` : "Codex")
     : selection.kind === "pr" ? selection.pr.title
     : selection.kind === "release" ? selection.release.name || selection.release.tagName
     : selection.kind === "issue" ? selection.issue.title
@@ -3542,6 +3542,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
             </button>
           </>
         ) : undefined}
+        codexTitle={terminalThread ? displayPathText(terminalThread.title, Boolean(terminalThread.environment)) : undefined}
         codexContent={projectFocusView === "codex" && selectedRepo ? (
           <ThreadWorkspace repositoryId={selectedRepo.id} id={selection.kind === "codex" ? selection.threadId : undefined}
             thread={terminalThread} theme={activeTheme} terminalOpen={terminalOpen} loading={projectLoading}
@@ -4693,6 +4694,7 @@ function ContentPane(props: {
   detached: boolean;
   attachmentOpening: boolean;
   onToggleAttachment(): void;
+  codexTitle?: string;
   codexContent?: React.ReactNode;
   codexActions?: React.ReactNode;
   auth: AuthStatus | null;
@@ -4886,7 +4888,11 @@ function ContentPane(props: {
             </button>
           </div>
           <div className="content-title">
-            {props.codexContent ? <span>Codex</span> : <ContentTitle selection={props.selection} repo={props.repo} />}
+            {props.codexContent ? (
+              <span title={props.detached && props.codexTitle ? `Codex - ${props.codexTitle}` : undefined}>
+                Codex{props.detached && props.codexTitle ? ` - ${props.codexTitle}` : ""}
+              </span>
+            ) : <ContentTitle selection={props.selection} repo={props.repo} />}
             {!props.codexContent && (
             <GithubUrlActionButton
               url={githubUrl}

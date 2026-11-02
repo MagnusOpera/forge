@@ -7,11 +7,15 @@ import {
   rmSync,
   symlinkSync,
   writeFileSync,
+  readdirSync,
+  statSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
   importAttachments,
+  importAttachmentData,
+  MAX_ATTACHMENT_BYTES,
   resolveOutputFile,
 } from "../../electron/main/codex/files";
 import { isImageAttachment } from "../../shared/codex";
@@ -27,6 +31,34 @@ afterEach(() =>
     .forEach((root) => rmSync(root, { recursive: true, force: true })),
 );
 describe("Codex files", () => {
+  it("imports clipboard images and documents without filesystem paths", () => {
+    const root = temp();
+    const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const [pic, doc] = importAttachmentData(root, [
+      { name: "clipboard.dat", data: image },
+      { name: "../notes.txt", data: new TextEncoder().encode("notes") },
+    ]);
+    expect(pic).toMatchObject({ name: "clipboard.dat", kind: "image" });
+    expect(pic.id).toMatch(/\.png$/);
+    expect(doc).toMatchObject({ name: "notes.txt", kind: "document" });
+    expect(readFileSync(path.join(root, "attachments", pic.id))).toEqual(Buffer.from(image));
+    expect(readFileSync(path.join(root, "attachments", doc.id), "utf8")).toBe("notes");
+    expect(statSync(path.join(root, "attachments", pic.id)).mode & 0o777).toBe(0o600);
+  });
+  it("validates the entire clipboard selection before writing attachments", () => {
+    const root = temp();
+    const valid = { name: "notes.txt", data: new Uint8Array([1]) };
+    for (const invalid of [
+      { name: "large.bin", data: new Uint8Array(MAX_ATTACHMENT_BYTES + 1) },
+      { name: "bad", data: [1, 2] },
+      { name: "bad\0name", data: new Uint8Array() },
+      null,
+    ]) {
+      expect(() => importAttachmentData(root, [valid, invalid])).toThrow("20 MB");
+      expect(readdirSync(root)).toEqual([]);
+    }
+    expect(() => importAttachmentData(root, Array(21).fill(valid))).toThrow("20 files");
+  });
   it("imports documents and detects images by content, retaining original names", () => {
     const source = temp(),
       store = temp();

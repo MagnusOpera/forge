@@ -729,6 +729,13 @@ export function CodexConversation({
         <div
           className="codex-composer"
           ref={composer}
+          onPasteCapture={(event) => {
+            const files = Array.from(event.clipboardData.files);
+            if (!files.length) return;
+            event.preventDefault();
+            event.stopPropagation();
+            addFiles(files);
+          }}
           onDragOver={(event) => {
             if (event.dataTransfer.types.includes("Files")) {
               event.preventDefault();

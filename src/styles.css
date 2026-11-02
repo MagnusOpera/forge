@@ -3673,7 +3673,7 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .codex-markdown-editor .tiptap { transition: none; }
 }
-.codex-markdown-editor .tiptap p { margin: 0 0 6px; }
+.codex-markdown-editor .tiptap p { margin: 0 0 6px; max-width: none; }
 .codex-markdown-editor .tiptap:has(p:only-child:empty)::before { content: attr(data-placeholder); color: var(--text-muted); pointer-events: none; float: left; height: 0; }
 .codex-markdown-editor .tiptap h1 { font-size: 1.5em; }
 .codex-markdown-editor .tiptap h2 { font-size: 1.3em; }

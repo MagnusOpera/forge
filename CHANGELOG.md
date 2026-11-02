@@ -4,6 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Show the thread name in detached Codex window titles.
+- Let Codex message text use the full editor width in wide windows.
+- Keep cursor arrow keys working in detached Codex message editors.
+- Paste clipboard images and files into Codex messages as attachments.
+- Confirm before quitting Forge while Codex threads or repository operations are running.
+
 ## [0.18.1]
 
 

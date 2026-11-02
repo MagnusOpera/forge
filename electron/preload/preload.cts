@@ -124,7 +124,15 @@ const codexApi: import("../../shared/codex.js").CodexApi = {
     ipcRenderer.on("codex:terminal", listener);
     return () => ipcRenderer.removeListener("codex:terminal", listener);
   },
-  attachFiles: (input, files) => ipcRenderer.invoke("codex:request", "attach", { ...input, paths: files.map((file) => webUtils.getPathForFile(file)) }),
+  attachFiles: async (input, files) => {
+    if (files.length > 20 || files.some(file => file.size > 20 * 1024 * 1024))
+      throw new Error("Attach up to 20 files of 20 MB or smaller.");
+    const paths = files.map(file => webUtils.getPathForFile(file));
+    if (paths.every(Boolean)) return ipcRenderer.invoke("codex:request", "attach", { ...input, paths });
+    // Clipboard images are browser File objects without a filesystem path.
+    const data = await Promise.all(files.map(async file => ({ name: file.name, data: new Uint8Array(await file.arrayBuffer()) })));
+    return ipcRenderer.invoke("codex:request", "attach", { ...input, files: data });
+  },
   request: (method, input) => ipcRenderer.invoke("codex:request", method, input),
   onChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, change: import("../../shared/codex.js").CodexChange) => callback(change);

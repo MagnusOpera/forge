@@ -15,14 +15,14 @@ import { defaultCodexPreferences } from "../../shared/codex";
 const mock = vi.hoisted(() => ({
   root: "",
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
-  quitting: [] as (() => void)[],
+  quitting: [] as ((event: { defaultPrevented: boolean; preventDefault(): void }) => void)[],
 }));
 vi.mock("electron", () => ({
   app: {
     isPackaged: false,
     getPath: () => mock.root,
     getAppPath: () => "/forge",
-    on: (_name: string, callback: () => void) => mock.quitting.push(callback),
+    on: (_name: string, callback: (event: { defaultPrevented: boolean; preventDefault(): void }) => void) => mock.quitting.push(callback),
   },
   ipcMain: {
     handle: (name: string, handler: (...args: unknown[]) => unknown) =>
@@ -37,6 +37,7 @@ vi.mock("electron", () => ({
     showOpenDialog: vi.fn(),
     showSaveDialog: vi.fn(),
     showMessageBox: vi.fn(),
+    showMessageBoxSync: vi.fn(() => 1),
   },
 }));
 import { shell, dialog } from "electron";
@@ -75,12 +76,43 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
-  mock.quitting.splice(0).forEach((quit) => quit());
+  vi.mocked(dialog.showMessageBoxSync).mockReturnValue(1);
+  mock.quitting.splice(0).forEach((quit) => quit({ defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } }));
   mock.handlers.clear();
   vi.restoreAllMocks();
   rmSync(mock.root, { recursive: true, force: true });
 });
 describe("Codex preload IPC handlers", () => {
+  it("cancels quitting before disposing Codex, then allows an explicitly confirmed quit", async () => {
+    await request("configuration");
+    vi.spyOn(ThreadManager.prototype, "hasActive").mockReturnValue(true);
+    const flush = vi.spyOn(ThreadManager.prototype, "flush");
+    const close = vi.spyOn(CodexStore.prototype, "close");
+    const dispose = vi.spyOn(TerminalManager.prototype, "dispose");
+    const quit = mock.quitting.shift()!;
+    const event = () => ({ defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } });
+    vi.mocked(dialog.showMessageBoxSync).mockReturnValueOnce(0);
+    const cancelled = event();
+    quit(cancelled);
+    expect(cancelled.defaultPrevented).toBe(true);
+    expect(flush).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    expect(dispose).not.toHaveBeenCalled();
+    expect(dialog.showMessageBoxSync).toHaveBeenCalledWith(expect.objectContaining({ defaultId: 0, cancelId: 0 }));
+    const confirmed = event();
+    quit(confirmed);
+    expect(confirmed.defaultPrevented).toBe(false);
+    expect(flush).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+  it("quits without confirmation when Codex has no active work", async () => {
+    await request("configuration");
+    const prompt = vi.mocked(dialog.showMessageBoxSync);
+    prompt.mockClear();
+    mock.quitting.shift()!({ defaultPrevented: false, preventDefault: vi.fn() });
+    expect(prompt).not.toHaveBeenCalled();
+  });
   it("checks the CLI at startup without starting an app-server or signing in", async () => {
     const prepare = vi.spyOn(CodexClient.prototype, "prepare").mockResolvedValue("/bin/codex");
     const start = vi.spyOn(CodexClient.prototype, "start");
@@ -352,6 +384,12 @@ describe("Codex attachment and output IPC", () => {
       name: "spec.pdf",
       kind: "document",
     });
+    const pasted = await request("attach", {
+      ...args,
+      files: [{ name: "clipboard.png", data: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]) }],
+    });
+    expect(pasted).toEqual([expect.objectContaining({ name: "clipboard.png", kind: "image" })]);
+    await expect(request("attach", { ...args, paths: [source], files: [] })).rejects.toThrow("Invalid attachments");
     await request("update", { ...args, draftAttachments: attachments });
     expect(
       new CodexStore(path.join(mock.root, "codex")).get("R_123", id)

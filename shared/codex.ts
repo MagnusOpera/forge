@@ -363,7 +363,7 @@ export type CodexCommands = {
     },
     void
   >;
-  attach: Command<ThreadInput & { paths?: string[] }, CodexAttachment[]>;
+  attach: Command<ThreadInput & { paths?: string[]; files?: { name: string; data: Uint8Array }[] }, CodexAttachment[]>;
   outputFile: Command<
     ThreadInput & { href: string; action: "reveal" | "save" | "image" | "open" },
     string | null

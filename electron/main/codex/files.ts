@@ -5,6 +5,7 @@ import {
   realpathSync,
   statSync,
   readFileSync,
+  writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -12,6 +13,27 @@ import { fileURLToPath } from "node:url";
 import type { CodexAttachment } from "../../../shared/codex.js";
 
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export function importAttachmentData(root: string, files: unknown): CodexAttachment[] {
+  if (!Array.isArray(files) || files.length > 20)
+    throw new Error("Attach up to 20 files at a time.");
+  const selected = files.map((file) => {
+    if (!file || typeof file.name !== "string" || !file.name || file.name.length > 1024 || file.name.includes("\0") ||
+        !(file.data instanceof Uint8Array) || file.data.byteLength > MAX_ATTACHMENT_BYTES)
+      throw new Error("Attachments must be named files of 20 MB or smaller.");
+    const name = path.basename(file.name.replace(/\\/g, "/"));
+    const image = imageExtension(file.data);
+    const extension = image ?? path.extname(name).toLowerCase().replace(/[^a-z0-9.]/g, "").slice(0, 16);
+    return {
+      data: file.data,
+      attachment: { id: `${randomUUID()}${extension}`, name, kind: image ? "image" as const : "document" as const },
+    };
+  });
+  const directory = path.join(root, "attachments");
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  for (const { data, attachment } of selected)
+    writeFileSync(path.join(directory, attachment.id), data, { mode: 0o600, flag: "wx" });
+  return selected.map(({ attachment }) => attachment);
+}
 export function imageExtension(data: Uint8Array): string | null {
   const header = Buffer.from(data).subarray(0, 12);
   if (

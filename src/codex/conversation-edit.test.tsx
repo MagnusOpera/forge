@@ -68,6 +68,26 @@ afterEach(() => {
   delete window.forgeCodex;
   vi.unstubAllGlobals();
 });
+it("pastes clipboard images and documents as attachments without replacing the draft", async () => {
+  const added = [
+    { id: "image.png", name: "image.png", kind: "image" as const },
+    { id: "notes.txt", name: "notes.txt", kind: "document" as const },
+  ];
+  const attachFiles = vi.fn(async () => added);
+  window.forgeCodex!.attachFiles = attachFiles;
+  await act(async () => root.render(<CodexConversation repositoryId="r" id="t" loading={false} onConfigure={() => {}} />));
+  const editor = container.querySelector('[role="textbox"]')!;
+  const files = [new File(["png"], "image.png", { type: "image/png" }), new File(["notes"], "notes.txt")];
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", { value: { files, getData: () => "" } });
+  await act(async () => editor.dispatchEvent(event));
+  expect(event.defaultPrevented).toBe(true);
+  expect(attachFiles).toHaveBeenCalledWith({ repositoryId: "r", id: "t" }, files);
+  expect(editor.textContent).toBe("Unsent draft");
+  expect(container.querySelector(".codex-attachments")?.textContent).toContain("image.png");
+  expect(container.querySelector(".codex-attachments")?.textContent).toContain("notes.txt");
+  expect(container.querySelector(".codex-attachments")?.textContent).toContain("notes.pdf");
+});
 it("loads a user message for revision without sending and restores the previous draft on cancel", async () => {
   await act(async () =>
     root.render(
