@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.19.1]
+
+
 - Remove the gray strip beneath the app icon in the macOS Dock and website icons.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.19.0...0.19.1
 
 ## [0.19.0]
 
