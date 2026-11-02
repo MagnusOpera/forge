@@ -79,14 +79,14 @@ export function CodexQuickActions({
     icon: React.ReactNode;
   }[] = [
     {
-      action: "sync",
-      label: defaultBranch ? `Merge ${defaultBranch}` : "Merge default branch",
-      icon: <GitMerge size={16} />,
-    },
-    {
       action: "commit",
       label: "Commit",
       icon: <GitCommitHorizontal size={16} />,
+    },
+    {
+      action: "sync",
+      label: defaultBranch ? `Merge ${defaultBranch}` : "Merge default branch",
+      icon: <GitMerge size={16} />,
     },
     { action: "push", label: "Push", icon: <Upload size={16} /> },
     {
@@ -187,34 +187,6 @@ export function CodexQuickActions({
           </>
         )}
         {group === "all" && <span className="toolbar-divider" />}
-        {group !== "checkout" && thread && !thread.sourceHome && (
-          <button
-            className="icon-button"
-            aria-label={
-              thread.checkout === "default"
-                ? "Start worktree"
-                : `Merge into ${defaultBranch || "default branch"}`
-            }
-            title={
-              unavailable ||
-              (thread.checkout === "default"
-                ? "Start worktree"
-                : `Merge into ${defaultBranch || "default branch"}`)
-            }
-            disabled={busy || Boolean(unavailable)}
-            onClick={() =>
-              void execute(async () => {
-                await reviewCheckout(thread.checkout === "default" ? "worktree" : "merge");
-              })
-            }
-          >
-            {thread.checkout === "default" ? (
-              <GitBranchPlus size={16} />
-            ) : (
-              <GitPullRequestClosed size={16} />
-            )}
-          </button>
-        )}
         {group !== "checkout" &&
           actions
             .filter(
@@ -244,6 +216,34 @@ export function CodexQuickActions({
                 {action.icon}
               </button>
             ))}
+        {group !== "checkout" && thread && !thread.sourceHome && (
+          <button
+            className="icon-button"
+            aria-label={
+              thread.checkout === "default"
+                ? "Start worktree"
+                : `Merge into ${defaultBranch || "default branch"}`
+            }
+            title={
+              unavailable ||
+              (thread.checkout === "default"
+                ? "Start worktree"
+                : `Merge into ${defaultBranch || "default branch"}`)
+            }
+            disabled={busy || Boolean(unavailable)}
+            onClick={() =>
+              void execute(async () => {
+                await reviewCheckout(thread.checkout === "default" ? "worktree" : "merge");
+              })
+            }
+          >
+            {thread.checkout === "default" ? (
+              <GitBranchPlus size={16} />
+            ) : (
+              <GitPullRequestClosed size={16} />
+            )}
+          </button>
+        )}
         {(error || mergeConflict) && (
           <div className="codex-action-error" role="alert">
             <span>

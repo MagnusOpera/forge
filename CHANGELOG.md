@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Put Commit first in the Codex message toolbar.
+
 - Show the thread name in detached Codex window titles.
 - Let Codex message text use the full editor width in wide windows.
 - Keep cursor arrow keys working in detached Codex message editors.

@@ -73,6 +73,16 @@ it("separates checkout header actions from composer Git actions", () => {
   expect(composer).not.toContain('aria-label="Diff checkout changes"');
 });
 
+it.each(["light", "dark"] as const)("puts Commit first in the %s composer toolbar for both checkout types", (theme) => {
+  for (const checkout of ["default", "worktree"] as const) {
+    const html = renderToStaticMarkup(
+      <CodexQuickActions thread={{ ...thread, checkout }} theme={theme} group="git" />,
+    );
+    const labels = [...html.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map(match => match[1]);
+    expect(labels[0]).toBe("Commit");
+  }
+});
+
 it("disables remote desktop and Git actions in both themes", () => {
   for (const theme of ["light", "dark"] as const) {
     const html = renderToStaticMarkup(
