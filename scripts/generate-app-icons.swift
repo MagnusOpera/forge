@@ -9,10 +9,11 @@ let output = NSImage(size: canvas)
 output.lockFocusFlipped(false)
 NSGraphicsContext.current?.imageInterpolation = .high
 // Mask away the presentation backdrop, retaining the tile's outer metallic rim.
+// The tile ends at y=1118, above the baked-in shadow and gray backdrop.
 // Coordinates are normalized from the 1254px source image.
 let scale = 1024.0 / 1254.0
-let tile = NSRect(x: 108 * scale, y: (1254 - 1148) * scale,
-                  width: 1032 * scale, height: 1040 * scale)
+let tile = NSRect(x: 108 * scale, y: (1254 - 1118) * scale,
+                  width: 1030 * scale, height: 1010 * scale)
 NSBezierPath(roundedRect: tile, xRadius: 248 * scale, yRadius: 248 * scale).addClip()
 image.draw(in: NSRect(origin: .zero, size: canvas))
 output.unlockFocus()

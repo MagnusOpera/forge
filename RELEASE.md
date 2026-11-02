@@ -90,3 +90,5 @@ On macOS, run `bash scripts/generate-app-icons.sh` from the repository root to
 regenerate the transparent 1024px PNG, macOS ICNS, Windows ICO, SVG wrapper, and web-sized PNG assets.
 This uses AppKit, `sips`, `iconutil`, and Python 3. The SVG embeds the PNG losslessly;
 it is not vector artwork. Existing app and website paths remain unchanged.
+The source includes a gray presentation backdrop and a baked-in shadow. Keep the
+export mask aligned with the metallic tile edge so neither appears in the Dock.

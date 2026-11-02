@@ -70,9 +70,9 @@ describe("website ignition branding", () => {
   it.each(["index", "install", "documentation", "changelog"])("uses the new logo and icons on %s", page => {
     const html = readFileSync(path.resolve(`website/${page}.html`), "utf8");
     const doc = new DOMParser().parseFromString(html, "text/html");
-    expect(doc.querySelector(".brand img")?.getAttribute("src")).toBe("assets/forge-ignition-128.png");
-    expect(doc.querySelector('link[rel="icon"]')?.getAttribute("href")).toBe("assets/forge-ignition-32.png");
-    expect(doc.querySelector('link[rel="apple-touch-icon"]')?.getAttribute("href")).toBe("assets/forge-ignition-180.png");
+    expect(doc.querySelector(".brand img")?.getAttribute("src")).toBe("assets/forge-ignition-128.png?v=2");
+    expect(doc.querySelector('link[rel="icon"]')?.getAttribute("href")).toBe("assets/forge-ignition-32.png?v=2");
+    expect(doc.querySelector('link[rel="apple-touch-icon"]')?.getAttribute("href")).toBe("assets/forge-ignition-180.png?v=2");
   });
 
   it.each([32, 128, 180])("ships a correctly sized %ipx PNG", size => {
