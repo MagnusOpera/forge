@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.20.0]
+
+
 - Add native Chat mode with local projects, project instructions, searchable threads, and detachable conversations.
 - Reorder Chat projects and confirm project deletion before removing their threads.
 - Share OpenAI sign-in and model discovery between Build and Chat through one configuration section.
@@ -15,6 +18,8 @@ All notable changes to Forge are documented in this file.
 - Keep rounded pane dividers below the titlebar and detached chat titles clear of macOS window controls.
 - Match Chat thread rows, message colors, and input highlights to the existing Build styles.
 - Remove back and forward buttons from all content-pane headers.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.19.1...0.20.0
 
 ## [0.19.1]
 
