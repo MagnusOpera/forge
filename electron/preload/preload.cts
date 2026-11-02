@@ -141,3 +141,23 @@ const codexApi: import("../../shared/codex.js").CodexApi = {
   }
 };
 contextBridge.exposeInMainWorld("forgeCodex", codexApi);
+
+const chatGptApi: import("../../shared/chatgpt.js").ChatApi = {
+  attachFiles: async (input, files) => {
+    if (files.length > 20 || files.some(file => file.size > 20 * 1024 * 1024))
+      throw new Error("Attach up to 20 files of 20 MB or smaller.");
+    const paths = files.map(file => webUtils.getPathForFile(file));
+    if (paths.every(Boolean)) return ipcRenderer.invoke("chatgpt:request", "attach", { ...input, paths });
+    // Clipboard images are browser File objects without a filesystem path.
+    const data = await Promise.all(files.map(async file => ({ name: file.name, data: new Uint8Array(await file.arrayBuffer()) })));
+    return ipcRenderer.invoke("chatgpt:request", "attach", { ...input, files: data });
+  },
+
+  request: (method, input) => ipcRenderer.invoke("chatgpt:request", method, input),
+  onChanged: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, state: import("../../shared/chatgpt.js").ChatState) => callback(state);
+    ipcRenderer.on("chatgpt:changed", listener);
+    return () => ipcRenderer.removeListener("chatgpt:changed", listener);
+  },
+};
+contextBridge.exposeInMainWorld("forgeChatGpt", chatGptApi);

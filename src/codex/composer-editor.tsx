@@ -123,6 +123,7 @@ export function ComposerEditor({
   disabled,
   placeholder,
   sendShortcut = "enter",
+  label = "Message Codex",
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -130,6 +131,7 @@ export function ComposerEditor({
   disabled: boolean;
   placeholder: string;
   sendShortcut?: CodexSendShortcut;
+  label?: string;
 }) {
   "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
 
@@ -146,7 +148,7 @@ export function ComposerEditor({
     editorProps: {
       attributes: {
         role: "textbox",
-        "aria-label": "Message Codex",
+        "aria-label": label,
         "aria-multiline": "true",
         "data-placeholder": placeholder,
       },
@@ -198,13 +200,13 @@ export function ComposerEditor({
         ...editor.options.editorProps,
         attributes: {
           role: "textbox",
-          "aria-label": "Message Codex",
+          "aria-label": label,
           "aria-multiline": "true",
           "data-placeholder": placeholder,
         },
       },
     });
-  }, [editor, placeholder]);
+  }, [editor, placeholder, label]);
   return (
     <div className="codex-markdown-editor">
       <EditorContent editor={editor} />

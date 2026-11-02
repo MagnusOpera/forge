@@ -76,6 +76,7 @@ import { AUTO_MERGE_API_UNAVAILABLE_MESSAGE, isAutoMergeNotAllowedMessage } from
 
 import { isThreadWindowCloseShortcut } from "./codex/windows.js";
 import { trustedCodexSenderUrl } from "./codex/validation.js";
+import { registerChatGptIpc } from "./chatgpt/ipc.js";
 import { registerCodexIpc } from "./codex/ipc.js";
 
 type GraphqlClient = typeof graphql;
@@ -2672,6 +2673,7 @@ function registerIpc(): void {
 
 registerIpc();
 const codexWindows = registerCodexIpc(() => mainWindow, createThreadWindow, focusedContentWindow);
+registerChatGptIpc(() => mainWindow, () => codexWindows.globalClient());
 
 app.whenReady().then(async () => {
   await migrateLegacyUserData();

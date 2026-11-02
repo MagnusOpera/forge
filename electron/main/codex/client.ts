@@ -126,6 +126,23 @@ export class CodexClient implements CodexTransport {
   private serverRequests = new Set<string | number>();
   protected version = "";
   onEvent: (event: RpcEvent) => void = () => undefined;
+  private listeners = new Set<(event: RpcEvent) => void>();
+  subscribe(listener: (event: RpcEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+  private emit(event: RpcEvent): void {
+    this.onEvent(event);
+    for (const listener of this.listeners) {
+      try {
+        listener(event);
+      } catch {
+        /* A subscriber must not interrupt the shared transport. */
+      }
+    }
+  }
   constructor(
     private home: string,
     private executable: () => string,
@@ -273,7 +290,7 @@ export class CodexClient implements CodexTransport {
         if (typeof resolved === "string" || typeof resolved === "number")
           this.serverRequests.delete(resolved);
       }
-      this.onEvent({
+      this.emit({
         method: message.method,
         params: object(message.params),
         ...(id === undefined ? {} : { requestId: id }),
@@ -339,7 +356,7 @@ export class CodexClient implements CodexTransport {
     }
     this.pending.clear();
     this.serverRequests.clear();
-    this.onEvent({
+    this.emit({
       method: "connection/failed",
       params: { message: error.message },
     });

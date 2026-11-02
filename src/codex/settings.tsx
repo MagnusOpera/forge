@@ -269,13 +269,13 @@ export function CodexSettingsDialog({
             {(project
               ? [
                   ["github", "GitHub"],
-                  ["codex", "Codex"],
+                  ["codex", "OpenAI"],
                 ]
               : [
                   ["general", "General"],
                   ["environments", "Environments"],
                   ["github", "GitHub"],
-                  ["codex", "Codex"],
+                  ["codex", "OpenAI"],
                 ]
             ).map(([id, label]) => (
               <button
@@ -346,7 +346,7 @@ export function CodexSettingsDialog({
             )}
             {project && section === "codex" && (
               <section>
-                <h3>Codex account</h3>
+                <h3>OpenAI account</h3>
                 <label>
                   <input
                     type="checkbox"
@@ -356,7 +356,7 @@ export function CodexSettingsDialog({
                       setAccountOverride(event.target.checked)
                     }
                   />{" "}
-                  Use a separate Codex account for this project
+                  Use a separate OpenAI account for this project
                 </label>
                 <p className="codex-muted">
                   {accountOverride
@@ -364,13 +364,13 @@ export function CodexSettingsDialog({
                     : "New local threads use the global account."}{" "}
                   Existing threads keep their account. Remote threads use the
                   remote host's account; imported threads keep their original
-                  Codex account.
+                  OpenAI account.
                 </p>
               </section>
             )}
             {section === "codex" && (!project || accountOverride) && (
               <section>
-                <h3>{project ? "Project account" : "Codex account"}</h3>
+                <h3>{project ? "Project account" : "OpenAI account"}</h3>
                 <p>
                   {!status
                     ? "Checking Codex and updating if needed…"

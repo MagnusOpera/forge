@@ -55,7 +55,7 @@ export function registerCodexIpc(
   window: () => BrowserWindow | null,
   createThreadWindow?: (target: CodexThreadWindow) => BrowserWindow,
   focusedContentWindow: () => BrowserWindow | null = () => null,
-): { mainWindowClosed(): void; prepare(): Promise<void> } {
+): { mainWindowClosed(): void; prepare(): Promise<void>; globalClient(): CodexClient } {
   let store: CodexStore | undefined,
     client: CodexClient | undefined,
     manager: ThreadManager | undefined,
@@ -869,6 +869,7 @@ export function registerCodexIpc(
     store?.close();
   });
   return {
+    globalClient: () => services().client,
     prepare: async () => {
       try {
         await services().client.prepare();

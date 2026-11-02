@@ -84,11 +84,11 @@ it("keeps environment definitions global and edits existing checkout mappings on
     [...container.querySelectorAll("nav button")].map(
       (button) => button.textContent,
     );
-  expect(labels()).toEqual(["General", "Environments", "GitHub", "Codex"]);
+  expect(labels()).toEqual(["General", "Environments", "GitHub", "OpenAI"]);
   await act(async () =>
     root.render(<CodexSettingsDialog {...props} project={project} />),
   );
-  expect(labels()).toEqual(["GitHub", "Codex"]);
+  expect(labels()).toEqual(["GitHub", "OpenAI"]);
   const remote = [
     ...container.querySelectorAll<HTMLButtonElement>("nav button"),
   ].find((button) => button.textContent === "GitHub")!;
@@ -232,31 +232,63 @@ async function navigate(label: string) {
   );
 }
 it("shows tildified local executable and editor fields but saves absolute paths", async () => {
-  const config = { ...configuration, editor: "/Users/alice/Applications/Editor.app", executable: "/Users/alice/bin/codex" };
-  request.mockImplementation(async (method) => method === "displayContext"
-    ? { homeDirectory: "/Users/alice", platform: "darwin" }
-    : method === "models" ? [] : method === "status" ? { connected: false, authenticated: false } : config);
+  const config = {
+    ...configuration,
+    editor: "/Users/alice/Applications/Editor.app",
+    executable: "/Users/alice/bin/codex",
+  };
+  request.mockImplementation(async (method) =>
+    method === "displayContext"
+      ? { homeDirectory: "/Users/alice", platform: "darwin" }
+      : method === "models"
+        ? []
+        : method === "status"
+          ? { connected: false, authenticated: false }
+          : config,
+  );
   await initializeDisplayPaths();
   await act(async () => root.render(<CodexSettingsDialog {...props} />));
   await navigate("General");
-  const editor = container.querySelector<HTMLInputElement>('[aria-label="Text editor application"]')!;
+  const editor = container.querySelector<HTMLInputElement>(
+    '[aria-label="Text editor application"]',
+  )!;
   expect(editor.value).toBe("~/Applications/Editor.app");
-  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-  act(() => { setValue.call(editor, "~/Applications/Other.app"); editor.dispatchEvent(new Event("input", { bubbles: true })); });
-  await navigate("Codex");
-  expect([...container.querySelectorAll("input")].some(input => input.value === "~/bin/codex")).toBe(true);
-  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Save configuration")!.click());
-  expect(request).toHaveBeenCalledWith("saveConfiguration", expect.objectContaining({ editor: "/Users/alice/Applications/Other.app", executable: "/Users/alice/bin/codex" }));
+  const setValue = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!;
+  act(() => {
+    setValue.call(editor, "~/Applications/Other.app");
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await navigate("OpenAI");
+  expect(
+    [...container.querySelectorAll("input")].some(
+      (input) => input.value === "~/bin/codex",
+    ),
+  ).toBe(true);
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Save configuration")!
+      .click(),
+  );
+  expect(request).toHaveBeenCalledWith(
+    "saveConfiguration",
+    expect.objectContaining({
+      editor: "/Users/alice/Applications/Other.app",
+      executable: "/Users/alice/bin/codex",
+    }),
+  );
 });
-it("places GitHub sign-in controls in GitHub and account controls in Codex", async () => {
+it("places GitHub sign-in controls in GitHub and account controls in OpenAI", async () => {
   await act(async () => root.render(<CodexSettingsDialog {...props} />));
   await navigate("GitHub");
   expect(container.textContent).toContain("Sign in with GitHub");
   expect(container.querySelector('input[type="password"]')).toBeNull();
-  expect(container.textContent).not.toContain("Codex account");
-  await navigate("Codex");
+  expect(container.textContent).not.toContain("OpenAI account");
+  await navigate("OpenAI");
   expect(container.querySelector('input[type="password"]')).toBeNull();
-  expect(container.textContent).toContain("Codex account");
+  expect(container.textContent).toContain("OpenAI account");
   expect(container.textContent).toContain("Codex defaults");
 });
 it("signs in to a project account separately and saves its override", async () => {
@@ -276,7 +308,7 @@ it("signs in to a project account separately and saves its override", async () =
   await act(async () =>
     root.render(<CodexSettingsDialog {...props} project={project} />),
   );
-  await navigate("Codex");
+  await navigate("OpenAI");
   expect(container.textContent).toContain("the global account");
   expect(container.textContent).not.toContain("Sign in with ChatGPT");
   await act(async () =>
@@ -332,7 +364,7 @@ it("restores a saved account override and routes project sign-out correctly", as
   await act(async () =>
     root.render(<CodexSettingsDialog {...props} project={project} />),
   );
-  await navigate("Codex");
+  await navigate("OpenAI");
   expect(
     container.querySelector<HTMLInputElement>('input[type="checkbox"]')!
       .checked,
@@ -364,7 +396,7 @@ it("groups local and remote checkouts and saves the project's selected default e
     [...container.querySelectorAll("nav button")].map(
       (button) => button.textContent,
     ),
-  ).toEqual(["GitHub", "Codex"]);
+  ).toEqual(["GitHub", "OpenAI"]);
   expect(container.textContent).toContain("Local Git folder");
   expect(
     container.querySelector('[aria-label="Ghoulix checkout path"]'),
@@ -394,62 +426,154 @@ it("groups local and remote checkouts and saves the project's selected default e
   );
 });
 
-const settingsProps = { auth: null, onClose: () => {}, onSignInGithub: async () => {}, onRemoveGithub: () => {}, onOpenUrl: () => {} };
+const settingsProps = {
+  auth: null,
+  onClose: () => {},
+  onSignInGithub: async () => {},
+  onRemoveGithub: () => {},
+  onOpenUrl: () => {},
+};
 async function selectStart(label: string) {
-  const field = container.querySelector('[aria-label="Default thread starting point"]')!.closest(".combobox")!;
-  await act(async () => [...field.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === label)!.click());
+  const field = container
+    .querySelector('[aria-label="Default thread starting point"]')!
+    .closest(".combobox")!;
+  await act(async () =>
+    [...field.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((option) => option.textContent === label)!
+      .click(),
+  );
 }
 async function saveSettings() {
-  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Save configuration")!.click());
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Save configuration")!
+      .click(),
+  );
 }
 it("keeps Worktree as the global default and saves the starting point from GitHub settings", async () => {
-  await act(async () => root.render(<CodexSettingsDialog {...settingsProps} />));
-  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("nav button")].find(button => button.textContent === "GitHub")!.click());
-  expect(container.querySelector('[aria-label="Default thread starting point"]')?.textContent).toContain("Worktree from default branch HEAD");
+  await act(async () =>
+    root.render(<CodexSettingsDialog {...settingsProps} />),
+  );
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("nav button")]
+      .find((button) => button.textContent === "GitHub")!
+      .click(),
+  );
+  expect(
+    container.querySelector('[aria-label="Default thread starting point"]')
+      ?.textContent,
+  ).toContain("Worktree from default branch HEAD");
   await selectStart("Current repository branch");
   await saveSettings();
-  expect(request).toHaveBeenCalledWith("saveConfiguration", expect.objectContaining({ defaultThreadStart: "current" }));
+  expect(request).toHaveBeenCalledWith(
+    "saveConfiguration",
+    expect.objectContaining({ defaultThreadStart: "current" }),
+  );
 });
 it("shows the inherited global default, saves a project choice, and can reset it to inheritance", async () => {
   const config = { ...configuration, defaultThreadStart: "current" };
-  request.mockImplementation(async method => method === "models" ? [] : config);
-  await act(async () => root.render(<CodexSettingsDialog {...settingsProps} project={project} />));
-  expect(container.querySelector('[aria-label="Default thread starting point"]')?.textContent).toContain("Use global default (Current repository branch)");
+  request.mockImplementation(async (method) =>
+    method === "models" ? [] : config,
+  );
+  await act(async () =>
+    root.render(<CodexSettingsDialog {...settingsProps} project={project} />),
+  );
+  expect(
+    container.querySelector('[aria-label="Default thread starting point"]')
+      ?.textContent,
+  ).toContain("Use global default (Current repository branch)");
   await selectStart("New branch from default branch");
   await saveSettings();
-  expect(request).toHaveBeenCalledWith("saveProject", expect.objectContaining({ defaultThreadStart: "new" }));
+  expect(request).toHaveBeenCalledWith(
+    "saveProject",
+    expect.objectContaining({ defaultThreadStart: "new" }),
+  );
   await selectStart("Use global default (Current repository branch)");
   await saveSettings();
-  expect(request).toHaveBeenCalledWith("saveProject", expect.objectContaining({ defaultThreadStart: null }));
+  expect(request).toHaveBeenCalledWith(
+    "saveProject",
+    expect.objectContaining({ defaultThreadStart: null }),
+  );
 });
 it("restores a saved project starting point", async () => {
-  const config = { ...configuration, defaultThreadStart: "current", projects: { repo: { ...configuration.projects.repo, defaultThreadStart: "default" } } };
-  request.mockImplementation(async method => method === "models" ? [] : config);
-  await act(async () => root.render(<CodexSettingsDialog {...settingsProps} project={project} />));
-  expect(container.querySelector('[aria-label="Default thread starting point"]')?.textContent).toBe("Default branch checkout");
+  const config = {
+    ...configuration,
+    defaultThreadStart: "current",
+    projects: {
+      repo: { ...configuration.projects.repo, defaultThreadStart: "default" },
+    },
+  };
+  request.mockImplementation(async (method) =>
+    method === "models" ? [] : config,
+  );
+  await act(async () =>
+    root.render(<CodexSettingsDialog {...settingsProps} project={project} />),
+  );
+  expect(
+    container.querySelector('[aria-label="Default thread starting point"]')
+      ?.textContent,
+  ).toBe("Default branch checkout");
 });
 
 it("starts browser GitHub sign-in, allows cancellation, and displays retry errors", async () => {
   let reject!: (error: Error) => void;
-  const signIn = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+  const signIn = vi.fn(
+    () =>
+      new Promise<void>((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
   const cancel = vi.fn(async () => {});
-  await act(async () => root.render(<CodexSettingsDialog {...props}
-    auth={{ configured: false, encryptionAvailable: true, viewerLogin: null }}
-    onSignInGithub={signIn} onCancelGithubSignIn={cancel} />));
+  await act(async () =>
+    root.render(
+      <CodexSettingsDialog
+        {...props}
+        auth={{
+          configured: false,
+          encryptionAvailable: true,
+          viewerLogin: null,
+        }}
+        onSignInGithub={signIn}
+        onCancelGithubSignIn={cancel}
+      />,
+    ),
+  );
   await navigate("GitHub");
-  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Sign in with GitHub")!.click());
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Sign in with GitHub")!
+      .click(),
+  );
   expect(signIn).toHaveBeenCalledTimes(1);
   expect(container.textContent).toContain("Waiting for GitHub");
-  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Cancel sign-in")!.click());
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Cancel sign-in")!
+      .click(),
+  );
   expect(cancel).toHaveBeenCalledTimes(1);
   await act(async () => reject(new Error("Sign-in cancelled")));
   expect(container.textContent).toContain("Sign-in cancelled");
-  expect([...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Sign in with GitHub")!.disabled).toBe(false);
+  expect(
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Sign in with GitHub",
+    )!.disabled,
+  ).toBe(false);
 });
 
 it("shows a single GitHub connection without token controls or an authentication method indicator", async () => {
-  await act(async () => root.render(<CodexSettingsDialog {...props}
-    auth={{ configured: true, encryptionAvailable: true, viewerLogin: "octocat" }} />));
+  await act(async () =>
+    root.render(
+      <CodexSettingsDialog
+        {...props}
+        auth={{
+          configured: true,
+          encryptionAvailable: true,
+          viewerLogin: "octocat",
+        }}
+      />,
+    ),
+  );
   await navigate("GitHub");
   expect(container.textContent).toContain("Connected as octocat");
   expect(container.textContent).toContain("Reconnect with GitHub");
@@ -457,4 +581,32 @@ it("shows a single GitHub connection without token controls or an authentication
   expect(container.textContent).not.toContain("Active method");
   expect(container.textContent).not.toContain("personal access token");
   expect(container.querySelector('input[type="password"]')).toBeNull();
+});
+
+it("uses one OpenAI configuration section with no separate Chat sign-in or usage controls", async () => {
+  await act(async () =>
+    root.render(
+      <CodexSettingsDialog
+        auth={null}
+        onClose={() => {}}
+        onSignInGithub={async () => {}}
+        onRemoveGithub={() => {}}
+        onOpenUrl={() => {}}
+      />,
+    ),
+  );
+  const labels = [...container.querySelectorAll("nav button")].map(
+    (button) => button.textContent,
+  );
+  expect(labels).toContain("OpenAI");
+  expect(labels).not.toContain("Chat");
+  expect(labels).not.toContain("Codex");
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("nav button")]
+      .find((button) => button.textContent === "OpenAI")!
+      .click(),
+  );
+  expect(container.textContent).toContain("OpenAI account");
+  expect(container.querySelector(".think-connection-settings")).toBeNull();
+  expect(container.textContent).not.toContain("Manage usage");
 });

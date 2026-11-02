@@ -4,6 +4,18 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Add native Chat mode with local projects, project instructions, searchable threads, and detachable conversations.
+- Reorder Chat projects and confirm project deletion before removing their threads.
+- Share OpenAI sign-in and model discovery between Build and Chat through one configuration section.
+- Give Chat the Codex Markdown composer, model and reasoning controls, file drop and paste, and expandable response activity.
+- Display generated Chat images with persistent previews, follow-up context, and Open and Save actions.
+- Keep drafts and attachments intact when switching modes or detaching and reattaching chats.
+- Add a permanent left rail for collapse, theme, and global settings, with a horizontal color picker above pane dividers.
+- Place Build and Chat in the first-pane toolbar and distinguish navigation from the rail in light, dark, and glass themes.
+- Keep rounded pane dividers below the titlebar and detached chat titles clear of macOS window controls.
+- Match Chat thread rows, message colors, and input highlights to the existing Build styles.
+- Remove back and forward buttons from all content-pane headers.
+
 ## [0.19.1]
 
 

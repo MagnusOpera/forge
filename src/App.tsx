@@ -1,3 +1,4 @@
+import { ChatWorkspace } from "./chatgpt/workspace";
 import { ReleasesSection } from "./releases";
 import { releaseDate, releasesForTab, type ReleaseTab } from "../shared/releases";
 import { useContentAttachmentShortcut } from "./content-attachment-shortcut";
@@ -13,8 +14,6 @@ import {
   Tag,
   Activity,
   AlertCircle,
-  ArrowLeft,
-  ArrowRight,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -142,6 +141,8 @@ import { CodexQuickActions } from "./codex/quick-actions";
 import { CodexSettingsDialog } from "./codex/settings";
 import { CodexThreadList } from "./codex/threads";
 import { useCodexThreads } from "./codex/api";
+
+const sidebarRailWidth = 48;
 
 const PatchDiff = lazy(async () => {
   const module = await import("@pierre/diffs/react");
@@ -1160,14 +1161,17 @@ type WorkspaceProps = {
   appearance?: ItemAppearance;
   onPaneState?: (target: ContentItemTarget, pane: ItemPaneControl) => void;
   onNavigateItem?: (target: ContentItemTarget) => void;
-  history?: { back: boolean; forward: boolean; navigate(delta: -1 | 1): void };
 };
 export function App() { return <ForgeWorkspace />; }
 
-function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneState, onNavigateItem, history }: WorkspaceProps) {
+function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneState, onNavigateItem }: WorkspaceProps) {
   "use no memo"; // React Compiler does not yet support this try/finally control flow.
 
   const initialItem = useRef(item).current;
+  const [chatMode, setChatMode] = useState(false);
+  const [chatOpened, setChatOpened] = useState(false);
+  const [chatSidebarHost, setChatSidebarHost] = useState<HTMLDivElement | null>(null);
+  const [chatDetached, setChatDetached] = useState(false);
   const contentPane = useDetachablePane({ onReattach: () => { if (initialItem) onNavigateItem?.(initialItem); } });
   const [detachedItems, setDetachedItems] = useState<Map<string, { target: ContentItemTarget; pane: ItemPaneControl }>>(new Map());
   const reportItemPane = useCallback((target: ContentItemTarget, pane: ItemPaneControl) => {
@@ -1439,8 +1443,6 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     }),
     [releaseTab, projectFocusView, projectPullRequestTab, projectWorkflowTab, selectedRepo, selection]
   );
-  const canNavigateBack = navigation.index > 0;
-  const canNavigateForward = navigation.index >= 0 && navigation.index < navigation.entries.length - 1;
 
   const flash = useCallback((message: string) => {
     setToast(message);
@@ -1672,6 +1674,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 
   const selectRepo = useCallback(
     (repo: RepoSummary) => {
+      setChatMode(false);
       setSelectedRepo(repo);
       setStoredProjectFocusView((current) => repositorySelectionFocusView(
         current === "starred-actions" ? "workflows" : current,
@@ -3164,6 +3167,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   useEffect(() => {
     if (initialItem) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (chatMode && !appKeyboardShortcut(event) && !((event.metaKey || event.ctrlKey) && ["b", "k"].includes(event.key.toLowerCase()))) return;
       if (isHtmlElement(event.target) && event.target.closest(".codex-terminal-screen")) return;
       if (hasOpenKeyboardOverlay((event.target as Node | null)?.ownerDocument ?? (event.currentTarget as Window).document)) return;
       if (isTabNavigation(event) && (projectFocusView === "codex" || settingsScope)) return;
@@ -3174,6 +3178,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 
       const shortcut = appKeyboardShortcut(event);
       if (shortcut) {
+        setChatMode(false);
         event.preventDefault();
 
         if (shortcut === "refresh-repository") {
@@ -3280,6 +3285,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     targets.forEach(target => target.addEventListener("keydown", onKeyDown, true));
     return () => targets.forEach(target => target.removeEventListener("keydown", onKeyDown, true));
   }, [
+    chatMode,
     detachedItems,
     favoriteKeys,
     moveMiddleSelection,
@@ -3395,9 +3401,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     selection: projectFocusView === "codex" && selection.kind !== "codex" ? { kind: "repo" } : selection,
     focusView: projectFocusView,
   };
-  const activeDetached = !initialItem && Boolean(detachedItems.get(activeTarget.key)?.pane.detached);
+  const activeDetached = !initialItem && (chatMode ? chatDetached : Boolean(detachedItems.get(activeTarget.key)?.pane.detached));
   const focusSelectedItem = (targetSelection: ContentSelection) => detachedItems.get(contentItemKey(selectedRepo?.id, selectionRouteKey(targetSelection)))?.pane.focus();
   const navigateToItem = useCallback((target: ContentItemTarget) => {
+    setChatMode(false);
     setSelectedRepo(target.repo); setSelection(target.selection); setStoredProjectFocusView(target.focusView);
     if (target.selection.kind === "release") setReleaseTab(target.selection.release.isDraft ? "draft" : target.selection.release.isPrerelease ? "preview" : "active");
     if (target.selection.kind === "pr") setProjectPullRequestTab(pullRequestTabForState(target.selection.pr));
@@ -3412,13 +3419,13 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     if (initialItem) return;
     void api.setContentPaneLayout?.({
       detached: activeDetached,
-      cssWidth: middleWidth + (sidebarCollapsed ? 0 : leftWidth + 1),
+      cssWidth: middleWidth + (sidebarCollapsed ? sidebarRailWidth + 1 : leftWidth + 1),
     }).catch(error => console.warn("Unable to resize the content layout", error));
   }, [activeDetached, sidebarCollapsed, leftWidth, middleWidth]);
   const gridTemplateColumns = activeDetached
-    ? (sidebarCollapsed ? "0px 0px minmax(0, 1fr)" : `${leftWidth}px 1px minmax(0, 1fr)`)
+    ? (sidebarCollapsed ? `${sidebarRailWidth}px 1px minmax(0, 1fr)` : `${leftWidth}px 1px minmax(0, 1fr)`)
     : sidebarCollapsed
-    ? `0px 0px ${middleWidth}px 1px minmax(0, 1fr)`
+    ? `${sidebarRailWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`
     : `${leftWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`;
   const activeAccentColor = appearance?.accent ?? (activeTheme === "dark" ? darkAccentColor : lightAccentColor);
   const selectedAccent = normalizeAccentColor(activeAccentColor, defaultAccentByTheme[activeTheme]);
@@ -3570,10 +3577,6 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         }}
         prActionSubmitting={prActionSubmitting}
         theme={activeTheme}
-        canNavigateBack={history?.back ?? canNavigateBack}
-        canNavigateForward={history?.forward ?? canNavigateForward}
-        onNavigateBack={() => (history?.navigate ?? navigateHistory)(-1)}
-        onNavigateForward={() => (history?.navigate ?? navigateHistory)(1)}
         onOpenGithubUrl={openGithubUrl}
         onOpenWorkflowRunFromCheck={openWorkflowRunFromCheck}
         onCopyText={copyToClipboard}
@@ -3625,6 +3628,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     <div
       className={cx(
         "app-shell",
+        "workspace-shell",
         layoutAnimating && "layout-animating",
         middleKeyboardNavigating && "middle-keyboard-navigating"
       )}
@@ -3638,12 +3642,16 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       onClickCapture={clearPointerActivatedControlFocus}
       style={appStyle}
     >
+      <div className="workspace-body-divider" aria-hidden="true" />
       <Sidebar
-        headerActions={<>
-          <button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={() => setSettingsScope("global")}>
+        chatActive={chatMode}
+        chatSidebarRef={setChatSidebarHost}
+        onBuild={() => setChatMode(false)}
+        onChat={() => { setChatOpened(true); setChatMode(true); setSettingsScope(null); }}
+        globalConfiguration={<button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={() => setSettingsScope("global")}>
             <Settings size={17} />
-          </button>
-          <div className="theme-accent-control">
+          </button>}
+        themeControl={<div className="theme-accent-control">
             <button
               className="theme-toggle-button"
               aria-label={`Current theme: ${themePreferenceLabel(themePreference, systemTheme)}. Switch to ${themePreferenceLabel(nextThemePreference(themePreference), systemTheme)} theme.`}
@@ -3681,15 +3689,14 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
                 ))}
               </div>
             </div>
-          </div>
-        </>}
+          </div>}
         collapsed={sidebarCollapsed}
         favoriteRepos={favoriteRepos}
         repoGroups={repoGroups}
         selectedRepo={selectedRepo}
         search={sidebarSearch}
         onSearch={setSidebarSearch}
-        onToggle={() => setSidebarCollapsedWithAnimation(true)}
+        onToggle={() => setSidebarCollapsedWithAnimation(value => !value)}
         onSelectRepo={selectRepo}
         onToggleFavorite={toggleFavorite}
         onReorderFavoriteRepo={reorderFavoriteRepos}
@@ -3709,7 +3716,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
           }
         }}
       />
-      <ProjectPane
+      {!chatMode && <ProjectPane
         onProjectConfiguration={() => { setSettingsScope("project"); }}
         codexCount={codexThreads.threads.filter((thread) => !thread.archived).length}
         codexList={selectedRepo ? (
@@ -3751,7 +3758,6 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         onPullRequestTab={setProjectPullRequestTab}
         onWorkflowTab={setProjectWorkflowTab}
         onRefresh={() => void refreshActivePane()}
-        onToggleSidebar={() => setSidebarCollapsedWithAnimation(false)}
         onOpenGithubUrl={openGithubUrl}
         onCopyText={copyToClipboard}
         onSelectPr={(pr) => {
@@ -3764,21 +3770,30 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         onSelectWorkflow={(workflow) => { setSelection({ kind: "workflow", workflow }); focusSelectedItem({ kind: "workflow", workflow }); }}
         onToggleWorkflowStar={toggleWorkflowStar}
         onReorderFavoriteWorkflow={reorderFavoriteWorkflows}
-      />
-      {!activeDetached && <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />}
+      />}
+      {!chatMode && !activeDetached && <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />}
+      {chatOpened && <ChatWorkspace sidebarHost={chatSidebarHost} active={chatMode} theme={activeTheme} accent={selectedAccent} appearance={sidebarAppearance}
+        onActivate={() => setChatMode(true)} onDetachedLayout={setChatDetached}
+        onResize={event => startResize("middle", event)} sidebarCollapsed={sidebarCollapsed} />}
+      <div style={{ display: chatMode ? "none" : "contents" }}>
       {retainedContentItems(activeTarget, [...detachedItems.values()].map(entry => entry.target)).map(target => (
         <ForgeWorkspace key={target.key} item={target} sharedAuth={auth} onAuthChange={setAuth}
           appearance={{ themePreference, theme: activeTheme, sidebarAppearance, accent: selectedAccent }}
-          onPaneState={reportItemPane} onNavigateItem={navigateToItem}
-          history={{ back: canNavigateBack, forward: canNavigateForward, navigate: navigateHistory }} />
+          onPaneState={reportItemPane} onNavigateItem={navigateToItem} />
       ))}
+      </div>
       {overlays}
     </div>
   );
 }
 
 interface SidebarProps {
-  headerActions: React.ReactNode;
+  chatSidebarRef(node: HTMLDivElement | null): void;
+  onBuild(): void;
+  chatActive: boolean;
+  onChat(): void;
+  globalConfiguration: React.ReactNode;
+  themeControl: React.ReactNode;
   collapsed: boolean;
   favoriteRepos: RepoSummary[];
   repoGroups: Array<[string, RepoSummary[]]>;
@@ -3799,7 +3814,7 @@ interface SidebarProps {
 function Sidebar(props: SidebarProps) {
   "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
 
-  const sidebarRef = useRef<HTMLElement | null>(null);
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useStoredState<Record<string, boolean>>(
     "github-focus:collapsed-orgs",
@@ -3808,7 +3823,8 @@ function Sidebar(props: SidebarProps) {
   const [repoTab, setRepoTab] = useStoredState<SidebarRepoTab>("github-focus:sidebar-repo-tab", "favorites");
   const searchActive = props.search.trim().length > 0;
   const allRepoCount = props.repoGroups.reduce((total, [, repos]) => total + repos.length, 0);
-  const repoTabsUnderline = useSlidingUnderline(`${repoTab}:${props.favoriteRepos.length}:${allRepoCount}`);
+  const repoTabsUnderline = useSlidingUnderline(`${props.chatActive}:${repoTab}:${props.favoriteRepos.length}:${allRepoCount}`);
+  const modeUnderline = useSlidingUnderline(String(props.chatActive));
   const favoriteMonitorText = props.favoriteMonitorChecking
     ? "Checking favorites"
     : props.favoriteMonitorLastCheckedAt
@@ -3828,20 +3844,27 @@ function Sidebar(props: SidebarProps) {
   }, [props.collapsed]);
 
   return (
-    <aside
-      ref={sidebarRef}
-      className={cx("sidebar", props.collapsed && "sidebar-hidden")}
-      tabIndex={props.collapsed ? -1 : 0}
-      aria-hidden={props.collapsed}
-    >
+    <aside className={cx("sidebar", props.collapsed && "sidebar-collapsed")}>
+      <div className="sidebar-rail" role="toolbar" aria-label="Global controls" aria-orientation="vertical">
+        <button className="icon-button" aria-label={props.collapsed ? "Open sidebar" : "Collapse sidebar"} title={props.collapsed ? "Open sidebar" : "Collapse sidebar"} aria-expanded={!props.collapsed} onClick={props.onToggle}>
+          {props.collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
+        {props.themeControl}
+        <div className="sidebar-rail-spacer" />
+        {props.globalConfiguration}
+      </div>
+      <div ref={sidebarRef} className="sidebar-navigation" tabIndex={props.collapsed ? -1 : 0} aria-hidden={props.collapsed}>
       <div className="pane-header app-drag">
         <div className="header-actions">
-          {!props.collapsed && props.headerActions}
-          <button className="icon-button" aria-label="Collapse sidebar" onClick={props.onToggle}>
-            <PanelLeftClose size={18} />
-          </button>
+          <div ref={modeUnderline.containerRef} className="project-view-switcher workspace-mode-selector" role="toolbar" aria-label="Workspace mode">
+            <button className={cx("icon-button project-view-button", !props.chatActive && "active")} data-active-tab={!props.chatActive ? "true" : undefined} aria-label="Build" title="Build" aria-pressed={!props.chatActive} onClick={props.onBuild}><Code2 size={15} /></button>
+            <button className={cx("icon-button project-view-button chatgpt-nav-button", props.chatActive && "active")} data-active-tab={props.chatActive ? "true" : undefined} aria-label="Chat" title="Chat" aria-pressed={props.chatActive} onClick={props.onChat}><MessageSquare size={15} /></button>
+            <span className="sliding-tab-underline" style={modeUnderline.underlineStyle} aria-hidden="true" />
+          </div>
         </div>
       </div>
+      <div ref={props.chatSidebarRef} className="chatgpt-sidebar-host" style={{ display: props.chatActive ? "flex" : "none" }} />
+      <div className="sidebar-build-view" style={{ display: props.chatActive ? "none" : "flex" }}>
       <div ref={repoTabsUnderline.containerRef} className="sidebar-tabs" role="tablist" aria-label="Repository view">
         <button
           className={cx("sidebar-tab", repoTab === "favorites" && "active")}
@@ -3942,6 +3965,8 @@ function Sidebar(props: SidebarProps) {
           <span>{favoriteMonitorText}</span>
         </div>
       )}
+      </div>
+      </div>
     </aside>
   );
 }
@@ -4161,7 +4186,6 @@ function ProjectPane(props: {
   onPullRequestTab(tab: ProjectPullRequestTab): void;
   onWorkflowTab(tab: ProjectWorkflowTab): void;
   onRefresh(): void;
-  onToggleSidebar(): void;
   onOpenGithubUrl(url: string): void;
   onCopyText(value: string): Promise<boolean>;
   onSelectPr(pr: PullRequestSummary): void;
@@ -4182,11 +4206,6 @@ function ProjectPane(props: {
     <section className="project-pane" tabIndex={0}>
       <div className={cx("pane-header", props.sidebarCollapsed && "collapsed-project-header")}>
         <div className="pane-title">
-          {props.sidebarCollapsed && (
-            <button className="icon-button project-sidebar-toggle" aria-label="Open sidebar" onClick={props.onToggleSidebar}>
-              <PanelLeftOpen size={18} />
-            </button>
-          )}
           {props.loading && <Loader2 className="spin" size={14} />}
         </div>
         <div className="header-actions">
@@ -4711,12 +4730,8 @@ function ContentPane(props: {
   prActionSubmitting: boolean;
   theme: ThemeMode;
   workflowRuns: WorkflowRunSummary[];
-  canNavigateBack: boolean;
-  canNavigateForward: boolean;
   onPrTabChange(tab: string): void;
   onRunTabChange(tab: string): void;
-  onNavigateBack(): void;
-  onNavigateForward(): void;
   onOpenGithubUrl(url: string): void;
   onOpenWorkflowRunFromCheck(check: CheckSummary): void;
   onCopyText(value: string): Promise<boolean>;
@@ -4869,24 +4884,6 @@ function ContentPane(props: {
     <main className="content-pane" tabIndex={0}>
       <div className="content-header app-drag">
         <div className="content-header-left">
-          <div className="navigation-controls" aria-label="Navigation">
-            <button
-              className="icon-button navigation-button"
-              aria-label="Back"
-              onClick={props.onNavigateBack}
-              disabled={!props.canNavigateBack}
-            >
-              <ArrowLeft size={16} />
-            </button>
-            <button
-              className="icon-button navigation-button"
-              aria-label="Forward"
-              onClick={props.onNavigateForward}
-              disabled={!props.canNavigateForward}
-            >
-              <ArrowRight size={16} />
-            </button>
-          </div>
           <div className="content-title">
             {props.codexContent ? (
               <span title={props.detached && props.codexTitle ? `Codex - ${props.codexTitle}` : undefined}>

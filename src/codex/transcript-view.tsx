@@ -18,6 +18,7 @@ import { editedFiles, groupTranscript, workedDuration } from "./transcript";
 import { CodexDiffDialog } from "./diff-dialog";
 const labels: Record<string, string> = {
   reasoning: "Thinking summary",
+  imageGeneration: "Image generation",
   plan: "Plan",
   commandExecution: "Command",
   fileChange: "File changes",
@@ -60,7 +61,7 @@ function EditedFiles({ files, onOpen, remote }: {
   );
 }
 
-function WorkActivity({
+export function WorkActivity({
   items,
   timing,
   active,

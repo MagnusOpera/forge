@@ -26,15 +26,17 @@ export function ModelPicker({
   models,
   disabled,
   onChange,
+  defaultLabel = "Codex default",
 }: {
   value: CodexPreferences;
   models: CodexModel[];
   disabled: boolean;
+  defaultLabel?: string;
   onChange: (value: CodexPreferences) => void;
 }) {
   "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
 
-  const { window } = usePaneSurface();
+  const { window, document } = usePaneSurface();
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -47,7 +49,7 @@ export function ModelPicker({
   );
   const latest = useRef({ value, onChange });
   latest.current = { value, onChange };
-  const choices = [{ id: "", name: "Codex default" }, ...models];
+  const choices = [{ id: "", name: defaultLabel }, ...models];
   useEffect(() => {
     if (showModels)
       list.current
@@ -108,7 +110,7 @@ export function ModelPicker({
         {value.speed === "fast" && (
           <Zap size={12} fill="currentColor" aria-label="Fast speed" />
         )}
-        <span>{model?.name ?? (value.model || "Codex default")}</span>
+        <span>{model?.name ?? (value.model || defaultLabel)}</span>
         <span className="codex-muted">{effortLabel(currentEffort)}</span>
         <ChevronDown size={12} />
       </button>
@@ -233,7 +235,7 @@ export function ModelPicker({
                     {model?.name ??
                       (value.model
                         ? `${value.model} (unavailable)`
-                        : "Codex default")}
+                        : defaultLabel)}
                   </span>
                   <ChevronDown size={12} aria-hidden="true" />
                 </button>

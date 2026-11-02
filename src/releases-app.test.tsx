@@ -70,7 +70,7 @@ it.each(["light", "dark"])("opens Releases by shortcut, reads notes with keyboar
   await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "j", bubbles: true, cancelable: true })));
   expect(container.querySelector(".content-pane h1")?.textContent).toBe("Next version");
   expect(container.querySelector(".content-pane .markdown-block")?.textContent).toBe("Draft notes.");
-  await act(async () => container.querySelector<HTMLButtonElement>('.project-view-button[aria-pressed="true"]')!.click());
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Project focus view"] .project-view-button[aria-pressed="true"]')!.click());
   expect(getReleases).toHaveBeenCalledWith(expect.objectContaining({ owner: "test", name: "repo" }), { force: true });
 });
 
