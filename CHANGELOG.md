@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Refresh the website screenshots to show the current workspace, detached panes, and release view in both themes.
+
 ## [0.21.14]
 
 
