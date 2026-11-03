@@ -54,7 +54,7 @@ import {
 } from "./merge.js";
 import { assertWorktree, createWorktree, git } from "./git.js";
 import { hydrateCodexTurn, reduceCodexEvent, turnPolicy } from "./events.js";
-import { threadStartOptions, prepareDirectCheckout, validateThreadStart } from "./thread-start.js";
+import { threadStartOptions, startBaseCommit, prepareDirectCheckout, validateThreadStart } from "./thread-start.js";
 const supportedRequests = new Set([
   "item/tool/requestUserInput",
   "item/commandExecution/requestApproval",
@@ -456,7 +456,7 @@ export class ThreadManager {
           path.join(this.store.root, "worktrees"),
           thread.id,
           0,
-          thread.start ? `refs/heads/${thread.start.branch}` : "HEAD",
+          thread.start ? await startBaseCommit((args) => git(thread.repositoryPath, args), thread.start, true) : "HEAD",
         ),
       );
     }

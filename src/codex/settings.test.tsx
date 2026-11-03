@@ -462,7 +462,7 @@ it("keeps Worktree as the global default and saves the starting point from GitHu
   expect(
     container.querySelector('[aria-label="Default thread starting point"]')
       ?.textContent,
-  ).toContain("Worktree from default branch HEAD");
+  ).toContain("Worktree from origin/HEAD (fetch first)");
   await selectStart("Current repository branch");
   await saveSettings();
   expect(request).toHaveBeenCalledWith(
@@ -482,7 +482,7 @@ it("shows the inherited global default, saves a project choice, and can reset it
     container.querySelector('[aria-label="Default thread starting point"]')
       ?.textContent,
   ).toContain("Use global default (Current repository branch)");
-  await selectStart("New branch from default branch");
+  await selectStart("New branch from origin/HEAD (fetch first)");
   await saveSettings();
   expect(request).toHaveBeenCalledWith(
     "saveProject",

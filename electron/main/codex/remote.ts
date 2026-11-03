@@ -402,7 +402,7 @@ export async function prepareRemoteWorktree(
     );
     thread.repositoryPath = remotePath(root);
     thread.baseCommit = thread.start
-      ? await startBaseCommit((args) => remoteCommand(client, ["git", ...args], thread.repositoryPath), thread.start)
+      ? await startBaseCommit((args) => remoteCommand(client, ["git", ...args], thread.repositoryPath), thread.start, true)
       : await remoteCommand(client, ["git", "rev-parse", "--verify", "HEAD^{commit}"], thread.repositoryPath);
     thread.branch = `codex/forge-${thread.id}`;
     if (

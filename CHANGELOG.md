@@ -4,6 +4,10 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Place the new-branch starting point directly after worktree in global and project configuration.
+
+- Fetch the origin default branch before starting isolated worktrees or new branches.
+
 ## [0.20.0]
 
 

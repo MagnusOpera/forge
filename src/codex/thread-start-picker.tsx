@@ -73,9 +73,9 @@ export function ThreadStartPicker({ thread, onChange, onPendingChange }: {
         value={kind}
         disabled={busy || !options}
         options={[
-          { value: "worktree", label: `Worktree from ${options?.defaultBranch || "default branch"} HEAD`, disabled: !options?.defaultBranch },
+          { value: "worktree", label: `Worktree from origin/${options?.defaultBranch || "HEAD"} (fetch first)`, disabled: !options?.defaultBranch },
           { value: "default", label: `Default branch (${options?.defaultBranch || "unavailable"})`, disabled: !options?.defaultBranch },
-          { value: "new", label: `New branch from ${options?.defaultBranch || "default branch"}`, disabled: !options?.defaultBranch },
+          { value: "new", label: `New branch from origin/${options?.defaultBranch || "HEAD"} (fetch first)`, disabled: !options?.defaultBranch },
           { value: "current", label: `Current repository branch (${options?.currentBranch || "detached HEAD"})`, disabled: !options?.currentBranch },
         ]}
         onChange={(next) => {

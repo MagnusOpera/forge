@@ -16,9 +16,9 @@ import { isThreadStartKind, DEFAULT_THREAD_START, DEFAULT_TEXT_EDITOR, MINIMUM_C
 import { codexApi, errorMessage } from "./api";
 import { PreferencesEditor, useCodexModels } from "./preferences";
 const threadStartLabels: Record<CodexThreadStartKind, string> = {
-  worktree: "Worktree from default branch HEAD",
+  worktree: "Worktree from origin/HEAD (fetch first)",
+  new: "New branch from origin/HEAD (fetch first)",
   default: "Default branch checkout",
-  new: "New branch from default branch",
   current: "Current repository branch",
 };
 

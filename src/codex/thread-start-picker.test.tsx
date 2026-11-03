@@ -31,8 +31,8 @@ const choose = async (kind: string) => act(async () => {
 it("shows named branches inline without descriptions", async () => {
   await render();
   expect(request).toHaveBeenCalledWith("startOptions", { repositoryId: "r", id: "t" });
-  expect(container.querySelector('[role="combobox"]')?.textContent).toContain("Worktree from trunk HEAD");
-  expect(container.textContent).toContain("Worktree from trunk HEAD");
+  expect(container.querySelector('[role="combobox"]')?.textContent).toContain("Worktree from origin/trunk (fetch first)");
+  expect(container.textContent).toContain("Worktree from origin/trunk (fetch first)");
   expect(container.textContent).toContain("Default branch (trunk)");
   expect(container.textContent).toContain("Current repository branch (feature)");
   expect(container.querySelector("p")).toBeNull();
@@ -100,7 +100,7 @@ it("shows a save error and retains the last applied starting point", async () =>
   request.mockRejectedValueOnce(new Error("Checkout missing"));
   await choose("current");
   expect(container.querySelector('[role="alert"]')?.textContent).toContain("Checkout missing");
-  expect(container.querySelector('[role="combobox"]')?.textContent).toContain("Worktree from trunk HEAD");
+  expect(container.querySelector('[role="combobox"]')?.textContent).toContain("Worktree from origin/trunk (fetch first)");
 });
 
 it("requires a branch name when a new thread defaults to New branch", async () => {

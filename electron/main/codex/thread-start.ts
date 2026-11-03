@@ -19,10 +19,18 @@ export async function threadStartOptions(run: GitRunner): Promise<CodexStartOpti
   }
   return { defaultBranch, currentBranch };
 }
-export async function startBaseCommit(run: GitRunner, start: CodexThreadStart): Promise<string> {
+export async function startBaseCommit(run: GitRunner, start: CodexThreadStart, fetch = false): Promise<string> {
   if (!start.branch?.trim()) throw new Error("Choose a branch name.");
   await run(["check-ref-format", "--branch", start.branch]);
-  return (await run(["rev-parse", "--verify", `refs/heads/${start.branch}^{commit}`])).trim();
+  let ref = `refs/heads/${start.branch}`;
+  if (start.kind === "worktree" && (await run(["remote"])).split(/\s+/).includes("origin")) {
+    ref = `refs/remotes/origin/${start.branch}`;
+    if (fetch) await run(["fetch", "--no-tags", "origin", `+refs/heads/${start.branch}:${ref}`]);
+    // Validation does not fetch; a fresh clone may not track the default branch yet.
+    if (!fetch && !(await run(["show-ref", "--verify", ref]).then(() => true, () => false)))
+      return (await run(["rev-parse", "--verify", `refs/heads/${start.branch}^{commit}`])).trim();
+  }
+  return (await run(["rev-parse", "--verify", `${ref}^{commit}`])).trim();
 }
 export async function prepareDirectCheckout(run: GitRunner, start: CodexThreadStart): Promise<{ branch: string; baseCommit: string }> {
   if (!start.branch?.trim()) throw new Error("Choose a branch name.");
@@ -36,7 +44,7 @@ export async function prepareDirectCheckout(run: GitRunner, start: CodexThreadSt
     if (start.kind === "new") {
       // New branches start at the default branch, independently of the current checkout.
       const options = await threadStartOptions(run);
-      const base = await startBaseCommit(run, { kind: "worktree", branch: options.defaultBranch });
+      const base = await startBaseCommit(run, { kind: "worktree", branch: options.defaultBranch }, true);
       await run(["switch", "-c", start.branch, base]);
     } else {
       await startBaseCommit(run, start);
