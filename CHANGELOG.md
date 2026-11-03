@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.2]
+
+
 - Update Electron to 45.2.1 with the latest Chromium fixes.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.1...0.21.2
 
 ## [0.21.1]
 
