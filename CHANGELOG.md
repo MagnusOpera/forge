@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.14]
+
+
 - Keep the current window position and size when detaching panes after resizing with Rectangle or other window managers.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.13...0.21.14
 
 ## [0.21.13]
 
