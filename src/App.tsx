@@ -1,3 +1,4 @@
+import { UpdateCheckIndicator } from "./update-check-indicator";
 import { accentColors, normalizeAccentColor, projectAccentColor, type AccentColor, type ProjectAccentColors } from "./appearance";
 import { ChatWorkspace } from "./chatgpt/workspace";
 import { ReleasesSection } from "./releases";
@@ -413,6 +414,9 @@ function ipcUnavailable<T>(): Promise<T> {
 }
 
 const browserApi: GithubFocusApi = {
+  getUpdateStatus: async () => ({ checking: false, availableVersion: null, downloaded: false }),
+  installUpdate: async () => undefined,
+  onUpdateStatusChanged: () => () => undefined,
   platform: "browser",
   getAuthStatus: async () => ({ configured: false, encryptionAvailable: false, viewerLogin: null }),
   signInGithub: () => ipcUnavailable(),
@@ -3646,9 +3650,9 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         chatSidebarRef={setChatSidebarHost}
         onBuild={() => setChatMode(false)}
         onChat={() => { setChatOpened(true); setChatMode(true); setSettingsScope(null); }}
-        globalConfiguration={<button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={() => setSettingsScope("global")}>
+        globalConfiguration={<><UpdateCheckIndicator api={api} /><button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={() => setSettingsScope("global")}>
             <Settings size={17} />
-          </button>}
+          </button></>}
         themeControl={<div className="theme-accent-control">
             <button
               className="theme-toggle-button"

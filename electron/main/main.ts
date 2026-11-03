@@ -31,6 +31,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   ActorSummary,
+  AppUpdateStatus,
   AddPullRequestCommentPayload,
   ArtifactSummary,
   AuthStatus,
@@ -117,6 +118,8 @@ const activeNotifications = new Set<Notification>();
 let sidebarAppearanceMode: SidebarAppearanceMode = DEFAULT_SIDEBAR_APPEARANCE_MODE;
 let autoUpdaterInitialized = false;
 let updateCheckInFlight = false;
+let availableUpdateVersion: string | null = null;
+let downloadedUpdateVersion: string | null = null;
 let latestUpdateCheckWasManual = false;
 let updateRestartDialogOpen = false;
 
@@ -201,20 +204,23 @@ function initializeAutoUpdater(): void {
     });
   });
 
-  autoUpdater.on("update-available", (info) => {
-    if (!latestUpdateCheckWasManual) {
-      return;
+  autoUpdater.on("update-available", async (info) => {
+    if (latestUpdateCheckWasManual) {
+      await dialog.showMessageBox({
+        type: "info",
+        title: "Update Available",
+        message: `Forge ${info.version} is available.`,
+        detail: "The update is downloading and Forge will ask before restarting to install it."
+      });
     }
-
-    void dialog.showMessageBox({
-      type: "info",
-      title: "Update Available",
-      message: `Forge ${info.version} is available.`,
-      detail: "The update is downloading and Forge will ask before restarting to install it."
-    });
+    availableUpdateVersion = info.version;
+    broadcastUpdateStatus();
   });
 
   autoUpdater.on("update-downloaded", (event: UpdateDownloadedEvent) => {
+    downloadedUpdateVersion = event.version;
+    availableUpdateVersion = event.version;
+    broadcastUpdateStatus();
     void promptToInstallUpdate(event.version);
   });
 
@@ -245,6 +251,36 @@ async function promptToInstallUpdate(version: string): Promise<void> {
     }
   } finally {
     updateRestartDialogOpen = false;
+  }
+}
+
+function getUpdateStatus(): AppUpdateStatus {
+  return {
+    checking: updateCheckInFlight,
+    availableVersion: availableUpdateVersion,
+    downloaded: Boolean(availableUpdateVersion && downloadedUpdateVersion === availableUpdateVersion),
+  };
+}
+
+function broadcastUpdateStatus(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("updates:status-changed", getUpdateStatus());
+  }
+}
+
+function setUpdateCheckInFlight(checking: boolean): void {
+  updateCheckInFlight = checking;
+  broadcastUpdateStatus();
+}
+
+async function installAvailableUpdate(): Promise<void> {
+  if (!availableUpdateVersion) return;
+  if (downloadedUpdateVersion === availableUpdateVersion) {
+    await promptToInstallUpdate(availableUpdateVersion);
+  } else {
+    // Reuses an active download and retries a failed one. The downloaded event
+    // opens the existing restart confirmation when the update is ready.
+    await autoUpdater.downloadUpdate();
   }
 }
 
@@ -279,7 +315,7 @@ async function checkForUpdates(options: { manual: boolean }): Promise<void> {
   }
 
   initializeAutoUpdater();
-  updateCheckInFlight = true;
+  setUpdateCheckInFlight(true);
   try {
     await autoUpdater.checkForUpdates();
   } catch (error) {
@@ -293,7 +329,7 @@ async function checkForUpdates(options: { manual: boolean }): Promise<void> {
       });
     }
   } finally {
-    updateCheckInFlight = false;
+    setUpdateCheckInFlight(false);
   }
 }
 
@@ -2539,6 +2575,8 @@ function assertGitHubAuthSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerIpc(): void {
+  ipcMain.handle("updates:get-status", () => getUpdateStatus());
+  ipcMain.handle("updates:install", () => installAvailableUpdate());
   ipcMain.handle("auth:get-status", () => getAuthStatus());
   ipcMain.handle("auth:sign-in", async event => {
     assertGitHubAuthSender(event);

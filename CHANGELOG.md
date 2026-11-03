@@ -4,6 +4,10 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Show update checks in the rail and keep an upgrade button available after dismissing a new-version dialog.
+
+- Open project configuration on the Appearance section by default.
+
 ## [0.21.2]
 
 

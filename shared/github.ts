@@ -366,7 +366,16 @@ export interface PullRequestAutoMergePayload extends PullRequestActionPayload {
   pullRequestId: string;
 }
 
+export interface AppUpdateStatus {
+  checking: boolean;
+  availableVersion: string | null;
+  downloaded: boolean;
+}
+
 export interface GithubFocusApi {
+  getUpdateStatus(): Promise<AppUpdateStatus>;
+  onUpdateStatusChanged(callback: (status: AppUpdateStatus) => void): () => void;
+  installUpdate(): Promise<void>;
   getAuthStatus(): Promise<AuthStatus>;
   signInGithub(): Promise<AuthStatus>;
   cancelGithubSignIn(): Promise<void>;

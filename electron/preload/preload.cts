@@ -4,6 +4,7 @@ import type {
   CacheRequestOptions,
   DispatchWorkflowPayload,
   GithubFocusApi,
+  AppUpdateStatus,
   NativeNotificationPermission,
   NativeNotificationPayload,
   NativeNotificationSource,
@@ -38,6 +39,13 @@ async function requestNotificationPermission(): Promise<NativeNotificationPermis
 }
 
 const api: GithubFocusApi = {
+  installUpdate: () => ipcRenderer.invoke("updates:install"),
+  getUpdateStatus: () => ipcRenderer.invoke("updates:get-status"),
+  onUpdateStatusChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: AppUpdateStatus) => callback(status);
+    ipcRenderer.on("updates:status-changed", listener);
+    return () => ipcRenderer.removeListener("updates:status-changed", listener);
+  },
   platform: process.platform,
   getAuthStatus: () => ipcRenderer.invoke("auth:get-status"),
   signInGithub: () => ipcRenderer.invoke("auth:sign-in"),

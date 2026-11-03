@@ -49,7 +49,7 @@ export function CodexSettingsDialog({
   const { document } = usePaneSurface();
   const [accent, setAccent] = useState<AccentColor | undefined>(projectAccent);
   useEffect(() => setAccent(projectAccent), [project?.id, projectAccent]);
-  const [section, setSection] = useState(project ? "github" : "general");
+  const [section, setSection] = useState(project ? "appearance" : "general");
   const [homeRelativePath, setHomeRelativePath] = useState<string | null>(null);
   const [defaultEnvironment, setDefaultEnvironment] = useState("local");
   const [defaultThreadStart, setDefaultThreadStart] = useState<CodexThreadStartKind | "">(project ? "" : DEFAULT_THREAD_START);
@@ -131,7 +131,7 @@ export function CodexSettingsDialog({
   }, [document]);
   useEffect(() => {
     let active = true;
-    setSection(project ? "github" : "general");
+    setSection(project ? "appearance" : "general");
     if (!window.forgeCodex) {
       setError("Codex requires the Forge desktop app.");
       return;

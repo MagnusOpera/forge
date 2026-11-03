@@ -211,6 +211,7 @@ it("displays the local checkout with ~ while retaining its absolute operational 
       />,
     ),
   );
+  await navigate("GitHub");
   const displayed = container.querySelector<HTMLElement>(".codex-path")!;
   expect(displayed.textContent).toBe("~/src/forge");
   expect(displayed.title).toBe("/local/forge");
@@ -397,6 +398,7 @@ it("groups local and remote checkouts and saves the project's selected default e
       (button) => button.textContent,
     ),
   ).toEqual(["Appearance", "GitHub", "OpenAI"]);
+  await navigate("GitHub");
   expect(container.textContent).toContain("Local Git folder");
   expect(
     container.querySelector('[aria-label="Ghoulix checkout path"]'),
@@ -478,6 +480,7 @@ it("shows the inherited global default, saves a project choice, and can reset it
   await act(async () =>
     root.render(<CodexSettingsDialog {...settingsProps} project={project} />),
   );
+  await navigate("GitHub");
   expect(
     container.querySelector('[aria-label="Default thread starting point"]')
       ?.textContent,
@@ -509,6 +512,7 @@ it("restores a saved project starting point", async () => {
   await act(async () =>
     root.render(<CodexSettingsDialog {...settingsProps} project={project} />),
   );
+  await navigate("GitHub");
   expect(
     container.querySelector('[aria-label="Default thread starting point"]')
       ?.textContent,
@@ -636,4 +640,17 @@ it("saves a project accent and restores global inheritance without changing Code
   await act(async () => inherit().click());
   await act(async () => button("Save configuration").click());
   expect(onSaveProjectAccent).toHaveBeenLastCalledWith(undefined);
+});
+
+
+it("opens project configuration on Appearance and resets the section when switching scope", async () => {
+  await act(async () => root.render(<CodexSettingsDialog {...props} project={project} />));
+  const selected = () => container.querySelector('nav [aria-current="page"]')?.textContent;
+  expect(selected()).toBe("Appearance");
+  expect(container.querySelector('[aria-label="Project accent color"]')).not.toBeNull();
+  await navigate("GitHub");
+  await act(async () => root.render(<CodexSettingsDialog {...props} />));
+  expect(selected()).toBe("General");
+  await act(async () => root.render(<CodexSettingsDialog {...props} project={project} />));
+  expect(selected()).toBe("Appearance");
 });

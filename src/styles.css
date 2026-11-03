@@ -3982,3 +3982,12 @@ code {
   gap: 12px;
   margin-top: 16px;
 }
+
+.rail-update-check {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--icon);
+}

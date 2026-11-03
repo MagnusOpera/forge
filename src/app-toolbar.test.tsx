@@ -2,16 +2,24 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
-import type { GithubFocusApi } from "../shared/github";
+import type { AppUpdateStatus, GithubFocusApi } from "../shared/github";
 
 vi.mock("./codex/settings", () => ({
   CodexSettingsDialog: () => <div role="dialog" aria-label="Global settings" />,
 }));
+let updateStatusChanged: ((status: AppUpdateStatus) => void) | undefined;
+const installUpdate = vi.fn(async () => {});
 let App: typeof import("./App").App;
 let root: Root, container: HTMLDivElement;
 beforeAll(async () => {
   window.githubFocus = {
     platform: "browser",
+    getUpdateStatus: async () => ({ checking: false, availableVersion: null, downloaded: false }),
+    onUpdateStatusChanged: (callback: (status: AppUpdateStatus) => void) => {
+      updateStatusChanged = callback;
+      return () => { updateStatusChanged = undefined; };
+    },
+    installUpdate,
     getAuthStatus: async () => ({
       configured: true,
       encryptionAvailable: false,
@@ -140,4 +148,29 @@ it("keeps the rounded body divider separate from the native titlebar and rail", 
   expect(
     shell.querySelector('.sidebar .pane-header [aria-label="Workspace mode"]'),
   ).not.toBeNull();
+});
+
+
+it("shows update activity and a persistent upgrade button immediately above global configuration", async () => {
+  const rail = container.querySelector('[role="toolbar"][aria-label="Global controls"]')!;
+  const configuration = rail.querySelector('[aria-label="Global configuration"]')!;
+  expect(rail.querySelector('[aria-label="Checking for updates"]')).toBeNull();
+  await act(async () => updateStatusChanged!({ checking: true, availableVersion: null, downloaded: false }));
+  const spinner = rail.querySelector('[aria-label="Checking for updates"]')!;
+  expect(spinner.nextElementSibling).toBe(configuration);
+  expect(spinner.querySelector(".spin")).not.toBeNull();
+  await act(async () => rail.querySelector<HTMLButtonElement>('[aria-label="Collapse sidebar"]')!.click());
+  expect(spinner.closest('[aria-hidden="true"], [inert]')).toBeNull();
+  await act(async () => updateStatusChanged!({ checking: false, availableVersion: "1.2.3", downloaded: false }));
+  expect(rail.querySelector('[aria-label="Checking for updates"]')).toBeNull();
+  const upgrade = rail.querySelector<HTMLButtonElement>('[aria-label="Upgrade to Forge 1.2.3"]')!;
+  expect(upgrade.nextElementSibling).toBe(configuration);
+  await act(async () => upgrade.click());
+  expect(installUpdate).toHaveBeenCalledOnce();
+  await act(async () => updateStatusChanged!({ checking: false, availableVersion: "1.2.3", downloaded: true }));
+  expect(upgrade.title).toContain("ready to install");
+  await act(async () => updateStatusChanged!({ checking: true, availableVersion: "1.2.3", downloaded: true }));
+  expect(rail.querySelector('[aria-label="Checking for updates"]')).not.toBeNull();
+  await act(async () => updateStatusChanged!({ checking: false, availableVersion: "1.2.3", downloaded: true }));
+  expect(rail.querySelector('[aria-label="Upgrade to Forge 1.2.3"]')).not.toBeNull();
 });
