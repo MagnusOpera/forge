@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.1]
+
+
 - Override the global accent color in the first section of project configuration, Appearance.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.0...0.21.1
 
 ## [0.21.0]
 
