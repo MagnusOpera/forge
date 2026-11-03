@@ -1,3 +1,4 @@
+import { accentColors, type AccentColor } from "../appearance";
 import { usePaneSurface } from "../pane-surface";
 import { displayPath, displayPathText, expandDisplayPath } from "../paths";
 import { EnvironmentsEditor, ProjectEnvironments } from "./environments";
@@ -24,6 +25,8 @@ const threadStartLabels: Record<CodexThreadStartKind, string> = {
 
 export function CodexSettingsDialog({
   project,
+  projectAccent,
+  onSaveProjectAccent,
   auth,
   onClose,
   onSignInGithub,
@@ -32,6 +35,8 @@ export function CodexSettingsDialog({
   onOpenUrl,
 }: {
   project?: RepoSummary;
+  projectAccent?: AccentColor;
+  onSaveProjectAccent?: (color: AccentColor | undefined) => void;
   auth: AuthStatus | null;
   onClose: () => void;
   onSignInGithub: () => Promise<void>;
@@ -42,6 +47,8 @@ export function CodexSettingsDialog({
   "use no memo"; // React Compiler does not yet support this try/finally control flow.
 
   const { document } = usePaneSurface();
+  const [accent, setAccent] = useState<AccentColor | undefined>(projectAccent);
+  useEffect(() => setAccent(projectAccent), [project?.id, projectAccent]);
   const [section, setSection] = useState(project ? "github" : "general");
   const [homeRelativePath, setHomeRelativePath] = useState<string | null>(null);
   const [defaultEnvironment, setDefaultEnvironment] = useState("local");
@@ -268,6 +275,7 @@ export function CodexSettingsDialog({
           >
             {(project
               ? [
+                  ["appearance", "Appearance"],
                   ["github", "GitHub"],
                   ["codex", "OpenAI"],
                 ]
@@ -289,6 +297,24 @@ export function CodexSettingsDialog({
             ))}
           </nav>
           <div className="codex-settings-scroll">
+            {project && section === "appearance" && (
+              <section>
+                <h3>Accent color</h3>
+                <p className="codex-muted">Choose an accent for this project in light and dark mode.</p>
+                <label>
+                  <input type="checkbox" checked={!accent} onChange={event => setAccent(event.target.checked ? undefined : accentColors[0])} />{" "}
+                  Use global accent color
+                </label>
+                <div className="project-accent-swatches" role="radiogroup" aria-label="Project accent color">
+                  {accentColors.map((color, index) => (
+                    <button key={color} className={`accent-swatch ${accent === color ? "active" : ""}`}
+                      style={{ "--swatch-color": color } as React.CSSProperties}
+                      role="radio" aria-checked={accent === color} aria-label={`Project accent ${index + 1}`}
+                      onClick={() => setAccent(color)} />
+                  ))}
+                </div>
+              </section>
+            )}
             {!project && section === "environments" && configuration && (
               <EnvironmentsEditor
                 configuration={configuration}
@@ -629,7 +655,11 @@ export function CodexSettingsDialog({
           <button className="ghost-button" onClick={onClose} disabled={busy}>
             Close
           </button>
-          {(project || ["general", "github", "codex"].includes(section)) && (
+          {project && section === "appearance" ? (
+            <button className="ghost-button" onClick={() => { onSaveProjectAccent?.(accent); onClose(); }}>
+              Save configuration
+            </button>
+          ) : (project || ["general", "github", "codex"].includes(section)) && (
             <button
               className="ghost-button"
               disabled={busy || !configuration}
@@ -653,6 +683,7 @@ export function CodexSettingsDialog({
                         defaultThreadStart: defaultThreadStart || DEFAULT_THREAD_START,
                       });
                   setConfiguration(next);
+                  if (project) onSaveProjectAccent?.(accent);
                   onClose();
                 })
               }

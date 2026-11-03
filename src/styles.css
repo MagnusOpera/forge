@@ -3976,3 +3976,9 @@ code {
 .codex-conversation-search { margin: 4px 8px 8px; }
 .codex-search-status { margin: 8px 12px; color: var(--text-muted); font-size: 12px; }
 .codex-search-snippet { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
+.project-accent-swatches {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}

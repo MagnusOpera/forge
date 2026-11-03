@@ -1,3 +1,4 @@
+import { accentColors, normalizeAccentColor, projectAccentColor, type AccentColor, type ProjectAccentColors } from "./appearance";
 import { ChatWorkspace } from "./chatgpt/workspace";
 import { ReleasesSection } from "./releases";
 import { releaseDate, releasesForTab, type ReleaseTab } from "../shared/releases";
@@ -250,15 +251,6 @@ interface WorkflowCheckGroup {
   workflowRunId?: number | null;
 }
 
-const accentColors = [
-  "#7ee787",
-  "#79c0ff",
-  "#a5d6ff",
-  "#d2a8ff",
-  "#ffa7c4",
-  "#ffa198",
-  "#f2cc60"
-] as const;
 const sidebarAppearanceTransitionMs = 360;
 const themeTransitionMs = 320;
 const themeTransitionClass = "theme-transitioning";
@@ -272,7 +264,6 @@ const defaultAccentByTheme: Record<ThemeMode, AccentColor> = {
   light: accentColors[1]
 };
 const themePreferenceOptions: ThemePreference[] = ["system", "light", "dark"];
-type AccentColor = (typeof accentColors)[number];
 type AppCssVars = React.CSSProperties & Record<"--accent", string>;
 type SwatchCssVars = React.CSSProperties & Record<"--swatch-color", string>;
 type ViewTransitionHandle = { finished: Promise<void> };
@@ -524,10 +515,6 @@ function readStoredAccentColor(key: string): string | null {
   } catch {
     return null;
   }
-}
-
-function normalizeAccentColor(value: string, fallback: string): string {
-  return accentColors.includes(value as AccentColor) ? value : fallback;
 }
 
 function getSystemTheme(): ThemeMode {
@@ -1284,6 +1271,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     "github-focus:accent-color:light",
     activeTheme === "light" ? legacyAccentColor ?? defaultAccentByTheme.light : defaultAccentByTheme.light
   );
+  const [projectAccentColors, setProjectAccentColors] = useStoredState<ProjectAccentColors>("github-focus:project-accent-colors", {});
   const [leftWidth, setLeftWidth] = useStoredState("github-focus:left-width", 280);
   const [middleWidth, setMiddleWidth] = useStoredState("github-focus:middle-width", 392);
   const [sidebarSearch, setSidebarSearch] = useState("");
@@ -3427,8 +3415,8 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     : sidebarCollapsed
     ? `${sidebarRailWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`
     : `${leftWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`;
-  const activeAccentColor = appearance?.accent ?? (activeTheme === "dark" ? darkAccentColor : lightAccentColor);
-  const selectedAccent = normalizeAccentColor(activeAccentColor, defaultAccentByTheme[activeTheme]);
+  const globalAccent = normalizeAccentColor(activeTheme === "dark" ? darkAccentColor : lightAccentColor, defaultAccentByTheme[activeTheme]);
+  const selectedAccent = appearance?.accent ?? projectAccentColor(projectAccentColors, chatMode ? undefined : selectedRepo?.id, globalAccent);
   const appStyle: AppCssVars = {
     gridTemplateColumns,
     "--accent": selectedAccent
@@ -3484,6 +3472,16 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   const overlays = <>{settingsScope && (
         <CodexSettingsDialog
           project={settingsScope === "project" ? selectedRepo ?? undefined : undefined}
+          projectAccent={selectedRepo ? projectAccentColors?.[selectedRepo.id] : undefined}
+          onSaveProjectAccent={(color) => {
+            if (!selectedRepo) return;
+            setProjectAccentColors(current => {
+              const next = { ...current };
+              if (color) next[selectedRepo.id] = color;
+              else delete next[selectedRepo.id];
+              return next;
+            });
+          }}
           auth={auth}
           onClose={() => setSettingsScope(null)}
           onSignInGithub={async () => {
@@ -3676,10 +3674,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
                 {accentColors.map((color, index) => (
                   <button
                     key={color}
-                    className={cx("accent-swatch", selectedAccent === color && "active")}
+                    className={cx("accent-swatch", globalAccent === color && "active")}
                     style={{ "--swatch-color": color } as SwatchCssVars}
                     role="radio"
-                    aria-checked={selectedAccent === color}
+                    aria-checked={globalAccent === color}
                     aria-label={`Accent ${index + 1}`}
                     onClick={(event) => {
                       setActiveAccentColor(color);
@@ -3778,7 +3776,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       <div style={{ display: chatMode ? "none" : "contents" }}>
       {retainedContentItems(activeTarget, [...detachedItems.values()].map(entry => entry.target)).map(target => (
         <ForgeWorkspace key={target.key} item={target} sharedAuth={auth} onAuthChange={setAuth}
-          appearance={{ themePreference, theme: activeTheme, sidebarAppearance, accent: selectedAccent }}
+          appearance={{ themePreference, theme: activeTheme, sidebarAppearance, accent: projectAccentColor(projectAccentColors, target.repo?.id, globalAccent) }}
           onPaneState={reportItemPane} onNavigateItem={navigateToItem} />
       ))}
       </div>

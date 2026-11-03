@@ -88,7 +88,7 @@ it("keeps environment definitions global and edits existing checkout mappings on
   await act(async () =>
     root.render(<CodexSettingsDialog {...props} project={project} />),
   );
-  expect(labels()).toEqual(["GitHub", "OpenAI"]);
+  expect(labels()).toEqual(["Appearance", "GitHub", "OpenAI"]);
   const remote = [
     ...container.querySelectorAll<HTMLButtonElement>("nav button"),
   ].find((button) => button.textContent === "GitHub")!;
@@ -396,7 +396,7 @@ it("groups local and remote checkouts and saves the project's selected default e
     [...container.querySelectorAll("nav button")].map(
       (button) => button.textContent,
     ),
-  ).toEqual(["GitHub", "OpenAI"]);
+  ).toEqual(["Appearance", "GitHub", "OpenAI"]);
   expect(container.textContent).toContain("Local Git folder");
   expect(
     container.querySelector('[aria-label="Ghoulix checkout path"]'),
@@ -609,4 +609,31 @@ it("uses one OpenAI configuration section with no separate Chat sign-in or usage
   expect(container.textContent).toContain("OpenAI account");
   expect(container.querySelector(".think-connection-settings")).toBeNull();
   expect(container.textContent).not.toContain("Manage usage");
+});
+
+it("saves a project accent and restores global inheritance without changing Codex settings", async () => {
+  const onSaveProjectAccent = vi.fn();
+  const onClose = vi.fn();
+  const props = {
+    project, auth: null, onClose, onSaveProjectAccent,
+    onSignInGithub: vi.fn(async () => {}), onRemoveGithub: vi.fn(), onOpenUrl: vi.fn(),
+  };
+  await act(async () => root.render(<CodexSettingsDialog {...props} />));
+  const button = (label: string) => [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label)!;
+  await act(async () => button("Appearance").click());
+  const inherit = () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  expect(inherit().checked).toBe(true);
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Project accent 4"]')!.click());
+  expect(inherit().checked).toBe(false);
+  expect(onSaveProjectAccent).not.toHaveBeenCalled();
+  await act(async () => button("Save configuration").click());
+  expect(onSaveProjectAccent).toHaveBeenLastCalledWith("#d2a8ff");
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(request.mock.calls.some(([method]) => method === "saveProject")).toBe(false);
+
+  await act(async () => root.render(<CodexSettingsDialog {...props} projectAccent="#d2a8ff" />));
+  expect(container.querySelector('[aria-label="Project accent 4"]')?.getAttribute("aria-checked")).toBe("true");
+  await act(async () => inherit().click());
+  await act(async () => button("Save configuration").click());
+  expect(onSaveProjectAccent).toHaveBeenLastCalledWith(undefined);
 });
