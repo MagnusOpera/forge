@@ -1,3 +1,5 @@
+import { NotificationList } from "./notification-list";
+import { acknowledgeNotifications, emptyNotificationHistory, recordNotification } from "./notification-history";
 import { UpdateCheckIndicator } from "./update-check-indicator";
 import { accentColors, normalizeAccentColor, projectAccentColor, type AccentColor, type ProjectAccentColors } from "./appearance";
 import { ChatWorkspace } from "./chatgpt/workspace";
@@ -1308,6 +1310,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   const activeProjectLastFullRefreshAt = useRef(0);
   const favoriteProjectNotificationSnapshots = useRef(new Map<string, FavoriteProjectNotificationSnapshot>());
   const favoriteProjectRefreshInFlight = useRef(false);
+  const [notificationHistory, setNotificationHistory] = useState(emptyNotificationHistory);
   const nativeNotificationPermission = useRef<NativeNotificationPermission | null>(null);
 
   const loadedRepos = useMemo(
@@ -1374,6 +1377,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     authConfiguredRef.current = auth.configured;
     if (!auth.configured) {
       favoriteProjectNotificationSnapshots.current.clear();
+      setNotificationHistory(emptyNotificationHistory);
       setFavoriteProjectMonitorStatus({ checking: false, lastCheckedAt: null });
     }
   }, [auth]);
@@ -2524,6 +2528,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 
   const showFavoriteProjectNotification = useCallback(
     async (payload: NativeNotificationPayload): Promise<void> => {
+      setNotificationHistory(current => recordNotification(current, payload));
       if (!(await ensureNativeNotificationPermission())) {
         return;
       }
@@ -2594,6 +2599,16 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       setStoredProjectFocusView
     ]
   );
+
+  const openNotification = (payload: NativeNotificationPayload) => {
+    const source = payload.source;
+    const selection: ContentSelection = source.kind === "pull-request"
+      ? { kind: "pr", pr: source.pullRequest } : { kind: "run", run: source.run };
+    const key = contentItemKey(source.repo.id, selectionRouteKey(selection));
+    detachedItems.get(key)?.pane.reattach();
+    setChatMode(false);
+    focusNotificationSource(source);
+  };
 
   const refreshFavoriteProjectsForNotifications = useCallback(async (): Promise<void> => {
     if (!authConfiguredRef.current || favoriteProjectRefreshInFlight.current) {
@@ -3654,6 +3669,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         globalConfiguration={<><UpdateCheckIndicator api={api} /><button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={() => setSettingsScope("global")}>
             <Settings size={17} />
           </button></>}
+        notifications={<NotificationList history={notificationHistory} onSeen={() => setNotificationHistory(acknowledgeNotifications)} onOpen={openNotification} />}
         themeControl={<div className="theme-accent-control">
             <button
               className="theme-toggle-button"
@@ -3797,6 +3813,7 @@ interface SidebarProps {
   onChat(): void;
   globalConfiguration: React.ReactNode;
   themeControl: React.ReactNode;
+  notifications: React.ReactNode;
   collapsed: boolean;
   favoriteRepos: RepoSummary[];
   repoGroups: Array<[string, RepoSummary[]]>;
@@ -3853,6 +3870,7 @@ function Sidebar(props: SidebarProps) {
           {props.collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
         </button>
         {props.themeControl}
+        {props.notifications}
         <div className="sidebar-rail-spacer" />
         {props.globalConfiguration}
       </div>

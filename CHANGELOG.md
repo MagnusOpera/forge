@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Add a rail notification list with an unread bell indicator and navigation to related content, even when native alerts are disabled.
+
 ## [0.21.7]
 
 
