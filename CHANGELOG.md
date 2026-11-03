@@ -4,6 +4,10 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Match the third pane’s header color to the other panes in matte mode.
+
+- Show focus outlines only on text-entry fields and editors, with subtle backgrounds for focused icon buttons.
+
 ## [0.21.11]
 
 

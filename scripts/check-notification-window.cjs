@@ -43,6 +43,24 @@ app.whenReady().then(async () => {
     win.webContents.on("did-create-window", child => children.push(child));
     await win.loadFile(path.join(root, "dist/renderer/index.html"));
     await waitFor(win, "!!document.querySelector('[aria-label=\"Refresh favorite repositories\"]:not(:disabled)')");
+    assert.ok(await win.webContents.executeJavaScript(`(() => {
+      const root = document.querySelector('.workspace-shell');
+      const host = root.querySelector('.content-pane-shell');
+      const content = host.querySelector('.content-pane');
+      const header = content.querySelector('.content-header');
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--sidebar-solid-bg)';
+      root.append(probe);
+      const matte = getComputedStyle(probe).color;
+      probe.remove();
+      return root.dataset.sidebarAppearance === 'normal'
+        && getComputedStyle(root, '::before').backgroundColor === matte
+        && getComputedStyle(host).backgroundColor === 'rgba(0, 0, 0, 0)'
+        && getComputedStyle(header).backgroundColor === 'rgba(0, 0, 0, 0)'
+        && getComputedStyle(content).backgroundImage.includes('linear-gradient');
+    })()`), "Docked content header reveals the same matte surface as the other panes");
+    await new Promise(resolve => setTimeout(resolve, 100));
+    writeFileSync(path.join(root, '.out/notifications', 'matte-header-' + theme + '.png'), (await win.webContents.capturePage()).toPNG());
     const refresh = async () => {
       await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Refresh favorite repositories\"]').click()");
       await waitFor(win, "!!document.querySelector('[aria-label=\"Refresh favorite repositories\"]:not(:disabled)')");
@@ -121,9 +139,67 @@ app.whenReady().then(async () => {
 
     await win.webContents.executeJavaScript(`(async () => { const row = Array.from(document.querySelectorAll('.notification-item.unread')).find(row => row.textContent.includes('Workflow failed')); const repo = (await window.githubFocus.getRepositories()).data.find(repo => row.textContent.includes(repo.fullName)); window.clickNativeNotification({ kind: 'workflow-run', repo, run: window.notificationRuns[0] }); })()`);
     await waitFor(win, "document.querySelectorAll('.notification-item.unread').length === 3");
-    await win.webContents.executeJavaScript("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    win.show();
+    win.focus();
+    win.webContents.focus();
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Tab" });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+    await waitFor(win, "!document.querySelector('.notification-panel')");
     assert.equal(await win.webContents.executeJavaScript("!!document.querySelector('.notification-panel')"), false);
     assert.equal(await win.webContents.executeJavaScript("document.activeElement === document.querySelector('.notification-bell')"), true);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    assert.ok(await win.webContents.executeJavaScript(`(() => {
+      const bell = document.querySelector('.notification-bell');
+      const style = getComputedStyle(bell);
+      const accent = document.createElement('span');
+      accent.style.color = 'var(--sidebar-row-hover-bg)';
+      bell.append(accent);
+      const color = getComputedStyle(accent).color;
+      accent.remove();
+      return bell.matches(':focus-visible') && style.outlineStyle === 'none' && style.backgroundColor === color;
+    })()`), "Escape restores keyboard focus with a subtle background and no outline");
+    await new Promise(resolve => setTimeout(resolve, 100));
+    writeFileSync(path.join(root, '.out/notifications', 'focus-' + theme + '.png'), (await win.webContents.capturePage()).toPNG());
+    await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Open sidebar\"]').click()");
+    await waitFor(win, "!!document.querySelector('[aria-label=\"Collapse sidebar\"]')");
+    assert.ok(await win.webContents.executeJavaScript(`['.sidebar-navigation', '.project-pane', '.content-pane'].every(selector => {
+      const pane = document.querySelector(selector);
+      pane.focus();
+      return document.activeElement === pane && getComputedStyle(pane).outlineStyle === 'none';
+    })`), "Panes retain keyboard focus without perimeter outlines");
+    assert.ok(await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.sidebar-tab')).every(tab => {
+      tab.focus();
+      return document.activeElement === tab && getComputedStyle(tab).outlineStyle === 'none';
+    })`), "Repository tabs have no focus rectangle");
+    assert.ok(await win.webContents.executeJavaScript(`(() => {
+      const host = document.createElement('div');
+      host.className = 'codex-checkout-dialog codex-model-popover';
+      host.innerHTML = '<button class="codex-jump-latest codex-edited-file combobox-trigger">Action</button><a class="commit-link codex-message-attachment" href="#">Link</a><div tabindex="0">Region</div><input type="checkbox"><input type="text"><textarea></textarea><div contenteditable="true">Editor</div>';
+      document.querySelector('.app-shell').append(host);
+      const controls = [...host.children];
+      const results = controls.map((control, index) => {
+        control.focus();
+        const style = getComputedStyle(control);
+        return document.activeElement === control && (index < 4 ? style.outlineStyle === 'none' : style.outlineStyle === 'solid' && style.outlineWidth === '1px');
+      });
+      host.remove();
+      return results.every(Boolean);
+    })()`), "Outlines are disabled for controls and regions, including dialogs, and enabled for text entry");
+    await win.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-tab')).find(tab => tab.textContent.includes('All')).click()");
+    await waitFor(win, "!!document.querySelector('[aria-label=\"Search repositories\"]')");
+    await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Search repositories\"]').focus()");
+    await new Promise(resolve => setTimeout(resolve, 350));
+    assert.ok(await win.webContents.executeJavaScript(`(() => {
+      const input = document.querySelector('[aria-label="Search repositories"]');
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--accent)';
+      input.parentElement.append(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      return document.activeElement === input && getComputedStyle(input.parentElement).borderColor === accent;
+    })()`), "Text fields retain their theme-colored focus border");
     win.destroy();
     console.log(theme + ": denied native alerts, per-item read actions, native click read state, retained list, collapsed rail, PR/run selection in the third pane, reattachment, and Escape passed");
   }
