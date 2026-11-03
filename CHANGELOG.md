@@ -4,8 +4,13 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.7]
+
+
 - Add vertical spacing inside Codex question choices so labels and descriptions have room above and below.
 - Show the Codex thread name in attached and detached pane titles, using Codex before a thread starts.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.6...0.21.7
 
 ## [0.21.6]
 
