@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.11]
+
+
 - Match notification read-button spacing to the icon inset on the left.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.10...0.21.11
 
 ## [0.21.10]
 
