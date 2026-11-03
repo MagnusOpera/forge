@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.12]
+
+
 - Match the third pane’s header color to the other panes in matte mode.
 
 - Show focus outlines only on text-entry fields and editors, with subtle backgrounds for focused icon buttons.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.11...0.21.12
 
 ## [0.21.11]
 
