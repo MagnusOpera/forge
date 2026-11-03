@@ -108,6 +108,8 @@ it("keeps drafts while navigating chats and switching back to GitHub", async () 
 });
 it("streams updates into a detached live conversation and reattaches with the same draft and theme", async () => {
   await click("First");
+  expect(container.querySelector('.chatgpt-content-header [aria-label="Delete chat"]')).toBeNull();
+  expect(container.querySelector('[aria-label="Delete thread First"]')).not.toBeNull();
   const editor = container.querySelector<HTMLElement>(
     '[aria-label="Message OpenAI"]',
   )!;
@@ -122,6 +124,12 @@ it("streams updates into a detached live conversation and reattaches with the sa
     ),
   );
   expect(frame.contentDocument!.querySelector('[role="textbox"]')).toBe(editor);
+  expect(frame.contentDocument!.querySelector('.chatgpt-content-header [aria-label="Delete chat"]')).toBeNull();
+  await click("Rename chat", frame.contentDocument!);
+  expect(frame.contentDocument!.querySelector('[aria-label="Chat title"]')).not.toBeNull();
+  expect(frame.contentDocument!.querySelector('[aria-label="Save chat title"] .lucide-save')).not.toBeNull();
+  await click("Cancel rename", frame.contentDocument!);
+  expect(frame.contentDocument!.querySelector('[aria-label="Chat title"]')).toBeNull();
   expect(layout).toHaveBeenLastCalledWith(true);
   const next = initial();
   next.threads[0].messages.push({

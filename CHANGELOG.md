@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Match chat-header title sizes, align editing controls, use a save icon, and remove header delete buttons.
+
 ## [0.21.12]
 
 

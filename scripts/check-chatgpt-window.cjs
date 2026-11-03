@@ -74,8 +74,8 @@ async function checkBuild(win, theme) {
   })()`);
   assert.equal(
     chrome.railColor,
-    chrome.titlebarColor,
-    "Rail and titlebar share a single opaque background",
+    "rgba(0, 0, 0, 0)",
+    "Transparent rail reveals the shared titlebar material",
   );
   assert.equal(chrome.top, 44);
   assert.equal(chrome.left, 48);
@@ -186,6 +186,22 @@ async function checkRail(win, theme) {
     win,
     "document.querySelector('.sidebar').getBoundingClientRect().width > 48",
   );
+}
+async function checkChatTitle(win, theme, suffix, expectedFont) {
+  assert.equal(await win.webContents.executeJavaScript("getComputedStyle(document.querySelector('.chatgpt-content-header > strong')).font"), expectedFont, "Chat titles match the second pane’s typography");
+  assert.equal(await win.webContents.executeJavaScript("!!document.querySelector('.chatgpt-content-header .lucide-trash-2')"), false, "Chat headers omit the delete action");
+  await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Rename chat\"]').click()");
+  await waitFor(win, "!!document.querySelector('[aria-label=\"Cancel rename\"]')");
+  assert.ok(await win.webContents.executeJavaScript(`(() => {
+    const header = document.querySelector('.chatgpt-content-header');
+    const controls = [...header.querySelectorAll('form input, form button, .chatgpt-actions button')];
+    const centers = controls.map(control => { const r = control.getBoundingClientRect(); return r.top + r.height / 2; });
+    return Math.max(...centers) - Math.min(...centers) < 1;
+  })()`), "Chat title input, Save, Cancel, and detach controls share a vertical center");
+  await new Promise(resolve => setTimeout(resolve, 100));
+  writeFileSync(path.join(root, '.out/chatgpt/', theme + '-rename-' + suffix + '.png'), (await win.webContents.capturePage()).toPNG());
+  await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Cancel rename\"]').click()");
+  await waitFor(win, "!!document.querySelector('[aria-label=\"Rename chat\"]')");
 }
 app
   .whenReady()
@@ -351,6 +367,8 @@ app
         ),
         180,
       );
+      const chatTitleFont = await win.webContents.executeJavaScript("getComputedStyle(document.querySelector('.chatgpt-threads-pane .pane-header strong')).font");
+      await checkChatTitle(win, theme, "attached", chatTitleFont);
       console.log(theme + ": fonts and screenshot");
       await checkComposer(win);
       await win.webContents.executeJavaScript("document.fonts.ready");
@@ -416,6 +434,7 @@ app
         }`),
         "Detached chat title must clear the macOS traffic lights",
       );
+      await checkChatTitle(child, theme, "detached", chatTitleFont);
       writeFileSync(
         path.join(root, ".out/chatgpt/" + theme + "-detached.png"),
         (await child.webContents.capturePage()).toPNG(),

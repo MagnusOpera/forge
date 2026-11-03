@@ -14,6 +14,7 @@ import { ChatGeneratedImage } from "./generated-images";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Send,
+  Save,
   Copy,
   ImagePlus,
   Folder,
@@ -614,7 +615,6 @@ export function ChatWorkspace({
               setProjectId(thread.projectId);
               setSelectedId(thread.id);
             }}
-            onDelete={() => removeThread(thread.id)}
           />
         ))}
     </>
@@ -632,7 +632,6 @@ function ChatContent({
   connected,
   reportDetached,
   onSelect,
-  onDelete,
   onError,
 }: {
   thread: ChatThread;
@@ -645,7 +644,6 @@ function ChatContent({
   connected: boolean;
   reportDetached(id: string, detached: boolean): void;
   onSelect(): void;
-  onDelete(): void;
   onError(error: string): void;
 }) {
   "use no memo"; // Preserve live pane refs and async request cleanup.
@@ -688,7 +686,6 @@ function ChatContent({
   const [sending, setSending] = useState(false);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(thread.title);
-  const [deletePending, setDeletePending] = useState(false);
   const running =
     sending || thread.messages.some((m) => m.status === "streaming");
   const scroll = useRef<HTMLDivElement>(null);
@@ -825,8 +822,13 @@ function ChatContent({
                     if (e.key === "Escape") setEditing(false);
                   }}
                 />
-                <button className="text-button" type="submit">
-                  Save
+                <button
+                  className="icon-button"
+                  type="submit"
+                  aria-label="Save chat title"
+                  title="Save chat title"
+                >
+                  <Save size={14} />
                 </button>
                 <button
                   className="icon-button"
@@ -853,28 +855,6 @@ function ChatContent({
               </>
             )}
             <div className="chatgpt-actions">
-              {deletePending ? (
-                <>
-                  <button className="text-button" onClick={onDelete}>
-                    Delete chat
-                  </button>
-                  <button
-                    className="text-button"
-                    onClick={() => setDeletePending(false)}
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <button
-                  className="icon-button"
-                  aria-label="Delete chat"
-                  disabled={running || pane.detached}
-                  onClick={() => setDeletePending(true)}
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
               <button
                 className="icon-button"
                 aria-label={pane.detached ? "Reattach chat" : "Detach chat"}

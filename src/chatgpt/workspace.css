@@ -72,10 +72,10 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 12px;
 }
 .chatgpt-content-header > form {
   display: flex;
+  align-items: center;
   flex: 1;
   min-width: 0;
   gap: 4px;
@@ -222,6 +222,7 @@
   display: flex;
   gap: 8px;
 }
+.chatgpt-content-header > strong,
 .chatgpt-threads-pane .pane-header strong {
   overflow: hidden;
   text-overflow: ellipsis;
