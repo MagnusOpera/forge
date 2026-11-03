@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.3]
+
+
 - Show update checks in the rail and keep an upgrade button available after dismissing a new-version dialog.
 
 - Open project configuration on the Appearance section by default.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.2...0.21.3
 
 ## [0.21.2]
 
