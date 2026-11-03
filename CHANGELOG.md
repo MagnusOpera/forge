@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Use the current Forge app logo for macOS notifications and remove the extra image on the right.
+
 ## [0.21.3]
 
 

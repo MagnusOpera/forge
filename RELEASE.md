@@ -90,5 +90,15 @@ On macOS, run `bash scripts/generate-app-icons.sh` from the repository root to
 regenerate the transparent 1024px PNG, macOS ICNS, Windows ICO, SVG wrapper, and web-sized PNG assets.
 This uses AppKit, `sips`, `iconutil`, and Python 3. The SVG embeds the PNG losslessly;
 it is not vector artwork. Existing app and website paths remain unchanged.
+The macOS bundle references `forge-ignition.icns` through `CFBundleIconFile` and
+copies the current ICNS into Resources under that name. Keep these packaging
+settings together. The distinct filename replaces the previous `icon.icns`
+reference so macOS can refresh cached app artwork. Native macOS notifications
+use that bundle icon and must omit a custom notification image to avoid a second
+logo on the right. Verify a fresh notification after installing a packaged build;
+if macOS still shows cached artwork, quit and reopen Forge after refreshing its
+Launch Services registration with
+`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Forge.app`.
+
 The source includes a gray presentation backdrop and a baked-in shadow. Keep the
 export mask aligned with the metallic tile edge so neither appears in the Dock.

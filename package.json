@@ -40,6 +40,12 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "assets/forge-icon.icns",
+      "extendInfo": {
+        "CFBundleIconFile": "forge-ignition.icns"
+      },
+      "extraResources": [
+        { "from": "assets/forge-icon.icns", "to": "forge-ignition.icns" }
+      ],
       "target": [
         {
           "target": "zip",

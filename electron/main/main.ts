@@ -1,3 +1,4 @@
+import { nativeNotificationOptions } from "./notifications.js";
 import { GitHubCredentials } from "./github-credentials.js";
 import { publishDraftRelease } from "./releases.js";
 import { fetchRepositoryReleases } from "../../shared/releases.js";
@@ -2316,11 +2317,6 @@ async function openInGitHub(rawUrl: string): Promise<void> {
   await shell.openExternal(url.toString());
 }
 
-function notificationText(value: unknown, fallback: string): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  return (text || fallback).slice(0, 240);
-}
-
 function focusMainWindow(): BrowserWindow {
   if (!mainWindow) {
     createWindow();
@@ -2357,12 +2353,8 @@ function showNativeNotification(payload: NativeNotificationPayload): boolean {
     return false;
   }
 
-  const icon = nativeImage.createFromPath(appIconPath("png"));
-  const notification = new Notification({
-    title: notificationText(payload.title, appDisplayName),
-    body: notificationText(payload.body, "New Forge notification"),
-    icon: icon.isEmpty() ? undefined : icon
-  });
+  const icon = process.platform === "darwin" ? undefined : nativeImage.createFromPath(appIconPath("png"));
+  const notification = new Notification(nativeNotificationOptions(payload, process.platform, icon));
 
   activeNotifications.add(notification);
   notification.once("click", () => {
