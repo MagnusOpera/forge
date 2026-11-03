@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Announce available upgrades in the rail and open the upgrade dialog only when clicked.
+
 - Finish update checks silently when Forge is already up to date.
 
 - Use the current Forge app logo for macOS notifications and remove the extra image on the right.

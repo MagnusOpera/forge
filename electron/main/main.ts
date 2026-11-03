@@ -1,3 +1,4 @@
+import { showUpgradeDialog } from "./upgrade-dialog.js";
 import { nativeNotificationOptions } from "./notifications.js";
 import { GitHubCredentials } from "./github-credentials.js";
 import { publishDraftRelease } from "./releases.js";
@@ -121,7 +122,6 @@ let autoUpdaterInitialized = false;
 let updateCheckInFlight = false;
 let availableUpdateVersion: string | null = null;
 let downloadedUpdateVersion: string | null = null;
-let latestUpdateCheckWasManual = false;
 let updateRestartDialogOpen = false;
 
 function windowBackgroundColorForSidebarAppearance(mode: SidebarAppearanceMode): string {
@@ -192,15 +192,7 @@ function initializeAutoUpdater(): void {
     private: false
   });
 
-  autoUpdater.on("update-available", async (info) => {
-    if (latestUpdateCheckWasManual) {
-      await dialog.showMessageBox({
-        type: "info",
-        title: "Update Available",
-        message: `Forge ${info.version} is available.`,
-        detail: "The update is downloading and Forge will ask before restarting to install it."
-      });
-    }
+  autoUpdater.on("update-available", (info) => {
     availableUpdateVersion = info.version;
     broadcastUpdateStatus();
   });
@@ -209,37 +201,11 @@ function initializeAutoUpdater(): void {
     downloadedUpdateVersion = event.version;
     availableUpdateVersion = event.version;
     broadcastUpdateStatus();
-    void promptToInstallUpdate(event.version);
   });
 
   autoUpdater.on("error", (error) => {
     console.error("Forge auto-update check failed.", error);
   });
-}
-
-async function promptToInstallUpdate(version: string): Promise<void> {
-  if (updateRestartDialogOpen) {
-    return;
-  }
-
-  updateRestartDialogOpen = true;
-  try {
-    const result = await dialog.showMessageBox({
-      type: "info",
-      buttons: ["Restart and Install", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Ready",
-      message: `Forge ${version} is ready to install.`,
-      detail: "Restart Forge to finish installing the update."
-    });
-
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall(false, true);
-    }
-  } finally {
-    updateRestartDialogOpen = false;
-  }
 }
 
 function getUpdateStatus(): AppUpdateStatus {
@@ -262,13 +228,16 @@ function setUpdateCheckInFlight(checking: boolean): void {
 }
 
 async function installAvailableUpdate(): Promise<void> {
-  if (!availableUpdateVersion) return;
-  if (downloadedUpdateVersion === availableUpdateVersion) {
-    await promptToInstallUpdate(availableUpdateVersion);
-  } else {
-    // Reuses an active download and retries a failed one. The downloaded event
-    // opens the existing restart confirmation when the update is ready.
-    await autoUpdater.downloadUpdate();
+  if (!availableUpdateVersion || updateRestartDialogOpen) return;
+  updateRestartDialogOpen = true;
+  try {
+    await showUpgradeDialog(availableUpdateVersion, downloadedUpdateVersion === availableUpdateVersion, {
+      showDialog: options => dialog.showMessageBox(options),
+      download: () => autoUpdater.downloadUpdate(),
+      install: () => autoUpdater.quitAndInstall(false, true),
+    });
+  } finally {
+    updateRestartDialogOpen = false;
   }
 }
 
@@ -276,8 +245,6 @@ async function checkForUpdates(options: { manual: boolean }): Promise<void> {
   if (process.platform !== "darwin") {
     return;
   }
-
-  latestUpdateCheckWasManual = options.manual;
 
   if (!app.isPackaged) {
     if (options.manual) {
