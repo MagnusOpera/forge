@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Add vertical spacing inside Codex question choices so labels and descriptions have room above and below.
+- Show the Codex thread name in attached and detached pane titles, using Codex before a thread starts.
+
 ## [0.21.6]
 
 

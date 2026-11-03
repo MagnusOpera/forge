@@ -75,15 +75,34 @@ app.whenReady().then(async () => {
     win.webContents.on("did-create-window", value => { child = value; });
     await win.loadFile(path.join(root, "dist/renderer/index.html"));
     await waitFor(win, "!!document.querySelector('.codex-thread-select')");
+    await win.webContents.executeJavaScript(`(() => {
+      const original = window.forgeCodex.request;
+      window.forgeCodex.request = async (method, input) => {
+        const result = await original(method, input);
+        if (method === 'thread') result.thread.requests = [{
+          id: 'question', method: 'tool/requestUserInput', params: {},
+          questions: [{ id: 'scope', header: 'API scope', question: 'Should I extend the API scope?', options: [
+            { label: 'Extend API scope (Recommended)', description: 'Adds server-side filtering with correct pagination and scales to large portfolios.' },
+            { label: 'AppClient only', description: 'Fetches all search results before filtering, which costs more requests for large portfolios.' }
+          ] }]
+        }];
+        return result;
+      };
+    })()`);
     await win.webContents.executeJavaScript("document.querySelector('.codex-thread-select').click()");
     await waitFor(win, "!!document.querySelector('.codex-input .tiptap')");
-    assert.equal(await win.webContents.executeJavaScript("document.querySelector('.content-title').textContent"), "Codex");
+    const expected = "Make workflow failures easier to investigate";
+    assert.equal(await win.webContents.executeJavaScript("document.querySelector('.content-title').textContent"), expected);
+    await waitFor(win, "!!document.querySelector('.codex-answer-options button')");
+    assert.ok(await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.codex-answer-options button')).every(button => {
+      const style = getComputedStyle(button);
+      return parseFloat(style.paddingTop) >= 8 && parseFloat(style.paddingBottom) >= 8;
+    })`), "Question choices have vertical padding");
     await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Detach content pane\"]').click()");
     for (let attempt = 0; !child && attempt < 100; attempt++)
       await new Promise(resolve => setTimeout(resolve, 100));
     assert.ok(child, "Detached window opened");
     await waitFor(child, "!!document.querySelector('.codex-input .tiptap')");
-    const expected = "Codex - Make workflow failures easier to investigate";
     assert.equal(await child.webContents.executeJavaScript("document.querySelector('.content-title').textContent"), expected);
     assert.equal(await child.webContents.executeJavaScript("document.title"), expected + " · Forge");
     for (const width of [1400, 640]) {
@@ -108,11 +127,11 @@ app.whenReady().then(async () => {
     }
     await child.webContents.executeJavaScript("document.querySelector('[aria-label=\"Reattach content pane\"]').click()");
     await waitFor(win, "!!document.querySelector('.codex-input .tiptap')");
-    assert.equal(await win.webContents.executeJavaScript("document.querySelector('.content-title').textContent"), "Codex");
+    assert.equal(await win.webContents.executeJavaScript("document.querySelector('.content-title').textContent"), expected);
     assert.ok(await win.webContents.executeJavaScript("document.querySelector('.codex-input .tiptap').textContent.includes('A long draft')"));
     await checkCursor(win);
     win.destroy();
-    console.log(`${theme}: detached title, full-width draft at 1400/640px, and reattachment passed`);
+    console.log(`${theme}: question choice padding, detached title, full-width draft at 1400/640px, and reattachment passed`);
   }
 }).then(() => app.quit()).catch(error => { console.error(error); app.exit(1); });
 app.on("window-all-closed", () => {});

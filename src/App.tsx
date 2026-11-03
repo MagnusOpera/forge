@@ -3381,7 +3381,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     } catch (error) { flash(error instanceof Error ? error.message : String(error)); }
   };
   const contentRoute = `${selectedRepo?.id}:${selectionRouteKey(selection)}`;
-  const contentTitle = selection.kind === "codex" ? (terminalThread ? `Codex - ${terminalThread.title}` : "Codex")
+  const contentTitle = selection.kind === "codex" ? (terminalThread?.title || "Codex")
     : selection.kind === "pr" ? selection.pr.title
     : selection.kind === "release" ? selection.release.name || selection.release.tagName
     : selection.kind === "issue" ? selection.issue.title
@@ -4712,7 +4712,7 @@ function WorkflowRunSplitButton(props: {
   );
 }
 
-function ContentPane(props: {
+export function ContentPane(props: {
   detached: boolean;
   attachmentOpening: boolean;
   onToggleAttachment(): void;
@@ -4889,8 +4889,8 @@ function ContentPane(props: {
         <div className="content-header-left">
           <div className="content-title">
             {props.codexContent ? (
-              <span title={props.detached && props.codexTitle ? `Codex - ${props.codexTitle}` : undefined}>
-                Codex{props.detached && props.codexTitle ? ` - ${props.codexTitle}` : ""}
+              <span title={props.codexTitle || undefined}>
+                {props.codexTitle || "Codex"}
               </span>
             ) : <ContentTitle selection={props.selection} repo={props.repo} />}
             {!props.codexContent && (

@@ -3681,7 +3681,7 @@ code {
 .codex-request fieldset { border: 0; margin: 0 0 12px; padding: 0; }
 .codex-request legend { color: var(--text-strong); margin-bottom: 8px; line-height: 1.6; }
 .codex-answer-options { display: grid; gap: 6px; margin: 8px 0; }
-.codex-answer-options button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; white-space: normal; }
+.codex-answer-options button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 12px; text-align: left; white-space: normal; }
 .codex-answer-options button small { display: block; color: var(--text-muted); margin-top: 4px; }
 .codex-answer-options .active { border: 1px solid var(--accent); color: var(--accent); }
 .codex-conversation textarea { resize: vertical; min-height: 70px; font-size: 13px; line-height: 1.6; }
