@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.13]
+
+
 - Match chat-header title sizes, align editing controls, use a save icon, and remove header delete buttons.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.12...0.21.13
 
 ## [0.21.12]
 
