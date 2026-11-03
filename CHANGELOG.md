@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Keep the current window position and size when detaching panes after resizing with Rectangle or other window managers.
+
 ## [0.21.13]
 
 

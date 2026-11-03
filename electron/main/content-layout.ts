@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 
 export type ContentPaneLayout = { detached: boolean; cssWidth: number };
-type LayoutWindow = Pick<BrowserWindow, "getBounds" | "getNormalBounds" | "getContentBounds" | "getMinimumSize" | "setMinimumSize" | "setBounds" | "isMaximized" | "unmaximize" | "maximize" | "isFullScreen"> & {
+type LayoutWindow = Pick<BrowserWindow, "getBounds" | "getContentBounds" | "getMinimumSize" | "setMinimumSize" | "setBounds" | "isMaximized" | "unmaximize" | "maximize" | "isFullScreen"> & {
   webContents: Pick<BrowserWindow["webContents"], "getZoomFactor">;
 };
 
@@ -10,7 +10,7 @@ export class MainContentLayout {
   private attached?: { width: number; height: number; minimum: number[]; maximized: boolean };
   private desired: ContentPaneLayout = { detached: false, cssWidth: 672 };
 
-  constructor(private window: LayoutWindow) {}
+  constructor(private window: LayoutWindow, private platform: NodeJS.Platform = process.platform) {}
 
   update(layout: ContentPaneLayout): void {
     if (typeof layout?.detached !== "boolean" || !Number.isFinite(layout.cssWidth) || layout.cssWidth < 300 || layout.cssWidth > 1000)
@@ -26,12 +26,15 @@ export class MainContentLayout {
     const bounds = win.getBounds();
     if (this.desired.detached) {
       if (!this.attached) {
-        const normal = win.getNormalBounds();
-        this.attached = { width: normal.width, height: normal.height, minimum: win.getMinimumSize(), maximized: win.isMaximized() };
+        // Window managers can resize a macOS window without updating its normal-state bounds.
+        // Restore the frame visible at detach time, including external moves and resizes.
+        this.attached = { width: bounds.width, height: bounds.height, minimum: win.getMinimumSize(), maximized: this.platform !== "darwin" && win.isMaximized() };
       }
       const chrome = bounds.width - win.getContentBounds().width;
       const width = Math.min(this.attached.width, Math.ceil(this.desired.cssWidth * win.webContents.getZoomFactor() + chrome));
-      if (win.isMaximized()) win.unmaximize();
+      // On macOS setBounds resizes even a zoomed window directly. Unmaximizing first
+      // would briefly restore its old frame (and can animate from stale bounds).
+      if (this.platform !== "darwin" && win.isMaximized()) win.unmaximize();
       win.setMinimumSize(Math.min(this.attached.minimum[0], width), this.attached.minimum[1]);
       win.setBounds({ ...bounds, width });
     } else if (this.attached) {
