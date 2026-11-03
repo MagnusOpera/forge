@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Replace update-error dialogs with a retry button in the rail.
+
 ## [0.21.4]
 
 

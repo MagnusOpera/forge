@@ -414,8 +414,9 @@ function ipcUnavailable<T>(): Promise<T> {
 }
 
 const browserApi: GithubFocusApi = {
-  getUpdateStatus: async () => ({ checking: false, availableVersion: null, downloaded: false }),
+  getUpdateStatus: async () => ({ checking: false, failed: false, availableVersion: null, downloaded: false }),
   installUpdate: async () => undefined,
+  checkForUpdates: async () => undefined,
   onUpdateStatusChanged: () => () => undefined,
   platform: "browser",
   getAuthStatus: async () => ({ configured: false, encryptionAvailable: false, viewerLogin: null }),

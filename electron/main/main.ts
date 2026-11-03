@@ -1,3 +1,4 @@
+import { UpdateState } from "./update-state.js";
 import { showUpgradeDialog } from "./upgrade-dialog.js";
 import { nativeNotificationOptions } from "./notifications.js";
 import { GitHubCredentials } from "./github-credentials.js";
@@ -33,7 +34,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   ActorSummary,
-  AppUpdateStatus,
   AddPullRequestCommentPayload,
   ArtifactSummary,
   AuthStatus,
@@ -119,9 +119,11 @@ let activeTokenHash: string | null = null;
 const activeNotifications = new Set<Notification>();
 let sidebarAppearanceMode: SidebarAppearanceMode = DEFAULT_SIDEBAR_APPEARANCE_MODE;
 let autoUpdaterInitialized = false;
-let updateCheckInFlight = false;
-let availableUpdateVersion: string | null = null;
-let downloadedUpdateVersion: string | null = null;
+const updateState = new UpdateState(status => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("updates:status-changed", status);
+  }
+}, error => console.error("Forge auto-update failed.", error));
 let updateRestartDialogOpen = false;
 
 function windowBackgroundColorForSidebarAppearance(mode: SidebarAppearanceMode): string {
@@ -193,49 +195,30 @@ function initializeAutoUpdater(): void {
   });
 
   autoUpdater.on("update-available", (info) => {
-    availableUpdateVersion = info.version;
-    broadcastUpdateStatus();
+    updateState.available(info.version);
   });
 
   autoUpdater.on("update-downloaded", (event: UpdateDownloadedEvent) => {
-    downloadedUpdateVersion = event.version;
-    availableUpdateVersion = event.version;
-    broadcastUpdateStatus();
+    updateState.downloaded(event.version);
   });
 
   autoUpdater.on("error", (error) => {
-    console.error("Forge auto-update check failed.", error);
+    updateState.fail(error);
   });
 }
 
-function getUpdateStatus(): AppUpdateStatus {
-  return {
-    checking: updateCheckInFlight,
-    availableVersion: availableUpdateVersion,
-    downloaded: Boolean(availableUpdateVersion && downloadedUpdateVersion === availableUpdateVersion),
-  };
-}
-
-function broadcastUpdateStatus(): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("updates:status-changed", getUpdateStatus());
-  }
-}
-
-function setUpdateCheckInFlight(checking: boolean): void {
-  updateCheckInFlight = checking;
-  broadcastUpdateStatus();
-}
-
 async function installAvailableUpdate(): Promise<void> {
-  if (!availableUpdateVersion || updateRestartDialogOpen) return;
+  const { availableVersion, downloaded } = updateState.status();
+  if (!availableVersion || updateRestartDialogOpen) return;
   updateRestartDialogOpen = true;
   try {
-    await showUpgradeDialog(availableUpdateVersion, downloadedUpdateVersion === availableUpdateVersion, {
+    await showUpgradeDialog(availableVersion, downloaded, {
       showDialog: options => dialog.showMessageBox(options),
       download: () => autoUpdater.downloadUpdate(),
       install: () => autoUpdater.quitAndInstall(false, true),
     });
+  } catch (error) {
+    updateState.fail(error);
   } finally {
     updateRestartDialogOpen = false;
   }
@@ -258,34 +241,13 @@ async function checkForUpdates(options: { manual: boolean }): Promise<void> {
     return;
   }
 
-  if (updateCheckInFlight) {
-    if (options.manual) {
-      await dialog.showMessageBox({
-        type: "info",
-        title: "Checking for Updates",
-        message: "Forge is already checking for updates."
-      });
-    }
-    return;
-  }
-
   initializeAutoUpdater();
-  setUpdateCheckInFlight(true);
-  try {
-    await autoUpdater.checkForUpdates();
-  } catch (error) {
-    console.error("Forge auto-update check failed.", error);
-    if (options.manual) {
-      await dialog.showMessageBox({
-        type: "error",
-        title: "Update Check Failed",
-        message: "Forge could not check for updates.",
-        detail: error instanceof Error ? error.message : String(error)
-      });
-    }
-  } finally {
-    setUpdateCheckInFlight(false);
-  }
+  await updateState.check(async () => {
+    const result = await autoUpdater.checkForUpdates();
+    // Downloading continues after the version check completes. Observe its
+    // rejection too so background failures use the same retry UI.
+    void result?.downloadPromise?.catch(error => updateState.fail(error));
+  });
 }
 
 function configureAppPresentation(): void {
@@ -2521,7 +2483,8 @@ function assertGitHubAuthSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle("updates:get-status", () => getUpdateStatus());
+  ipcMain.handle("updates:get-status", () => updateState.status());
+  ipcMain.handle("updates:check", () => checkForUpdates({ manual: true }));
   ipcMain.handle("updates:install", () => installAvailableUpdate());
   ipcMain.handle("auth:get-status", () => getAuthStatus());
   ipcMain.handle("auth:sign-in", async event => {

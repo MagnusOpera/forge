@@ -16,19 +16,20 @@ it("restores in-flight checks on mount, ignores stale snapshots, and unsubscribe
     getUpdateStatus: () => new Promise<AppUpdateStatus>(done => { resolve = done; }),
     onUpdateStatusChanged: (callback: typeof changed) => { changed = callback; return unsubscribe; },
     installUpdate: vi.fn(async () => {}),
+    checkForUpdates: vi.fn(async () => {}),
   };
   try {
     await act(async () => root.render(<UpdateCheckIndicator api={api} />));
-    await act(async () => resolve({ checking: true, availableVersion: null, downloaded: false }));
+    await act(async () => resolve({ checking: true, failed: false, availableVersion: null, downloaded: false }));
     expect(container.querySelector('[role="status"]')).not.toBeNull();
-    await act(async () => changed({ checking: false, availableVersion: null, downloaded: false }));
+    await act(async () => changed({ checking: false, failed: false, availableVersion: null, downloaded: false }));
     expect(container.childElementCount).toBe(0);
     await act(async () => root.unmount());
     expect(unsubscribe).toHaveBeenCalledOnce();
     const nextRoot = createRoot(container);
     await act(async () => nextRoot.render(<UpdateCheckIndicator api={api} />));
-    await act(async () => changed({ checking: false, availableVersion: "1.2.3", downloaded: true }));
-    await act(async () => resolve({ checking: true, availableVersion: null, downloaded: false }));
+    await act(async () => changed({ checking: false, failed: false, availableVersion: "1.2.3", downloaded: true }));
+    await act(async () => resolve({ checking: true, failed: false, availableVersion: null, downloaded: false }));
     expect(container.querySelector('[role="status"]')).toBeNull();
     expect(container.querySelector('[aria-label="Upgrade to Forge 1.2.3"]')).not.toBeNull();
     await act(async () => nextRoot.unmount());

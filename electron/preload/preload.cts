@@ -39,6 +39,7 @@ async function requestNotificationPermission(): Promise<NativeNotificationPermis
 }
 
 const api: GithubFocusApi = {
+  checkForUpdates: () => ipcRenderer.invoke("updates:check"),
   installUpdate: () => ipcRenderer.invoke("updates:install"),
   getUpdateStatus: () => ipcRenderer.invoke("updates:get-status"),
   onUpdateStatusChanged: (callback) => {

@@ -9,17 +9,19 @@ vi.mock("./codex/settings", () => ({
 }));
 let updateStatusChanged: ((status: AppUpdateStatus) => void) | undefined;
 const installUpdate = vi.fn(async () => {});
+const checkForUpdates = vi.fn(async () => {});
 let App: typeof import("./App").App;
 let root: Root, container: HTMLDivElement;
 beforeAll(async () => {
   window.githubFocus = {
     platform: "browser",
-    getUpdateStatus: async () => ({ checking: false, availableVersion: null, downloaded: false }),
+    getUpdateStatus: async () => ({ checking: false, failed: false, availableVersion: null, downloaded: false }),
     onUpdateStatusChanged: (callback: (status: AppUpdateStatus) => void) => {
       updateStatusChanged = callback;
       return () => { updateStatusChanged = undefined; };
     },
     installUpdate,
+    checkForUpdates,
     getAuthStatus: async () => ({
       configured: true,
       encryptionAvailable: false,
@@ -155,22 +157,44 @@ it("shows update activity and a persistent upgrade button immediately above glob
   const rail = container.querySelector('[role="toolbar"][aria-label="Global controls"]')!;
   const configuration = rail.querySelector('[aria-label="Global configuration"]')!;
   expect(rail.querySelector('[aria-label="Checking for updates"]')).toBeNull();
-  await act(async () => updateStatusChanged!({ checking: true, availableVersion: null, downloaded: false }));
+  await act(async () => updateStatusChanged!({ checking: true, failed: false, availableVersion: null, downloaded: false }));
   const spinner = rail.querySelector('[aria-label="Checking for updates"]')!;
   expect(spinner.nextElementSibling).toBe(configuration);
   expect(spinner.querySelector(".spin")).not.toBeNull();
   await act(async () => rail.querySelector<HTMLButtonElement>('[aria-label="Collapse sidebar"]')!.click());
   expect(spinner.closest('[aria-hidden="true"], [inert]')).toBeNull();
-  await act(async () => updateStatusChanged!({ checking: false, availableVersion: "1.2.3", downloaded: false }));
+  await act(async () => updateStatusChanged!({ checking: false, failed: false, availableVersion: "1.2.3", downloaded: false }));
   expect(rail.querySelector('[aria-label="Checking for updates"]')).toBeNull();
   const upgrade = rail.querySelector<HTMLButtonElement>('[aria-label="Upgrade to Forge 1.2.3"]')!;
   expect(upgrade.nextElementSibling).toBe(configuration);
   await act(async () => upgrade.click());
   expect(installUpdate).toHaveBeenCalledOnce();
-  await act(async () => updateStatusChanged!({ checking: false, availableVersion: "1.2.3", downloaded: true }));
+  await act(async () => updateStatusChanged!({ checking: false, failed: false, availableVersion: "1.2.3", downloaded: true }));
   expect(upgrade.title).toContain("ready to install");
-  await act(async () => updateStatusChanged!({ checking: true, availableVersion: "1.2.3", downloaded: true }));
+  await act(async () => updateStatusChanged!({ checking: true, failed: false, availableVersion: "1.2.3", downloaded: true }));
   expect(rail.querySelector('[aria-label="Checking for updates"]')).not.toBeNull();
-  await act(async () => updateStatusChanged!({ checking: false, availableVersion: "1.2.3", downloaded: true }));
+  await act(async () => updateStatusChanged!({ checking: false, failed: false, availableVersion: "1.2.3", downloaded: true }));
   expect(rail.querySelector('[aria-label="Upgrade to Forge 1.2.3"]')).not.toBeNull();
+});
+
+
+it("offers a retry above configuration after a failed check and restores the upgrade action on recovery", async () => {
+  const rail = container.querySelector('[role="toolbar"][aria-label="Global controls"]')!;
+  await act(async () => updateStatusChanged!({ checking: false, failed: true, availableVersion: "1.2.3", downloaded: false }));
+  const retry = rail.querySelector<HTMLButtonElement>('[aria-label="Retry update check"]')!;
+  expect(retry.nextElementSibling).toBe(rail.querySelector('[aria-label="Global configuration"]'));
+  expect(rail.querySelector('[aria-label="Upgrade to Forge 1.2.3"]')).toBeNull();
+  checkForUpdates.mockImplementationOnce(async () => {
+    updateStatusChanged!({ checking: true, failed: false, availableVersion: "1.2.3", downloaded: false });
+  });
+  await act(async () => retry.click());
+  expect(checkForUpdates).toHaveBeenCalledOnce();
+  expect(rail.querySelector('[aria-label="Checking for updates"]')).not.toBeNull();
+  await act(async () => updateStatusChanged!({ checking: false, failed: false, availableVersion: "1.2.3", downloaded: true }));
+  expect(rail.querySelector('[aria-label="Retry update check"]')).toBeNull();
+  expect(rail.querySelector('[aria-label="Upgrade to Forge 1.2.3"]')).not.toBeNull();
+  await act(async () => updateStatusChanged!({ checking: false, failed: true, availableVersion: null, downloaded: false }));
+  expect(rail.querySelector('[aria-label="Retry update check"]')).not.toBeNull();
+  await act(async () => updateStatusChanged!({ checking: false, failed: false, availableVersion: null, downloaded: false }));
+  expect(rail.querySelector('[aria-label="Retry update check"]')).toBeNull();
 });
