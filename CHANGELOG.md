@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Match notification read-button spacing to the icon inset on the left.
+
 ## [0.21.10]
 
 

@@ -59,8 +59,15 @@ app.whenReady().then(async () => {
     assert.ok(await win.webContents.executeJavaScript(`(() => {
       const panel = document.querySelector('.notification-panel').getBoundingClientRect();
       const row = document.querySelector('.notification-row').getBoundingClientRect();
-      return panel.x >= 48 && panel.right <= innerWidth && row.width >= panel.width - 40;
+      return panel.x >= 48 && panel.right <= innerWidth && row.width >= panel.width - 48;
     })()`), "List is visible with the sidebar collapsed and uses the full row width");
+    assert.ok(await win.webContents.executeJavaScript(`(() => {
+      const item = document.querySelector('.notification-item.unread');
+      const bounds = item.getBoundingClientRect();
+      const icon = item.querySelector('.notification-row > svg').getBoundingClientRect();
+      const button = item.querySelector('.notification-mark-read').getBoundingClientRect();
+      return Math.abs((icon.left - bounds.left) - (bounds.right - button.right)) < 1 && bounds.right - button.right >= 8;
+    })()`), "Read button has the same edge inset as the leading notification icon");
     assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('.notification-item.unread').length"), 3, "Viewing the list keeps individual notifications unread");
     const weights = await win.webContents.executeJavaScript(`(() => {
       const first = document.querySelector('.notification-item');
