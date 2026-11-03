@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Limit notification history to the latest 10 events.
+
 ## [0.21.8]
 
 

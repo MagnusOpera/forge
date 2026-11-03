@@ -14,10 +14,10 @@ it("records newest first, clears only the indicator when seen, and signals later
   expect(next.pending).toBe(true);
   expect(next.items.map(item => item.id)).toEqual(["two", "one"]);
 });
-it("bounds the session history to the latest 100 notifications", () => {
+it("bounds the session history to the latest 10 notifications", () => {
   let history = emptyNotificationHistory;
-  for (let i = 0; i < 105; i++) history = recordNotification(history, payload(String(i)));
-  expect(history.items).toHaveLength(100);
-  expect(history.items[0].id).toBe("104");
+  for (let i = 0; i < 15; i++) history = recordNotification(history, payload(String(i)));
+  expect(history.items).toHaveLength(10);
+  expect(history.items[0].id).toBe("14");
   expect(history.items.at(-1)?.id).toBe("5");
 });
