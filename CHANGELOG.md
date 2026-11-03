@@ -4,9 +4,14 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.10]
+
+
 - Use continuous glass across the rail, header, and rounded outer edge while keeping the panes matte.
 
 - Highlight unread notification titles and mark notifications as read when opened or with a check button.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.9...0.21.10
 
 ## [0.21.9]
 
