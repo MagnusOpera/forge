@@ -192,19 +192,6 @@ function initializeAutoUpdater(): void {
     private: false
   });
 
-  autoUpdater.on("update-not-available", () => {
-    if (!latestUpdateCheckWasManual) {
-      return;
-    }
-
-    void dialog.showMessageBox({
-      type: "info",
-      title: "Forge is up to date",
-      message: "Forge is up to date.",
-      detail: `Version ${app.getVersion()} is the latest available release.`
-    });
-  });
-
   autoUpdater.on("update-available", async (info) => {
     if (latestUpdateCheckWasManual) {
       await dialog.showMessageBox({
