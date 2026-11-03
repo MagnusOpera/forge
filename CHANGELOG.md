@@ -4,11 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.4]
+
+
 - Announce available upgrades in the rail and open the upgrade dialog only when clicked.
 
 - Finish update checks silently when Forge is already up to date.
 
 - Use the current Forge app logo for macOS notifications and remove the extra image on the right.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.3...0.21.4
 
 ## [0.21.3]
 
