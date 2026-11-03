@@ -1,11 +1,12 @@
-import { Bell, GitPullRequest, Workflow, X } from "lucide-react";
+import { Bell, Check, GitPullRequest, Workflow, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { NativeNotificationPayload } from "../shared/github";
 import type { NotificationHistory } from "./notification-history";
 
-export function NotificationList({ history, onSeen, onOpen }: {
+export function NotificationList({ history, onSeen, onOpen, onRead }: {
   history: NotificationHistory;
   onSeen(): void;
+  onRead(id: string): void;
   onOpen(payload: NativeNotificationPayload): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -45,12 +46,14 @@ export function NotificationList({ history, onSeen, onOpen }: {
         <button className="icon-button" aria-label="Close notifications" onClick={() => { setOpen(false); trigger.current?.focus(); }}><X size={14} /></button>
       </div>
       <div className="notification-list">
-        {history.items.length === 0 ? <div className="empty-row">No notifications yet.</div> : history.items.map(item => <div className="repo-button-wrap" key={item.id}>
+        {history.items.length === 0 ? <div className="empty-row">No notifications yet.</div> : history.items.map(item => <div className={`repo-button-wrap notification-item${item.read ? "" : " unread"}`} key={item.id}>
           <button className="repo-button notification-row" title={`${item.title}\n${item.body}`}
             onClick={() => { onOpen(item); setOpen(false); trigger.current?.focus(); }}>
             {item.source.kind === "pull-request" ? <GitPullRequest size={15} /> : <Workflow size={15} />}
-            <span className="notification-copy"><span className="repo-name">{item.title}</span><span className="repo-meta">{item.body}</span></span>
+            <span className="notification-copy"><span className="repo-name notification-title">{item.title}</span><span className="repo-meta">{item.body}</span></span>
           </button>
+          {!item.read && <button className="icon-button notification-mark-read" aria-label={`Mark as read: ${item.title}`} title="Mark as read"
+            onClick={event => { (event.currentTarget.previousElementSibling as HTMLButtonElement | null)?.focus(); onRead(item.id); }}><Check size={15} /></button>}
         </div>)}
       </div>
     </div>}

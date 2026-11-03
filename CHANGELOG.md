@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Highlight unread notification titles and mark notifications as read when opened or with a check button.
+
 ## [0.21.9]
 
 

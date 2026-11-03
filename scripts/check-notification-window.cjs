@@ -15,6 +15,7 @@ window.githubFocus.getRepo = async (target) => ({ data: (await window.githubFocu
 window.notificationPullRequests = [];
 window.notificationRuns = [];
 window.nativeAttempts = 0;
+window.githubFocus.onNativeNotificationClicked = listener => { window.clickNativeNotification = listener; return () => {}; };
 window.githubFocus.getPullRequests = async () => ({ data: window.notificationPullRequests });
 window.githubFocus.getWorkflowRuns = async () => ({ data: window.notificationRuns });
 window.githubFocus.getPullRequest = async () => ({ data: { ...window.notificationPullRequests[0], body: 'Ready for review', comments: [], reviews: [], commits: [], files: [], labels: [], assignees: [], requestedReviewers: [] } });
@@ -58,8 +59,19 @@ app.whenReady().then(async () => {
     assert.ok(await win.webContents.executeJavaScript(`(() => {
       const panel = document.querySelector('.notification-panel').getBoundingClientRect();
       const row = document.querySelector('.notification-row').getBoundingClientRect();
-      return panel.x >= 48 && panel.right <= innerWidth && row.width >= panel.width - 12;
+      return panel.x >= 48 && panel.right <= innerWidth && row.width >= panel.width - 40;
     })()`), "List is visible with the sidebar collapsed and uses the full row width");
+    assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('.notification-item.unread').length"), 3, "Viewing the list keeps individual notifications unread");
+    const weights = await win.webContents.executeJavaScript(`(() => {
+      const first = document.querySelector('.notification-item');
+      const unread = getComputedStyle(first.querySelector('.notification-title')).fontWeight;
+      first.querySelector('.notification-mark-read').click();
+      return unread;
+    })()`);
+    await waitFor(win, "document.querySelectorAll('.notification-item.unread').length === 2");
+    assert.ok(await win.webContents.executeJavaScript(`Number(${JSON.stringify(weights)}) > Number(getComputedStyle(document.querySelector('.notification-item:not(.unread) .notification-title')).fontWeight)`), "Unread titles are bolder than read titles");
+    assert.equal(await win.webContents.executeJavaScript("!!document.querySelector('.notification-panel')"), true, "Marking read keeps the list open");
+    assert.equal(await win.webContents.executeJavaScript("!!document.querySelector('.notification-item:not(.unread) .notification-mark-read')"), false, "Read notifications hide the read action");
     await win.webContents.executeJavaScript("document.querySelector('.notification-bell').click()");
     await waitFor(win, "!document.querySelector('.notification-panel')");
     await win.webContents.executeJavaScript("document.querySelector('.notification-bell').click()");
@@ -71,6 +83,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript(`window.notificationRuns = [{ id: 123, name: 'Build', displayTitle: 'Build failed', status: 'completed', conclusion: 'failure', branch: 'main', url: 'https://github.com/acme/workspace/actions/runs/123', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];`);
     await refresh();
     await waitFor(win, "!!document.querySelector('.notification-dot')");
+    await waitFor(win, "document.querySelectorAll('.notification-item.unread').length === 5");
     const screenshot = await win.webContents.capturePage();
     writeFileSync(path.join(root, '.out/notifications', theme + '.png'), screenshot.toPNG());
     for (const kind of ["pull-request", "workflow-run"]) {
@@ -79,6 +92,10 @@ app.whenReady().then(async () => {
       await waitFor(win, `document.querySelector('.content-pane')?.innerText.includes(${JSON.stringify(title)})`);
       assert.equal(children.length, 0, "Notification selects the third pane without opening a window");
       assert.equal(await win.webContents.executeJavaScript("!!document.querySelector('.notification-panel')"), false, "Selection closes the popup");
+      await win.webContents.executeJavaScript("document.querySelector('.notification-bell').click()");
+      await waitFor(win, "!!document.querySelector('.notification-panel')");
+      assert.equal(await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.notification-row')).find(row => row.textContent.includes(${JSON.stringify(kind === "pull-request" ? "New pull request" : "Workflow failed")})).parentElement.classList.contains('unread')`), false, "Opening a notification marks it read");
+      await win.webContents.executeJavaScript("document.querySelector('.notification-bell').click()");
       // Existing detached content must return to the third pane as well.
       await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Detach content pane\"]').click()");
       for (let attempt = 0; !children.length && attempt < 100; attempt++) await new Promise(resolve => setTimeout(resolve, 100));
@@ -95,11 +112,13 @@ app.whenReady().then(async () => {
       await waitFor(win, "!!document.querySelector('.notification-panel')");
     }
 
+    await win.webContents.executeJavaScript(`(async () => { const row = Array.from(document.querySelectorAll('.notification-item.unread')).find(row => row.textContent.includes('Workflow failed')); const repo = (await window.githubFocus.getRepositories()).data.find(repo => row.textContent.includes(repo.fullName)); window.clickNativeNotification({ kind: 'workflow-run', repo, run: window.notificationRuns[0] }); })()`);
+    await waitFor(win, "document.querySelectorAll('.notification-item.unread').length === 3");
     await win.webContents.executeJavaScript("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
     assert.equal(await win.webContents.executeJavaScript("!!document.querySelector('.notification-panel')"), false);
     assert.equal(await win.webContents.executeJavaScript("document.activeElement === document.querySelector('.notification-bell')"), true);
     win.destroy();
-    console.log(theme + ": denied native alerts, unread state, retained list, collapsed rail, PR/run selection in the third pane, reattachment, and Escape passed");
+    console.log(theme + ": denied native alerts, per-item read actions, native click read state, retained list, collapsed rail, PR/run selection in the third pane, reattachment, and Escape passed");
   }
 }).then(() => app.quit()).catch(error => { console.error(error); app.exit(1); });
 app.on("window-all-closed", () => {});

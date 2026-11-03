@@ -1,5 +1,5 @@
 import { NotificationList } from "./notification-list";
-import { acknowledgeNotifications, emptyNotificationHistory, recordNotification } from "./notification-history";
+import { acknowledgeNotifications, emptyNotificationHistory, markNotificationRead, recordNotification } from "./notification-history";
 import { UpdateCheckIndicator } from "./update-check-indicator";
 import { accentColors, normalizeAccentColor, projectAccentColor, type AccentColor, type ProjectAccentColors } from "./appearance";
 import { ChatWorkspace } from "./chatgpt/workspace";
@@ -2540,6 +2540,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 
   const focusNotificationSource = useCallback(
     (source: NativeNotificationSource) => {
+      const payload = source.kind === "pull-request"
+        ? pullRequestNotificationPayload(source.repo, source.pullRequest)
+        : workflowFailureNotificationPayload(source.repo, source.run);
+      setNotificationHistory(current => markNotificationRead(current, payload.id));
       const repo = reposByKey.get(repoKey(source.repo)) ?? source.repo;
       const targetRepoKey = repoKey(repo);
       const alreadySelectedRepo = selectedRepoKeyRef.current === targetRepoKey;
@@ -3669,7 +3673,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         globalConfiguration={<><UpdateCheckIndicator api={api} /><button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={() => setSettingsScope("global")}>
             <Settings size={17} />
           </button></>}
-        notifications={<NotificationList history={notificationHistory} onSeen={() => setNotificationHistory(acknowledgeNotifications)} onOpen={openNotification} />}
+        notifications={<NotificationList history={notificationHistory} onSeen={() => setNotificationHistory(acknowledgeNotifications)} onOpen={openNotification} onRead={id => setNotificationHistory(current => markNotificationRead(current, id))} />}
         themeControl={<div className="theme-accent-control">
             <button
               className="theme-toggle-button"
