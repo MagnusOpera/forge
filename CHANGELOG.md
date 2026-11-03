@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.9]
+
+
 - Limit notification history to the latest 10 events.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.8...0.21.9
 
 ## [0.21.8]
 
