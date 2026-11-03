@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.5]
+
+
 - Replace update-error dialogs with a retry button in the rail.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.4...0.21.5
 
 ## [0.21.4]
 
