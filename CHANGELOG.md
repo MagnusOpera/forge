@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.8]
+
+
 - Add a rail notification list with an unread bell indicator and navigation to related content, even when native alerts are disabled.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.7...0.21.8
 
 ## [0.21.7]
 
