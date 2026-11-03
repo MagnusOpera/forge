@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Fix diff line-number alignment, change highlighting, and collapsed-context rows in detached windows.
+
 ## [0.21.5]
 
 

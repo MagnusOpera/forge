@@ -147,7 +147,7 @@ import { useCodexThreads } from "./codex/api";
 const sidebarRailWidth = 48;
 
 const PatchDiff = lazy(async () => {
-  const module = await import("@pierre/diffs/react");
+  const module = await import("./diff-viewer");
   return { default: module.PatchDiff };
 });
 

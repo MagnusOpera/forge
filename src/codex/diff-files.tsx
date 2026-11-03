@@ -1,11 +1,11 @@
 import { displayPath } from "../paths";
 import { useMemo } from "react";
 import { parsePatchFiles } from "@pierre/diffs";
+import type { FileDiffProps } from "@pierre/diffs/react";
 import {
   FileDiff,
   MultiFileDiff,
-  type FileDiffProps,
-} from "@pierre/diffs/react";
+} from "../diff-viewer";
 import type { CodexGitInfo } from "../../shared/codex";
 export default function DiffFiles({
   info,
