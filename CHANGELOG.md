@@ -4,11 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.0]
+
+
 - Refresh website screenshots to show the current workspace and navigation.
 
 - Place the new-branch starting point directly after worktree in global and project configuration.
 
 - Fetch the origin default branch before starting isolated worktrees or new branches.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.20.0...0.21.0
 
 ## [0.20.0]
 
