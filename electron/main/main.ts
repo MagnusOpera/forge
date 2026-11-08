@@ -126,12 +126,18 @@ let activeTokenHash: string | null = null;
 const activeNotifications = new Set<Notification>();
 let sidebarAppearanceMode: SidebarAppearanceMode = DEFAULT_SIDEBAR_APPEARANCE_MODE;
 let autoUpdaterInitialized = false;
-const updateState = new UpdateState(status => {
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("updates:status-changed", status);
-  }
-}, error => console.error("Forge auto-update failed.", error));
-let updateRestartDialogOpen = false;
+const updateState = new UpdateState(
+  status => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send("updates:status-changed", status);
+    }
+  },
+  error => console.error("Forge auto-update failed.", error),
+  version => showUpgradeDialog(version, {
+    showDialog: options => dialog.showMessageBox(options),
+    install: () => autoUpdater.quitAndInstall(false, true),
+  }),
+);
 
 function windowBackgroundColorForSidebarAppearance(mode: SidebarAppearanceMode): string {
   return supportsNativeGlassBackground && mode === "glass" ? glassWindowBackground : normalWindowBackground;
@@ -206,29 +212,12 @@ function initializeAutoUpdater(): void {
   });
 
   autoUpdater.on("update-downloaded", (event: UpdateDownloadedEvent) => {
-    updateState.downloaded(event.version);
+    void updateState.downloaded(event.version);
   });
 
   autoUpdater.on("error", (error) => {
     updateState.fail(error);
   });
-}
-
-async function installAvailableUpdate(): Promise<void> {
-  const { availableVersion, downloaded } = updateState.status();
-  if (!availableVersion || updateRestartDialogOpen) return;
-  updateRestartDialogOpen = true;
-  try {
-    await showUpgradeDialog(availableVersion, downloaded, {
-      showDialog: options => dialog.showMessageBox(options),
-      download: () => autoUpdater.downloadUpdate(),
-      install: () => autoUpdater.quitAndInstall(false, true),
-    });
-  } catch (error) {
-    updateState.fail(error);
-  } finally {
-    updateRestartDialogOpen = false;
-  }
 }
 
 async function checkForUpdates(options: { manual: boolean }): Promise<void> {
@@ -251,9 +240,7 @@ async function checkForUpdates(options: { manual: boolean }): Promise<void> {
   initializeAutoUpdater();
   await updateState.check(async () => {
     const result = await autoUpdater.checkForUpdates();
-    // Downloading continues after the version check completes. Observe its
-    // rejection too so background failures use the same retry UI.
-    void result?.downloadPromise?.catch(error => updateState.fail(error));
+    await result?.downloadPromise;
   });
 }
 
@@ -2492,7 +2479,7 @@ function assertGitHubAuthSender(event: IpcMainInvokeEvent): void {
 function registerIpc(): void {
   ipcMain.handle("updates:get-status", () => updateState.status());
   ipcMain.handle("updates:check", () => checkForUpdates({ manual: true }));
-  ipcMain.handle("updates:install", () => installAvailableUpdate());
+  ipcMain.handle("updates:install", () => updateState.promptToInstall());
   ipcMain.handle("auth:get-status", () => getAuthStatus());
   ipcMain.handle("auth:sign-in", async event => {
     assertGitHubAuthSender(event);

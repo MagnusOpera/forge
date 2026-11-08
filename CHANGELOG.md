@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Download Forge updates automatically, prompt when they’re ready, and keep the install button available if you choose Later.
+
 ## [0.22.3]
 
 

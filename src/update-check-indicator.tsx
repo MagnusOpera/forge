@@ -21,11 +21,14 @@ export function UpdateCheckIndicator({ api }: { api: UpdateApi }) {
     return () => { active = false; unsubscribe?.(); };
   }, [api]);
 
-  if (status.checking) return (
-    <span className="rail-update-check" role="status" aria-label="Checking for updates" title="Checking for updates">
-      <Loader2 size={17} className="spin" aria-hidden="true" />
-    </span>
-  );
+  if (status.checking) {
+    const label = status.availableVersion && !status.downloaded ? "Downloading update" : "Checking for updates";
+    return (
+      <span className="rail-update-check" role="status" aria-label={label} title={label}>
+        <RefreshCw size={17} className="spin" aria-hidden="true" />
+      </span>
+    );
+  }
   if (status.failed || error) return (
     <button className="icon-button" aria-label="Retry update check" title="Update failed. Check again."
       disabled={installing} onClick={() => {
@@ -37,11 +40,11 @@ export function UpdateCheckIndicator({ api }: { api: UpdateApi }) {
       <RefreshCw size={17} />
     </button>
   );
-  if (!status.availableVersion) return null;
+  if (!status.availableVersion || !status.downloaded) return null;
   const label = `Upgrade to Forge ${status.availableVersion}`;
   return (
     <button className="icon-button" aria-label={label}
-      title={error || `${label}${status.downloaded ? ", ready to install" : ", downloading"}`}
+      title={`${label}, ready to install`}
       disabled={installing} aria-busy={installing}
       onClick={() => {
         setInstalling(true);
