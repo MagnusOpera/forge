@@ -151,6 +151,29 @@ it("keeps file previews and branch state scoped to the project and refreshes aft
   expect(container.querySelector("pre")?.textContent).toBe("<b>new checkout</b>");
 });
 
+it("shows Pull progress in the toolbar and refreshes without a status row", async () => {
+  const pending = Promise.withResolvers<{ checkout: string; message: string }>();
+  const request = vi.fn((method) => {
+    if (method === "gitSnapshot") return Promise.resolve(snapshot("repo"));
+    if (method === "gitRepositoryHistory") return Promise.resolve({ commits: [], hasOlder: false });
+    if (method === "gitAction") return pending.promise;
+    throw new Error("Unexpected request");
+  });
+  vi.stubGlobal("forgeCodex", { request, onChanged: () => () => {} } as unknown as CodexApi);
+  await act(async () => root.render(<GitExplorer repo={repo("repo")} treeHost={tree} theme="light"
+    refreshSequence={0} onConfigure={() => {}} onFileGithubUrlChange={() => {}} />));
+
+  const pull = container.querySelector<HTMLButtonElement>('[aria-label="Pull"]')!;
+  await act(async () => pull.click());
+  expect(pull.querySelector(".spin")).not.toBeNull();
+  expect(container.querySelector(".git-explorer-message")).toBeNull();
+  await act(async () => pending.resolve({ checkout: "/tmp/repo", message: "Pulled origin/main into main." }));
+  expect(pull.querySelector(".spin")).toBeNull();
+  expect(pull.disabled).toBe(false);
+  expect(container.querySelector(".git-explorer-message")).toBeNull();
+  expect(request.mock.calls.filter(([method]) => method === "gitSnapshot")).toHaveLength(2);
+});
+
 it("opens the shared diff dialog for a changed file and keeps single click as a file preview", async () => {
   const current = snapshot("repo");
   if (current.kind !== "ready") throw new Error("Expected a checkout.");

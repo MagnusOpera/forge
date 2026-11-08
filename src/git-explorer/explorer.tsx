@@ -152,7 +152,7 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
       repositoryId: repo.id, revision: ready.revision, action, worktree: ready.checkout,
     }).then(
       ({ message, checkout }) => {
-        setFeedback(message);
+        if (action.kind === "switch") setFeedback(message);
         if (checkout === ready.checkout) return;
         setFile(null);
         setDiffFile(null);
@@ -170,11 +170,10 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
   const navigationBlocker = operation ? "A Git action is in progress." : loading ? "Reading the checkout…" : null;
   const blocker = (kind: ExplorerAction["kind"]) => navigationBlocker ?? ready?.blockers[kind] ?? null;
   const pullBlocker = blocker("pull") ?? (!ready ? "Configure a local checkout first." : null);
-  const workingMessage = operation === "switch" ? "Switching branches…" : "Pulling the current branch…";
   const treeMessage = !treeResult ? "Reading commit files…" : "error" in treeResult ? treeResult.error : "This commit has no files.";
   const publishedTreeCommit = treeResult && "publishedCommit" in treeResult ? treeResult.publishedCommit : undefined;
-  const gitFeedback = (operation || feedback) && (
-    <p className="git-explorer-message" role="status">{operation ? workingMessage : feedback}</p>
+  const gitFeedback = (operation === "switch" || feedback) && (
+    <p className="git-explorer-message" role="status">{operation === "switch" ? "Switching branches…" : feedback}</p>
   );
   const previewContext = ready && {
     repositoryId: repo.id, repositoryUrl: repo.url, revision: ready.revision, worktree: ready.checkout,
