@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.22.3]
+
+
 - Refine the layout and highlighting of Git Explorer’s history rails.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.22.2...0.22.3
 
 ## [0.22.2]
 
