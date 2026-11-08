@@ -4,11 +4,16 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.22.1]
+
+
 - Load recent file versions in the history rail as soon as a file is selected in Git Explorer.
 - Browse repository commits and their file trees from a separate history rail.
 - Keep repository history beside the file tree and anchor file history below the preview toolbar.
 - Expand the compact Git history rails on hover, with a vertical divider on file history.
 - Show repository and file history in the website screenshots.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.22.0...0.22.1
 
 ## [0.22.0]
 
