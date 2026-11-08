@@ -82,6 +82,92 @@ afterEach(() => {
   vi.restoreAllMocks();
   rmSync(mock.root, { recursive: true, force: true });
 });
+it("uses the saved local checkout for Git Explorer and validates action inputs", async () => {
+  const repositoryId = "R_123";
+  await expect(request("gitSnapshot", { repositoryId })).resolves.toMatchObject({ kind: "setup" });
+  const checkout = path.join(mock.root, "checkout");
+  mkdirSync(checkout);
+  await git(checkout, ["init", "-b", "main"]);
+  await git(checkout, ["config", "user.name", "Test"]);
+  await git(checkout, ["config", "user.email", "test@example.com"]);
+  writeFileSync(path.join(checkout, "hello.txt"), "hello");
+  await git(checkout, ["add", "."]);
+  await git(checkout, ["-c", "commit.gpgsign=false", "commit", "-m", "initial"]);
+  vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({ canceled: false, filePaths: [checkout] });
+  await request("pickFolder", { repositoryId, fullName: "octo/repo" });
+
+  const result = await request("gitSnapshot", { repositoryId, cwd: mock.root });
+  expect(result).toMatchObject({
+    kind: "ready", checkout: realpathSync(checkout), files: [{ path: "hello.txt", status: "clean" }],
+  });
+  const { revision } = result as { revision: string };
+  await expect(request("gitPreview", { repositoryId, revision, path: "hello.txt" }))
+    .resolves.toMatchObject({ kind: "text", text: "hello" });
+  await expect(request("gitAction", { repositoryId, revision, action: { kind: "reset" } }))
+    .rejects.toThrow(/Unknown Git action/);
+  await expect(request("gitPreview", { repositoryId, revision, path: ".git/config" }))
+    .rejects.toThrow(/Invalid checkout file path/);
+});
+
+it("opens a checked-out branch in its registered worktree and switches unused branches in the project checkout", async () => {
+  const repositoryId = "R_123";
+  const project = realpathSync(mock.root);
+  const checkout = path.join(project, "checkout");
+  const linked = path.join(project, "linked");
+  mkdirSync(checkout);
+  await git(checkout, ["init", "-b", "main"]);
+  await git(checkout, ["config", "user.name", "Test"]);
+  await git(checkout, ["config", "user.email", "test@example.com"]);
+  writeFileSync(path.join(checkout, "hello.txt"), "hello\n");
+  await git(checkout, ["add", "."]);
+  await git(checkout, ["-c", "commit.gpgsign=false", "commit", "-m", "initial"]);
+  await git(checkout, ["branch", "spare"]);
+  await git(checkout, ["worktree", "add", "-b", "topic", linked]);
+  vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({ canceled: false, filePaths: [checkout] });
+  await request("pickFolder", { repositoryId, fullName: "octo/repo" });
+
+  writeFileSync(path.join(checkout, "hello.txt"), "main edit\n");
+  writeFileSync(path.join(linked, "hello.txt"), "linked edit\n");
+  const originalRevision = (await request("gitSnapshot", { repositoryId }) as { revision: string }).revision;
+  const gitDir = (await git(checkout, ["rev-parse", "--absolute-git-dir"])).trim();
+  const head = (await git(checkout, ["rev-parse", "HEAD"])).trim();
+  const advanced = (await git(checkout, ["-c", "commit.gpgsign=false", "commit-tree", "HEAD^{tree}", "-p", head, "-m", "advance main"])).trim();
+  await git(checkout, ["update-ref", "refs/heads/main", advanced, head]);
+  writeFileSync(path.join(gitDir, "MERGE_HEAD"), head + "\n");
+  const main = await request("gitSnapshot", { repositoryId }) as { revision: string };
+  expect(main.revision).not.toBe(originalRevision);
+  expect(main).toMatchObject({ blockers: { switch: "Finish the pending Git operation first." } });
+  await expect(request("gitAction", {
+    repositoryId, revision: originalRevision, action: { kind: "switch", ref: "refs/heads/topic" },
+  })).resolves.toMatchObject({ checkout: linked });
+
+  const worktree = await request("gitSnapshot", { repositoryId, worktree: linked }) as { revision: string };
+  expect(worktree).toMatchObject({
+    checkout: linked, branch: "topic",
+    branches: expect.arrayContaining([
+      expect.objectContaining({ ref: "refs/heads/topic", linkedWorktree: true }),
+      expect.objectContaining({ ref: "refs/heads/main", worktree: checkout }),
+    ]),
+  });
+  const file = { repositoryId, worktree: linked, revision: worktree.revision, path: "hello.txt" };
+  await expect(request("gitPreview", file)).resolves.toMatchObject({ text: "linked edit\n" });
+  await expect(request("gitFileDiff", file)).resolves.toMatchObject({ diff: expect.stringContaining("+linked edit") });
+  await expect(request("gitPreview", { ...file, worktree: project })).rejects.toThrow(/worktree is no longer available/);
+  await expect(request("gitAction", {
+    ...file, action: { kind: "switch", ref: "refs/heads/main" },
+  })).resolves.toMatchObject({ checkout });
+  expect(readFileSync(path.join(checkout, "hello.txt"), "utf8")).toBe("main edit\n");
+
+  rmSync(path.join(gitDir, "MERGE_HEAD"));
+  writeFileSync(path.join(checkout, "hello.txt"), "hello\n");
+  await expect(request("gitAction", {
+    ...file, action: { kind: "switch", ref: "refs/heads/spare" },
+  })).resolves.toMatchObject({ checkout });
+  expect((await git(checkout, ["branch", "--show-current"])).trim()).toBe("spare");
+  expect((await git(linked, ["branch", "--show-current"])).trim()).toBe("topic");
+  expect(readFileSync(path.join(linked, "hello.txt"), "utf8")).toBe("linked edit\n");
+});
+
 describe("Codex preload IPC handlers", () => {
   it("cancels quitting before disposing Codex, then allows an explicitly confirmed quit", async () => {
     await request("configuration");

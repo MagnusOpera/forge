@@ -157,7 +157,8 @@ describe("Codex navigation", () => {
     expect(repositorySelectionFocusView("pull-requests", false)).toBe(
       "pull-requests",
     );
-    expect(adjacentProjectFocusView("codex", 1)).toBe("pull-requests");
+    expect(repositorySelectionFocusView("git", true)).toBe("git");
+    expect(adjacentProjectFocusView("codex", 1)).toBe("git");
     expect(
       appKeyboardShortcut({
         metaKey: true,

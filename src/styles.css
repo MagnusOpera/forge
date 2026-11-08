@@ -678,7 +678,7 @@ input {
   color: var(--text-hover);
 }
 
-.sidebar .icon-button:hover:not(:disabled) {
+:is(.sidebar, .project-pane .pane-header, .content-header) .icon-button:hover:not(:disabled) {
   background: var(--sidebar-row-hover-bg);
 }
 
@@ -688,8 +688,12 @@ input {
   color: var(--text-hover);
 }
 
-.app-shell .sidebar .icon-button:focus-visible {
+.app-shell :is(.sidebar, .project-pane .pane-header, .content-header) .icon-button:focus-visible {
   background: var(--sidebar-row-hover-bg);
+}
+
+:is(.project-pane .pane-header, .content-header) .icon-button {
+  border-radius: 6px;
 }
 
 .icon-button:disabled {
@@ -1013,7 +1017,7 @@ input {
   background-color: var(--sidebar-row-hover-bg);
 }
 
-.app-shell[data-sidebar-appearance="normal"] .sidebar .icon-button:hover:not(:disabled),
+.app-shell[data-sidebar-appearance="normal"] :is(.sidebar, .project-pane .pane-header, .content-header) .icon-button:hover:not(:disabled),
 .app-shell[data-sidebar-appearance="normal"] .sidebar .search-clear-button:hover,
 .app-shell[data-sidebar-appearance="normal"] .repo-group-toggle:hover,
 .app-shell[data-sidebar-appearance="normal"] .repo-button-wrap:hover {

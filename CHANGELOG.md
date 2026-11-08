@@ -4,6 +4,18 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Browse local files and conflicts, switch branches, and pull from Git Explorer.
+- Remove the duplicate GitHub icon from the Git Explorer toolbar.
+- Show Git action errors in a wide dialog with concise details and a Close button.
+- Allow branch switches when untracked files can be kept safely.
+- Show the most recently updated branches first and mark remote branches and linked worktrees with icons.
+- Show each branch name once in the picker and hide remote prefixes.
+- Match the branch search field to the repository search style.
+- Match icon hover highlights across all three pane headers.
+- Place the branch selector above the file tree in Git Explorer.
+- Open existing worktrees from the branch picker even during pending changes in the current checkout.
+- Open a file’s diff by double-clicking a changed file in Git Explorer.
+- Keep development Favorites across restarts while the installed app is open.
 - Refresh the website screenshots to show the current workspace, detached panes, and release view in both themes.
 
 ## [0.21.14]

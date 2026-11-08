@@ -1,3 +1,4 @@
+import type { GitAction, GitActionResult, GitPreview, GitSnapshot } from "./git-explorer.js";
 export type JsonObject = Record<string, unknown>;
 // Raise when Forge's integration requires a newer Codex app-server release.
 export const MINIMUM_CODEX_VERSION = "0.164.0";
@@ -223,6 +224,10 @@ export type CodexThreadWindow = ThreadInput & {
   terminalOpen: boolean;
 };
 export type CodexCommands = {
+  gitSnapshot: Command<{ repositoryId: string; worktree?: string }, GitSnapshot>;
+  gitPreview: Command<{ repositoryId: string; revision: string; path: string; worktree?: string }, GitPreview>;
+  gitFileDiff: Command<{ repositoryId: string; revision: string; path: string; worktree?: string }, CodexGitInfo>;
+  gitAction: Command<{ repositoryId: string; revision: string; action: GitAction; worktree?: string }, GitActionResult>;
   displayContext: Command<Record<string, never>, { homeDirectory: string; platform: string }>;
   openThreadWindow: Command<
     ThreadInput & {

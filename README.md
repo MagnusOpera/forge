@@ -53,7 +53,7 @@ Run the Electron app in development (automatically loads an optional, Git-ignore
 make dev
 ```
 
-Renderer changes reload automatically during development. After changing Electron main or preload code, stop the development command, fully quit Forge, and run `make dev` again to load those changes. Saved GitHub credentials are retained.
+Renderer changes reload automatically during development. After changing Electron main or preload code, stop the development command, fully quit Forge, and run `make dev` again to load those changes. Development Favorites are stored separately from the installed app's Favorites and persist across restarts. Both builds use the same saved GitHub credentials and project configuration.
 
 Build the app:
 

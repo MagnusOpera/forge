@@ -1,0 +1,229 @@
+.git-explorer-hint,
+.git-explorer-empty {
+  color: var(--text-secondary);
+}
+
+.git-explorer-hint {
+  margin: 12px 4px;
+}
+
+.git-explorer-title {
+  min-width: 0;
+}
+
+.git-explorer-title > span,
+.git-checkout-status > span,
+.git-tree-name,
+.git-branch-picker .combobox-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-explorer-actions {
+  flex-shrink: 0;
+}
+
+.git-project-scroll {
+  flex: 1;
+}
+
+.git-branch-picker {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.git-branch-picker .combobox-trigger > span {
+  flex: 1;
+}
+
+.git-branch-menu {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 7px);
+  inset-inline: 0;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-base);
+  background: var(--panel-bg);
+  box-shadow: 0 8px 20px var(--modal-shadow);
+}
+
+.git-branch-menu .search-box {
+  margin: 0;
+}
+
+.git-branch-menu .search-box > svg {
+  flex: 0 0 auto;
+}
+
+.git-branch-options {
+  max-height: 240px;
+  overflow: auto;
+  margin-top: 4px;
+}
+
+.git-branch-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.git-branch-option-icons {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--icon);
+}
+
+.git-branch-option[aria-selected="true"],
+.git-branch-option:hover {
+  background: var(--row-active-bg);
+}
+
+.git-branch-option[aria-disabled="true"],
+.git-branch-hint,
+.git-branch-option small {
+  color: var(--text-secondary);
+}
+
+.git-branch-option[aria-disabled="true"] {
+  cursor: default;
+}
+
+.git-branch-option > span > small {
+  display: block;
+}
+
+.git-branch-hint {
+  padding: 6px 8px;
+}
+
+.git-file-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.git-tree-row {
+  display: flex;
+  min-width: 0;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  padding-block: 3px;
+  padding-inline-end: 5px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--row-text);
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.git-tree-row:hover,
+.git-tree-row[aria-selected="true"] {
+  color: var(--text-strong);
+  background: var(--row-active-bg);
+}
+
+.git-tree-row[aria-selected="true"] {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.git-tree-row:focus-visible,
+.git-file-preview:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.git-tree-row > svg {
+  flex-shrink: 0;
+}
+
+.git-tree-row > svg[role="img"] {
+  margin-inline-start: auto;
+}
+
+.git-file-changed {
+  color: var(--running-text);
+}
+
+.git-file-conflict {
+  color: var(--danger-text);
+}
+
+.git-checkout-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.git-checkout-path {
+  flex: 1;
+}
+
+.git-upstream {
+  max-width: 55%;
+}
+
+.git-explorer-message {
+  max-height: 25vh;
+  overflow: auto;
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.codex-settings-dialog.git-action-error-dialog {
+  width: 800px;
+  height: fit-content;
+  padding: 0;
+  overflow: hidden;
+}
+
+.git-action-error-dialog::backdrop {
+  background: var(--overlay-bg);
+}
+
+.git-action-error-dialog pre {
+  max-height: 55vh;
+  overflow: auto;
+  margin: 16px 18px 18px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-strong);
+  background: var(--input-bg);
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.git-file-preview {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 14px;
+  color: var(--text-strong);
+  background: var(--content-bg);
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  tab-size: 4;
+}

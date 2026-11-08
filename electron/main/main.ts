@@ -28,7 +28,7 @@ import type { UpdateDownloadedEvent } from "electron-updater";
 import { Octokit } from "@octokit/rest";
 import { graphql } from "@octokit/graphql";
 import crypto from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -107,6 +107,13 @@ const { autoUpdater } = electronUpdater;
 
 app.setName(appDisplayName);
 app.setAppUserModelId("com.magnusopera.forge");
+
+if (isDev) {
+  // Chromium locks its browser storage while the installed app is running.
+  const devSessionData = path.join(app.getPath("userData"), "Development Session");
+  mkdirSync(devSessionData, { recursive: true, mode: 0o700 });
+  app.setPath("sessionData", devSessionData);
+}
 
 let mainWindow: BrowserWindow | null = null;
 let mainContentLayout: MainContentLayout | null = null;

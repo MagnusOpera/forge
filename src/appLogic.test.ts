@@ -98,7 +98,8 @@ describe("appLogic", () => {
     expect(adjacentProjectFocusView("workflow-runs", 1)).toBe("releases");
     expect(adjacentProjectFocusView("releases", 1)).toBe("codex");
     expect(adjacentProjectFocusView("releases", -1)).toBe("workflow-runs");
-    expect(adjacentProjectFocusView("pull-requests", -1)).toBe("codex");
+    expect(adjacentProjectFocusView("pull-requests", -1)).toBe("git");
+    expect(adjacentProjectFocusView("git", -1)).toBe("codex");
   });
 
   it("maps unmodified horizontal arrows to project-view cycling", () => {

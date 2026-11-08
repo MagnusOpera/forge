@@ -818,6 +818,29 @@ export class ThreadManager {
       this.locks.delete(thread.id);
     }
   }
+  projectCheckoutBlocker(repositoryPath: string): string | null {
+    if (this.closing) return "Forge is quitting.";
+    if (this.checkoutLocks.has(repositoryPath)) return "Wait for the checkout operation to finish.";
+    if ([...this.store.threads.values()].some((thread) =>
+      !thread.environment &&
+      (thread.repositoryPath === repositoryPath || thread.worktree === repositoryPath) &&
+      (codexIsActive(thread) || this.locks.has(thread.id))
+    )) return "Wait for active Codex work in this repository to finish.";
+    return null;
+  }
+  async withProjectCheckout<T>(repositoryPath: string, operation: () => Promise<T>, checkout = repositoryPath): Promise<T> {
+    const blocker = this.projectCheckoutBlocker(repositoryPath) ??
+      (checkout !== repositoryPath ? this.projectCheckoutBlocker(checkout) : null);
+    if (blocker) throw new Error(blocker);
+    this.checkoutLocks.add(repositoryPath);
+    this.checkoutLocks.add(checkout);
+    try {
+      return await operation();
+    } finally {
+      this.checkoutLocks.delete(repositoryPath);
+      this.checkoutLocks.delete(checkout);
+    }
+  }
   isChangingCheckout(thread: CodexThread): boolean {
     return this.checkoutLocks.has(thread.repositoryPath);
   }

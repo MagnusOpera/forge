@@ -23,6 +23,8 @@ import { terminalDimensions } from "../../../shared/terminal.js";
 import { TerminalManager } from "./terminal.js";
 import { ThreadManager } from "./threads.js";
 import { assertWorktree, gitInfo, inspectRepository } from "./git.js";
+import { gitBranchCheckout, gitCheckoutRevision, gitFileDiff, gitPreview, gitSnapshot, resolveExplorerWorktree, resolveGitCheckout, runGitAction } from "../git-explorer.js";
+import type { GitAction } from "../../../shared/git-explorer.js";
 import {
   validatePreferences,
   isThreadStartKind,
@@ -417,6 +419,76 @@ export function registerCodexIpc(
         return;
       }
       const projectId = repositoryId(input.repositoryId);
+      if (method === "gitSnapshot" || method === "gitPreview" || method === "gitFileDiff" || method === "gitAction") {
+        if (event.sender !== window()?.webContents)
+          throw new Error("Git Explorer is available in the main workspace.");
+        const project = store.configuration.projects[projectId];
+        if (!project?.path) {
+          const message = "Choose a local checkout in Project configuration.";
+          if (method === "gitSnapshot") return { kind: "setup", message };
+          throw new Error(message);
+        }
+        const root = await resolveGitCheckout(project.path).catch(() => null);
+        if (!root) {
+          const message = "The configured local checkout is unavailable or is no longer a Git repository.";
+          if (method === "gitSnapshot") return { kind: "setup", message };
+          throw new Error(message);
+        }
+        const checkPlacement = () => {
+          if (store.configuration.projects[projectId]?.path !== project.path)
+            throw new Error("The configured checkout changed. Refresh and try again.");
+        };
+        const worktree = input.worktree === undefined ? undefined : string(input.worktree, "worktree", 4096);
+        const cwd = await resolveExplorerWorktree(root, worktree).catch((error) => {
+          if (method === "gitSnapshot") return root;
+          throw error;
+        });
+        checkPlacement();
+        if (method === "gitSnapshot") {
+          const blocker = manager.projectCheckoutBlocker(root) ??
+            (cwd !== root ? manager.projectCheckoutBlocker(cwd) : null);
+          return gitSnapshot(cwd, blocker, root);
+        }
+
+        const revision = string(input.revision, "checkout revision", 64);
+        if (!/^[a-f0-9]{64}$/.test(revision)) throw new Error("Invalid checkout revision.");
+        if (method === "gitPreview")
+          return gitPreview(cwd, project.name ?? "", revision, string(input.path, "file path", 4096));
+        if (method === "gitFileDiff")
+          return gitFileDiff(cwd, revision, string(input.path, "file path", 4096));
+
+        const actionInput = object(input.action);
+        let action: GitAction;
+        switch (actionInput.kind) {
+          case "fetch":
+          case "pull":
+          case "push":
+            action = { kind: actionInput.kind };
+            break;
+          case "switch":
+            action = { kind: "switch", ref: string(actionInput.ref, "branch ref", 1024) };
+            break;
+          default:
+            throw new Error("Unknown Git action.");
+        }
+        if (action.kind === "switch") {
+          const existing = await gitBranchCheckout(root, action.ref);
+          checkPlacement();
+          if (existing) return existing;
+        }
+        const target = action.kind === "switch" ? root : cwd;
+        try {
+          return await manager.withProjectCheckout(root, async () => {
+            if (target !== cwd && (await gitCheckoutRevision(cwd)) !== revision)
+              throw new Error("The checkout changed. Refresh and try again.");
+            const expected = target === cwd ? revision : await gitCheckoutRevision(target);
+            const message = await runGitAction(target, expected, action, checkPlacement);
+            return { message, checkout: target };
+          }, target);
+        } finally {
+          changed({ repositoryId: projectId });
+        }
+      }
       if (method === "checkProjectCheckout") {
         const project = store.configuration.projects[projectId];
         const environmentId = string(input.environmentId, "environment ID");

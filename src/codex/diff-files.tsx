@@ -12,11 +12,13 @@ export default function DiffFiles({
   theme,
   split,
   remote = false,
+  emptyMessage = "No changes since this thread's base commit.",
 }: {
   info: CodexGitInfo;
   theme: "light" | "dark";
   split: boolean;
   remote?: boolean;
+  emptyMessage?: string;
 }) {
   const parsed = useMemo(() => {
     try {
@@ -85,7 +87,7 @@ export default function DiffFiles({
       ))}
       {!info.diff && !info.untracked.length && (
         <p className="codex-muted">
-          No changes since this thread's base commit.
+          {emptyMessage}
         </p>
       )}
     </div>

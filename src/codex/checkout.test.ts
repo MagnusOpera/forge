@@ -570,3 +570,19 @@ it("preserves outside target changes if the default branch moves during preparat
   expect(existsSync(path.join(repo, "feature"))).toBe(false);
   expect(existsSync(thread.worktree)).toBe(true);
 });
+
+it("shares the project checkout lock with Codex and releases it after a failed Git action", async () => {
+  const { manager, repo, thread } = await setup();
+  thread.state = "running";
+  await expect(manager.withProjectCheckout(repo, async () => {})).rejects.toThrow(/active Codex work/);
+  thread.state = "idle";
+
+  const operation = Promise.withResolvers<void>();
+  const pending = manager.withProjectCheckout(repo, () => operation.promise);
+  expect(manager.isChangingCheckout(thread)).toBe(true);
+  await expect(manager.withProjectCheckout(repo, async () => {})).rejects.toThrow(/checkout operation/);
+  operation.reject(new Error("Git failed"));
+  await expect(pending).rejects.toThrow("Git failed");
+  expect(manager.isChangingCheckout(thread)).toBe(false);
+  expect(manager.projectCheckoutBlocker(repo)).toBeNull();
+});

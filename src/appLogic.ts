@@ -9,7 +9,7 @@ import type {
 } from "../shared/github";
 
 export type ProjectPullRequestTab = "open" | "closed";
-export type ProjectFocusView = "codex" | "pull-requests" | "workflow-runs" | "issues" | "workflows" | "releases";
+export type ProjectFocusView = "codex" | "git" | "pull-requests" | "workflow-runs" | "issues" | "workflows" | "releases";
 export type PullRequestWorkflowState = "auto-ready" | "manual-ready" | "draft";
 export type FavoriteRepoSnapshots = Record<string, RepoSummary>;
 export type GithubUrlClickAction = "copy" | "open";
@@ -18,6 +18,7 @@ export type AppKeyboardShortcut =
   | "previous-favorite-repository"
   | "next-favorite-repository"
   | "codex"
+  | "git"
   | "open-pull-requests"
   | "workflow-runs"
   | "issues"
@@ -75,6 +76,7 @@ export function appKeyboardShortcut(event: KeyboardShortcutEvent): AppKeyboardSh
   }
   const viewShortcuts: Partial<Record<string, AppKeyboardShortcut>> = {
     c: "codex",
+    g: "git",
     p: "open-pull-requests",
     r: "workflow-runs",
     i: "issues",
@@ -84,7 +86,7 @@ export function appKeyboardShortcut(event: KeyboardShortcutEvent): AppKeyboardSh
   return event.shiftKey ? viewShortcuts[key] ?? null : null;
 }
 
-const projectFocusViewOrder: ProjectFocusView[] = ["codex", "pull-requests", "workflows", "issues", "workflow-runs", "releases"];
+const projectFocusViewOrder: ProjectFocusView[] = ["codex", "git", "pull-requests", "workflows", "issues", "workflow-runs", "releases"];
 
 export function adjacentProjectFocusView(current: ProjectFocusView, direction: -1 | 1): ProjectFocusView {
   const currentIndex = projectFocusViewOrder.indexOf(current);
@@ -509,5 +511,5 @@ export function findNewFailedWorkflowRuns(
 }
 
 export function repositorySelectionFocusView(current: ProjectFocusView, isFavorite: boolean): ProjectFocusView {
-  return isFavorite ? "codex" : current;
+  return isFavorite && current !== "git" ? "codex" : current;
 }

@@ -145,6 +145,7 @@ import { CodexQuickActions } from "./codex/quick-actions";
 import { CodexSettingsDialog } from "./codex/settings";
 import { CodexThreadList } from "./codex/threads";
 import { useCodexThreads } from "./codex/api";
+import { GitExplorer } from "./git-explorer/explorer";
 
 const sidebarRailWidth = 48;
 
@@ -378,6 +379,7 @@ function clearPointerActivatedControlFocus(event: React.MouseEvent<HTMLElement>)
     tagName === "INPUT" ||
     tagName === "TEXTAREA" ||
     tagName === "SELECT" ||
+    control.getAttribute("role") === "treeitem" ||
     control.getAttribute("contenteditable") === "true"
   ) {
     return;
@@ -1196,7 +1198,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   const [recentRepos, setRecentRepos] = useState<RepoSummary[]>([]);
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<RepoSummary | null>(initialItem?.repo ?? null);
-  const [settingsScope, setSettingsScope] = useState<"global" | "project" | null>(null);
+  const [settingsScope, setSettingsScope] = useState<"global" | "project" | "project-github" | null>(null);
+  const [gitTreeHost, setGitTreeHost] = useState<HTMLDivElement | null>(null);
+  const [gitRefreshSequence, setGitRefreshSequence] = useState(0);
+  const [gitFileGithubUrl, setGitFileGithubUrl] = useState<string | null>(null);
   const codexThreads = useCodexThreads(selectedRepo?.id);
   useEffect(() => {
     const archivedKeys = codexThreads.threads
@@ -1359,6 +1364,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   );
   const projectFocusView: ProjectFocusView =
     initialItem?.focusView ?? (storedProjectFocusView === "starred-actions" ? "workflows" : storedProjectFocusView);
+  const gitView = !initialItem && projectFocusView === "git" && Boolean(selectedRepo);
   const openPullRequests = useMemo(
     () => pullRequests.filter((pr) => pr.state !== "CLOSED" && pr.state !== "MERGED"),
     [pullRequests]
@@ -1411,7 +1417,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   }, [visibleRepos]);
 
   const middleItems = useMemo<MiddleItem[]>(() => {
-    if (projectFocusView === "codex") return [];
+    if (projectFocusView === "codex" || projectFocusView === "git") return [];
     if (projectFocusView === "workflow-runs") {
       return workflowRuns.map((run) => ({ id: `run:${run.id}`, kind: "run" as const, run }));
     }
@@ -1428,7 +1434,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     return visiblePullRequests.map((pr) => ({ id: `pr:${pr.number}`, kind: "pr" as const, pr }));
   }, [releases, releaseTab, issues, projectFocusView, projectWorkflowTab, starredWorkflows, visiblePullRequests, workflowRuns, workflows]);
 
-  const currentGithubUrl = openUrlForSelection(selection, selectedRepo);
+  const currentGithubUrl = gitView ? gitFileGithubUrl ?? selectedRepo?.url ?? null : openUrlForSelection(selection, selectedRepo);
   const currentNavigationEntry = useMemo<NavigationEntry>(
     () => ({
       focusView: projectFocusView,
@@ -1975,6 +1981,10 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   );
 
   const refreshActivePane = useCallback(async () => {
+    if (gitView) {
+      setGitRefreshSequence((value) => value + 1);
+      return;
+    }
     if (!selectedRepo) {
       return;
     }
@@ -2024,7 +2034,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       }
       return;
     }
-  }, [loadProject, selectedRepo, selection]);
+  }, [gitView, loadProject, selectedRepo, selection]);
 
   useEffect(() => {
     if (!initialItem) return;
@@ -2932,6 +2942,17 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     }
 
     if (selectedRepo) {
+      items.push({
+        id: "action:git-explorer",
+        kind: "action",
+        title: "Git Explorer",
+        subtitle: selectedRepo.fullName,
+        run: () => {
+          setChatMode(false);
+          setStoredProjectFocusView("git");
+          setSelection({ kind: "repo" });
+        }
+      });
       for (const pr of pullRequests) {
         items.push({
           id: `pr:${pr.number}`,
@@ -3182,7 +3203,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       if (chatMode && !appKeyboardShortcut(event) && !((event.metaKey || event.ctrlKey) && ["b", "k"].includes(event.key.toLowerCase()))) return;
       if (isHtmlElement(event.target) && event.target.closest(".codex-terminal-screen")) return;
       if (hasOpenKeyboardOverlay((event.target as Node | null)?.ownerDocument ?? (event.currentTarget as Window).document)) return;
-      if (isTabNavigation(event) && (projectFocusView === "codex" || settingsScope)) return;
+      if (isTabNavigation(event) && (projectFocusView === "codex" || gitView || settingsScope)) return;
       if (isTabNavigation(event)) {
         event.preventDefault();
         return;
@@ -3221,7 +3242,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         }
 
         setStoredProjectFocusView(shortcut);
-        if (shortcut !== "codex" && selection.kind === "codex") setSelection({ kind: "repo" });
+        if (shortcut === "git" || (shortcut !== "codex" && selection.kind === "codex")) setSelection({ kind: "repo" });
         return;
       }
 
@@ -3259,8 +3280,11 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         return;
       }
 
+      if (gitView && isHtmlElement(event.target) && event.target.closest(".git-file-tree, .git-branch-picker, .git-file-preview") &&
+          ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+
       const selectionDelta = middlePaneSelectionDelta(event);
-      if (selectionDelta !== null && projectFocusView !== "codex") {
+      if (selectionDelta !== null && projectFocusView !== "codex" && !gitView) {
         event.preventDefault();
         setMiddleKeyboardNavigating(true);
         moveMiddleSelection(selectionDelta);
@@ -3272,7 +3296,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         event.preventDefault();
         const nextView = adjacentProjectFocusView(projectFocusView, viewDirection);
         setStoredProjectFocusView(nextView);
-        if (nextView !== "codex" && selection.kind === "codex") setSelection({ kind: "repo" });
+        if (nextView === "git" || (nextView !== "codex" && selection.kind === "codex")) setSelection({ kind: "repo" });
         if (nextView === "pull-requests") {
           setProjectPullRequestTab("open");
         }
@@ -3300,6 +3324,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     chatMode,
     detachedItems,
     favoriteKeys,
+    gitView,
     moveMiddleSelection,
     navigateHistory,
     openGithub,
@@ -3413,7 +3438,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     selection: projectFocusView === "codex" && selection.kind !== "codex" ? { kind: "repo" } : selection,
     focusView: projectFocusView,
   };
-  const activeDetached = !initialItem && (chatMode ? chatDetached : Boolean(detachedItems.get(activeTarget.key)?.pane.detached));
+  const activeDetached = !initialItem && (chatMode ? chatDetached : !gitView && Boolean(detachedItems.get(activeTarget.key)?.pane.detached));
   const focusSelectedItem = (targetSelection: ContentSelection) => detachedItems.get(contentItemKey(selectedRepo?.id, selectionRouteKey(targetSelection)))?.pane.focus();
   const navigateToItem = useCallback((target: ContentItemTarget) => {
     setChatMode(false);
@@ -3422,7 +3447,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     if (target.selection.kind === "pr") setProjectPullRequestTab(pullRequestTabForState(target.selection.pr));
     detachedItems.get(target.key)?.pane.focus();
   }, [detachedItems, setStoredProjectFocusView, setProjectPullRequestTab]);
-  useEffect(() => { if (!initialItem) detachedItems.get(activeTarget.key)?.pane.focus(); }, [contentRoute]);
+  useEffect(() => { if (!initialItem && !gitView) detachedItems.get(activeTarget.key)?.pane.focus(); }, [contentRoute, gitView]);
   useEffect(() => { if (contentPane.error) flash(contentPane.error); }, [contentPane.error, flash]);
   const terminalKey = `${selectedRepo?.id}:${terminalThread?.id}`;
   const terminalOpen = Boolean(terminalThread && !terminalThread.archived && openTerminals[terminalKey]);
@@ -3495,7 +3520,8 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 
   const overlays = <>{settingsScope && (
         <CodexSettingsDialog
-          project={settingsScope === "project" ? selectedRepo ?? undefined : undefined}
+          project={settingsScope === "global" ? undefined : selectedRepo ?? undefined}
+          initialSection={settingsScope === "project-github" ? "github" : undefined}
           projectAccent={selectedRepo ? projectAccentColors?.[selectedRepo.id] : undefined}
           onSaveProjectAccent={(color) => {
             if (!selectedRepo) return;
@@ -3741,6 +3767,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       />
       {!chatMode && <ProjectPane
         onProjectConfiguration={() => { setSettingsScope("project"); }}
+        gitTree={<div ref={setGitTreeHost} />}
         codexCount={codexThreads.threads.filter((thread) => !thread.archived).length}
         codexList={selectedRepo ? (
           <CodexThreadList
@@ -3776,7 +3803,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         selection={selection}
         onFocusView={(view) => {
           setStoredProjectFocusView(view);
-          if (view !== "codex" && selection.kind === "codex") setSelection({ kind: "repo" });
+          if (view === "git" || (view !== "codex" && selection.kind === "codex")) setSelection({ kind: "repo" });
         }}
         onPullRequestTab={setProjectPullRequestTab}
         onWorkflowTab={setProjectWorkflowTab}
@@ -3799,7 +3826,11 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         onActivate={() => setChatMode(true)} onDetachedLayout={setChatDetached}
         onResize={event => startResize("middle", event)} sidebarCollapsed={sidebarCollapsed} />}
       <div style={{ display: chatMode ? "none" : "contents" }}>
-      {retainedContentItems(activeTarget, [...detachedItems.values()].map(entry => entry.target)).map(target => (
+      {gitView && selectedRepo && <GitExplorer key={selectedRepo.id} repo={selectedRepo} treeHost={gitTreeHost} theme={activeTheme}
+        refreshSequence={gitRefreshSequence} onConfigure={() => setSettingsScope("project-github")}
+        onFileGithubUrlChange={setGitFileGithubUrl} />}
+      {(gitView ? [...detachedItems.values()].map(entry => entry.target)
+        : retainedContentItems(activeTarget, [...detachedItems.values()].map(entry => entry.target))).map(target => (
         <ForgeWorkspace key={target.key} item={target} sharedAuth={auth} onAuthChange={setAuth}
           appearance={{ themePreference, theme: activeTheme, sidebarAppearance, accent: projectAccentColor(projectAccentColors, target.repo?.id, globalAccent) }}
           onPaneState={reportItemPane} onNavigateItem={navigateToItem} />
@@ -4186,6 +4217,7 @@ function RepoButton(props: {
 
 function ProjectPane(props: {
   onProjectConfiguration(): void;
+  gitTree: React.ReactNode;
   codexList: React.ReactNode;
   codexCount: number;
   repo: RepoSummary | null;
@@ -4260,7 +4292,7 @@ function ProjectPane(props: {
       {!props.repo ? (
         <EmptyPane icon={<Github size={24} />} title="No repository selected" />
       ) : (
-        <div className="project-scroll">
+        <div className={cx("project-scroll", props.focusView === "git" && "git-project-scroll")}>
           <div className="project-identity">
             <span className="owner">{props.repo.owner}</span>
             <span className="full-name">{props.repo.fullName}</span>
@@ -4268,13 +4300,14 @@ function ProjectPane(props: {
               <Settings size={14} />
             </button>
           </div>
-          {props.error && (
+          {props.error && props.focusView !== "git" && (
             <div className="inline-error">
               <AlertCircle size={15} />
               <span>{displayPathText(props.error)}</span>
             </div>
           )}
-          {props.focusView === "codex" ? props.codexList : props.focusView === "workflow-runs" ? (
+          {props.focusView === "git" ? props.gitTree
+            : props.focusView === "codex" ? props.codexList : props.focusView === "workflow-runs" ? (
             <WorkflowRunsSection
               runs={props.workflowRuns}
               selected={props.selection}
@@ -4314,7 +4347,7 @@ function ProjectPane(props: {
 }
 
 function ProjectFocusToolbar(props: {
-  counts: Record<ProjectFocusView, number>;
+  counts: Record<Exclude<ProjectFocusView, "git">, number>;
   disabled: boolean;
   view: ProjectFocusView;
   onView(view: ProjectFocusView): void;
@@ -4328,6 +4361,7 @@ function ProjectFocusToolbar(props: {
   );
   const items: Array<{ view: ProjectFocusView; label: string; shortcut: string; icon: React.ReactNode }> = [
     { view: "codex", label: "Codex", shortcut: "⌘⇧C", icon: <Bot size={15} /> },
+    { view: "git", label: "Git Explorer", shortcut: "⌘⇧G", icon: <GitBranch size={15} /> },
     { view: "pull-requests", label: "Pull Requests", shortcut: "⌘⇧P", icon: <GitPullRequest size={15} /> },
     { view: "workflow-runs", label: "Workflow Runs", shortcut: "⌘⇧R", icon: <Activity size={15} /> },
     { view: "issues", label: "Issues", shortcut: "⌘⇧I", icon: <Inbox size={15} /> },
@@ -4343,7 +4377,7 @@ function ProjectFocusToolbar(props: {
           type="button"
           className={cx("icon-button project-view-button", props.view === item.view && "active")}
           data-active-tab={props.view === item.view ? "true" : undefined}
-          aria-label={`${item.label} (${props.counts[item.view]})`}
+          aria-label={item.view === "git" ? item.label : `${item.label} (${props.counts[item.view]})`}
           title={`${item.label} (${item.shortcut})${props.view === item.view ? ". Click again to refresh (⌘R)" : ""}`}
           aria-pressed={props.view === item.view}
           disabled={props.disabled}

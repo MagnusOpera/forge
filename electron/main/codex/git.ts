@@ -4,12 +4,17 @@ import { mkdir, realpath, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { CodexGitInfo, CodexThread } from "../../../shared/codex.js";
 const exec = promisify(execFile);
-export async function git(cwd: string, args: string[]): Promise<string> {
+export async function git(
+  cwd: string,
+  args: string[],
+  options: { timeout?: number; env?: NodeJS.ProcessEnv; maxBuffer?: number } = {},
+): Promise<string> {
   return (
     await exec("git", ["-c", "core.fsmonitor=false", ...args], {
       cwd,
-      timeout: 30_000,
-      maxBuffer: 16 * 1024 * 1024,
+      timeout: options.timeout ?? 30_000,
+      env: options.env,
+      maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
     })
   ).stdout;
 }

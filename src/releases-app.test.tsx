@@ -80,8 +80,9 @@ it.each(["light", "dark"])("refreshes only when reselecting a project icon and r
   const header = container.querySelector(".project-pane .pane-header")!;
   expect(header.querySelector('[aria-label="Refresh repository"]')).toBeNull();
   expect(header.querySelector(".toolbar-divider")).toBeNull();
-  const buttons = [...header.querySelectorAll<HTMLButtonElement>(".project-view-button")];
-  // Start with a different view, then visit every icon, including Codex.
+  const buttons = [...header.querySelectorAll<HTMLButtonElement>(".project-view-button")]
+    .filter((button) => button.getAttribute("aria-label") !== "Git Explorer");
+  // Start with a different view, then visit each GitHub-backed icon.
   if (buttons[1].getAttribute("aria-pressed") !== "true") {
     await act(async () => buttons[1].click());
   }
