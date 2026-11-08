@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Link the website’s macOS download to the current Forge version.
+
 ## [0.22.1]
 
 

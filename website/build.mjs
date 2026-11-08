@@ -25,7 +25,9 @@ const passthroughFiles = [
 ];
 
 const packageJson = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8"));
-const releaseTag = process.env.RELEASE_TAG || packageJson.version;
+const changelog = await readFile(path.join(rootDir, "CHANGELOG.md"), "utf8");
+const latestVersion = parseChangelog(changelog).find(({ title }) => /^\d+\.\d+\.\d+$/.test(title));
+const releaseTag = process.env.RELEASE_TAG || latestVersion?.title || packageJson.version;
 
 function escapeHtml(value) {
   return value
@@ -155,7 +157,6 @@ await rm(outDir, { recursive: true, force: true });
 await mkdir(path.join(outDir, "assets"), { recursive: true });
 await mkdir(path.join(outDir, "screenshots"), { recursive: true });
 
-const changelog = await readFile(path.join(rootDir, "CHANGELOG.md"), "utf8");
 const indexHtml = await readFile(path.join(__dirname, "index.html"), "utf8");
 const installHtml = await readFile(path.join(__dirname, "install.html"), "utf8");
 const documentationHtml = await readFile(path.join(__dirname, "documentation.html"), "utf8");

@@ -1,10 +1,30 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const homepage = readFileSync(path.resolve("website/index.html"), "utf8");
 const siteScript = readFileSync(path.resolve("website/site.js"), "utf8");
+
+it("builds install links for the latest versioned changelog entry", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "forge-website-test-"));
+  try {
+    cpSync("website", path.join(root, "website"), { recursive: true });
+    mkdirSync(path.join(root, "assets"));
+    for (const file of ["package.json", "CHANGELOG.md", "LICENSE", "README.md", "assets/forge-icon.svg", "assets/forge-icon.png"]) {
+      copyFileSync(file, path.join(root, file));
+    }
+    execFileSync(process.execPath, [path.join(root, "website/build.mjs")], { env: { ...process.env, RELEASE_TAG: "" } });
+    const version = readFileSync("CHANGELOG.md", "utf8").match(/^## \[(\d+\.\d+\.\d+)\]/m)?.[1];
+    const install = readFileSync(path.join(root, ".out/site/install.html"), "utf8");
+    expect(version).toBeDefined();
+    expect(install).toContain(`/releases/download/${version}/forge-${version}-mac-arm64.zip`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 describe("homepage Forge previews", () => {
   it("switches between the bundled dark and light screenshots with the theme control", () => {
