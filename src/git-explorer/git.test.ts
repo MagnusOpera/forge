@@ -123,6 +123,40 @@ it("excludes old directory contents from the history of a same-named file", asyn
   expect((await gitFileHistory(checkout, revision, "notes")).commits).toMatchObject([{ commit: replaced, path: "notes" }]);
 });
 
+it("searches beyond the latest 50 repository and file commits, including across renames", { timeout: 15_000 }, async () => {
+  const { checkout } = await setup();
+  await writeFile(path.join(checkout, "base.txt"), "Search fixture\n");
+  await git(checkout, ["add", "base.txt"]);
+  await git(checkout, ["commit", "-m", "Older subject", "-m", "Original migration [v1]."]);
+  const older = (await git(checkout, ["rev-parse", "HEAD"])).trim();
+  await git(checkout, ["mv", "base.txt", "renamed.txt"]);
+  await git(checkout, ["commit", "-m", "Rename fixture"]);
+  for (let index = 0; index < 50; index++) {
+    await commit(checkout, "renamed.txt", `Change ${index}\n`);
+  }
+  const unrelated = await commit(checkout, "other.txt", "Unrelated file\n");
+  const { revision } = await snapshot(checkout);
+
+  const repositoryHistory = await gitRepositoryHistory(checkout, revision);
+  const fileHistory = await gitFileHistory(checkout, revision, "renamed.txt");
+  for (const history of [repositoryHistory, fileHistory]) {
+    expect(history.hasOlder).toBe(true);
+    expect(history.commits).toHaveLength(50);
+    expect(history.commits.some(({ commit }) => commit === older)).toBe(false);
+  }
+
+  for (const query of [" ORIGINAL MIGRATION [V1]. ", "older subject", older.slice(0, 8).toUpperCase(), older]) {
+    await expect(gitRepositoryHistory(checkout, revision, query)).resolves.toMatchObject({
+      commits: [{ commit: older, subject: "Older subject" }], hasOlder: false,
+    });
+    await expect(gitFileHistory(checkout, revision, "renamed.txt", undefined, query)).resolves.toMatchObject({
+      commits: [{ commit: older, path: "base.txt" }], hasOlder: false,
+    });
+  }
+  await expect(gitFileHistory(checkout, revision, "renamed.txt", undefined, unrelated))
+    .resolves.toEqual({ commits: [], hasOlder: false });
+});
+
 it("orders local and remote branches together by their tip commit date", async () => {
   const { checkout } = await setup();
   const fixtures = [

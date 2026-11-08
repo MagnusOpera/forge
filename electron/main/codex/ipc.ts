@@ -458,10 +458,12 @@ export function registerCodexIpc(
           return gitPreview(cwd, project.name ?? "", revision, string(input.path, "file path", 4096));
         if (method === "gitFileDiff")
           return gitFileDiff(cwd, revision, string(input.path, "file path", 4096));
-        if (method === "gitFileHistory")
+        if (method === "gitFileHistory" || method === "gitRepositoryHistory") {
+          const query = input.query === undefined ? undefined : string(input.query, "history search", 4096);
+          if (method === "gitRepositoryHistory") return gitRepositoryHistory(cwd, revision, query);
           return gitFileHistory(cwd, revision, string(input.path, "file path", 4096),
-            input.commit === undefined ? undefined : string(input.commit, "commit ID", 64));
-        if (method === "gitRepositoryHistory") return gitRepositoryHistory(cwd, revision);
+            input.commit === undefined ? undefined : string(input.commit, "commit ID", 64), query);
+        }
         if (method === "gitHistoricalTree")
           return gitHistoricalTree(cwd, project.name ?? "", revision, string(input.commit, "commit ID", 64));
         if (method === "gitHistoricalPreview")

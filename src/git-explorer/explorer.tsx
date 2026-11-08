@@ -30,6 +30,12 @@ type HistorySelection = { revision: string; version: GitCommit; file: string | n
 type HistoricalTreeResult = { revision: string; version: GitCommit } & (GitHistoricalTree | { error: string });
 const noFiles: GitFile[] = [];
 
+function useHistoryQuery(scope: string) {
+  const [search, setSearch] = useState({ scope, query: "" });
+  if (search.scope !== scope) setSearch({ scope, query: "" });
+  return [search.scope === scope ? search.query : "", (query: string) => setSearch({ scope, query })] as const;
+}
+
 export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigure, onFileGithubUrlChange }: {
   repo: RepoSummary;
   treeHost: HTMLElement | null;
@@ -64,10 +70,16 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
   const versionFiles = treeResult && "files" in treeResult ? treeResult.files : noFiles;
   const historyFile = versionFiles.some((entry) => entry.path === history?.file) ? history?.file ?? null : null;
   const visibleFile = version ? historyFile : selected;
+  const branchScope = JSON.stringify([repo.id, checkout, ready?.branch ?? revision]);
+  const searchFile = version && !treeResult ? history?.file : visibleFile;
+  const [repositoryQuery, searchRepository] = useHistoryQuery(branchScope);
+  const [fileQuery, searchFileHistory] = useHistoryQuery(JSON.stringify([branchScope, searchFile]));
   const title = visibleFile ?? (version ? "Repository history" : "Git Explorer");
-  const loadRepositoryHistory = useCallback(() => {
+  const loadRepositoryHistory = useCallback((query?: string) => {
     if (!revision) return Promise.reject(new Error("The checkout is unavailable."));
-    return codexApi().request("gitRepositoryHistory", { repositoryId: repo.id, revision, worktree: checkout });
+    return codexApi().request("gitRepositoryHistory", {
+      repositoryId: repo.id, revision, worktree: checkout, ...(query ? { query } : {}),
+    });
   }, [repo.id, revision, checkout]);
   const loadDiff = useCallback(async () => {
     if (!diffFile || !revision) throw new Error("The checkout is unavailable.");
@@ -184,8 +196,8 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
           <BranchPicker branch={ready.branch} branches={ready.branches} blocker={blocker("switch")}
             navigationBlocker={navigationBlocker} onSwitch={(ref) => void act({ kind: "switch", ref })} />
           <div className="git-history-layout git-repository-body">
-            <GitHistoryRail key={ready.revision} title="Repository history"
-              loadHistory={loadRepositoryHistory} version={version}
+            <GitHistoryRail key={branchScope} title="Repository history"
+              loadHistory={loadRepositoryHistory} version={version} query={repositoryQuery} onSearch={searchRepository}
               onSelect={(entry) => setHistorySelection(entry ? {
                 revision: ready.revision, version: entry, file: history ? history.file : selected,
               } : null)} />
@@ -242,7 +254,8 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
       )}
       {previewContext && (visibleFile ? (
         <GitFileView key={`${previewContext.revision}\0${version?.commit ?? "working"}\0${visibleFile}`}
-          {...previewContext} path={visibleFile} baseVersion={version} publishedTreeCommit={publishedTreeCommit} />
+          {...previewContext} path={visibleFile} baseVersion={version} publishedTreeCommit={publishedTreeCommit}
+          query={fileQuery} onSearch={searchFileHistory} />
       ) : (
         <GitVersionPreview {...previewContext} path={null} version={version} publishedTreeCommit={publishedTreeCommit}
           emptyMessage={version ? (versionFiles.length ? "Select a file to preview it at this commit." : treeMessage) :

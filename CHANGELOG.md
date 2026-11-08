@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Search repository and file history by commit ID or message, including commits older than the latest 50, and see when a filter is active on a collapsed rail.
+
 ## [0.22.4]
 
 

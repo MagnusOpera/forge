@@ -211,6 +211,90 @@ it("opens the shared diff dialog for a changed file and keeps single click as a 
   expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("other.txt");
 });
 
+it("filters both rails and keeps each query until its branch or file changes", async () => {
+  vi.useFakeTimers();
+  const checkout = snapshot("repo");
+  if (checkout.kind !== "ready") throw new Error("Expected a ready checkout");
+  const recent = { commit: "a".repeat(40), subject: "Recent change", date: "2026-11-03T12:00:00Z" };
+  const older = { commit: "b".repeat(40), subject: "Older change", date: "2026-11-02T12:00:00Z" };
+  const late = Promise.withResolvers<GitFileHistory>();
+  const request = vi.fn((method, input) => {
+    if (method === "gitSnapshot") return Promise.resolve({ ...checkout });
+    if (method === "gitPreview" || method === "gitHistoricalPreview") return Promise.resolve({ kind: "text", text: "file contents" });
+    if (method === "gitHistoricalTree") return Promise.resolve({ files: checkout.files });
+    if (method === "gitRepositoryHistory" || method === "gitFileHistory") {
+      if (input.query === "slow") return late.promise;
+      const matches = input.query ? [older] : [recent];
+      return Promise.resolve({ commits: matches.map((commit) => ({ ...commit, path: input.path })), hasOlder: !input.query });
+    }
+    throw new Error("Unexpected request");
+  });
+  vi.stubGlobal("forgeCodex", { request, onChanged: () => () => {} } as unknown as CodexApi);
+  const render = (refreshSequence: number) => root.render(<GitExplorer repo={repo("repo")} treeHost={tree}
+    theme="light" refreshSequence={refreshSequence} onConfigure={() => {}} onFileGithubUrlChange={() => {}} />);
+  const repositoryRail = () => tree.querySelector('aside[aria-label="Repository history"]')!;
+  const fileRail = () => container.querySelector('aside[aria-label="File history"]')!;
+  const input = (rail: Element) => rail.querySelector("input")!;
+  const filterIndicator = (rail: Element) => rail.querySelector('.git-history-filter-indicator[role="img"]');
+  const type = async (field: HTMLInputElement, value: string) => {
+    await act(async () => {
+      field.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => vi.advanceTimersByTime(200));
+  };
+
+  await act(async () => render(0));
+  await act(async () => tree.querySelector<HTMLButtonElement>('[title="other.txt"]')!.click());
+  expect(filterIndicator(repositoryRail())?.getAttribute("aria-label")).toBe("No commit filter");
+  expect(filterIndicator(fileRail())?.querySelector(".lucide-search")).toBeInstanceOf(SVGElement);
+  await type(input(repositoryRail()), "slow");
+  await type(input(repositoryRail()), "Older");
+  expect(repositoryRail().querySelector(".search-box svg")).not.toBeNull();
+  expect(repositoryRail().textContent).toContain(older.subject);
+  await act(async () => late.resolve({ commits: [{ ...recent, path: "other.txt" }], hasOlder: false }));
+  expect(repositoryRail().textContent).not.toContain(recent.subject);
+  expect(document.activeElement).toBe(input(repositoryRail()));
+  await act(async () => container.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
+  expect(document.activeElement).not.toBe(input(repositoryRail()));
+  expect(input(repositoryRail()).value).toBe("Older");
+  expect(filterIndicator(repositoryRail())?.getAttribute("aria-label")).toBe("Commit filter active");
+  expect(filterIndicator(repositoryRail())?.querySelector(".lucide-funnel")).toBeInstanceOf(SVGElement);
+
+  await type(input(fileRail()), "bbbbbbbb");
+  expect(filterIndicator(fileRail())?.getAttribute("aria-label")).toBe("Commit filter active");
+  expect(fileRail().textContent).toContain(older.subject);
+  expect(fileRail().textContent).not.toContain(recent.subject);
+  await act(async () => repositoryRail().querySelector<HTMLButtonElement>('button[title="Older change"]')!.click());
+  await act(async () => vi.advanceTimersByTime(200));
+  expect(input(fileRail()).value).toBe("bbbbbbbb");
+  expect(request).toHaveBeenCalledWith("gitFileHistory", expect.objectContaining({
+    path: "other.txt", query: "bbbbbbbb", commit: older.commit,
+  }));
+  await act(async () => fileRail().querySelector<HTMLButtonElement>('button[aria-label="Clear search"]')!.click());
+  expect(input(fileRail()).value).toBe("");
+  expect(filterIndicator(fileRail())?.getAttribute("aria-label")).toBe("No commit filter");
+  expect(document.activeElement).toBe(input(fileRail()));
+  expect(fileRail().textContent).toContain(recent.subject);
+
+  await type(input(fileRail()), "Older");
+  checkout.revision = "new-head";
+  await act(async () => render(1));
+  expect(input(repositoryRail()).value).toBe("Older");
+  expect(input(fileRail()).value).toBe("Older");
+  await act(async () => tree.querySelector<HTMLButtonElement>('[title="src/"]')!.click());
+  await act(async () => tree.querySelector<HTMLButtonElement>('[title="src/main.txt"]')!.click());
+  expect(input(fileRail()).value).toBe("");
+  expect(input(repositoryRail()).value).toBe("Older");
+  await type(input(fileRail()), "Older");
+  checkout.branch = "another-branch";
+  checkout.revision = "another-head";
+  await act(async () => render(2));
+  expect(input(repositoryRail()).value).toBe("");
+  expect(input(fileRail()).value).toBe("");
+});
+
 it("browses file versions, ignores a late preview, and returns to the working tree", async () => {
   const slowPreview = Promise.withResolvers<GitPreview>();
   const commits: GitFileHistory["commits"] = [
@@ -237,7 +321,7 @@ it("browses file versions, ignores a late preview, and returns to the working tr
   expect(history.parentElement?.previousElementSibling?.matches(".git-checkout-status")).toBe(true);
   expect(history.previousElementSibling?.firstElementChild?.matches(".git-file-preview")).toBe(true);
   expect(history.previousElementSibling?.querySelector("pre")?.textContent).toBe("local edit");
-  const firstEntry = history.firstElementChild?.firstElementChild;
+  const firstEntry = history.querySelector(".git-history-entry");
   expect(firstEntry?.textContent).toBe("Working tree");
   expect(history.textContent).not.toContain("File history");
   expect(request).toHaveBeenCalledWith("gitFileHistory", expect.objectContaining({ path: "other.txt" }));
@@ -284,7 +368,7 @@ it("browses repository trees and keeps the file timeline scoped to the selected 
     refreshSequence={0} onConfigure={() => {}} onFileGithubUrlChange={onFileGithubUrlChange} />));
   expect(request).toHaveBeenCalledWith("gitRepositoryHistory", { repositoryId: "repo", revision: "repo", worktree: "/tmp/repo" });
   const repositoryHistory = tree.querySelector('aside[aria-label="Repository history"]')!;
-  expect(repositoryHistory.firstElementChild?.firstElementChild?.textContent).toBe("Working tree");
+  expect(repositoryHistory.querySelector(".git-history-entry")?.textContent).toBe("Working tree");
   expect(repositoryHistory.textContent).not.toContain("Repository history");
   expect(container.querySelector('button[aria-label="Repository history"]')).toBeNull();
   expect(container.querySelector('aside[aria-label="File history"]')).toBeNull();

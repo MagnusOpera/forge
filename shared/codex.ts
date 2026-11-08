@@ -228,8 +228,8 @@ export type CodexThreadWindow = ThreadInput & {
 export type CodexCommands = {
   gitSnapshot: Command<{ repositoryId: string; worktree?: string }, GitSnapshot>;
   gitPreview: Command<GitFileInput, GitPreview>;
-  gitFileHistory: Command<GitFileInput & { commit?: string }, GitFileHistory>;
-  gitRepositoryHistory: Command<GitCheckoutInput, GitHistory>;
+  gitFileHistory: Command<GitFileInput & { commit?: string; query?: string }, GitFileHistory>;
+  gitRepositoryHistory: Command<GitCheckoutInput & { query?: string }, GitHistory>;
   gitHistoricalTree: Command<GitCheckoutInput & { commit: string }, GitHistoricalTree>;
   gitHistoricalPreview: Command<GitFileInput & { commit: string }, GitPreview>;
   gitFileDiff: Command<GitFileInput, CodexGitInfo>;

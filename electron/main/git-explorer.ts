@@ -1,8 +1,10 @@
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
-import type { GitAction, GitBranch, GitFile, GitFileHistory, GitHistoricalTree, GitHistory, GitPreview, GitSnapshot } from "../../shared/git-explorer.js";
+import type { GitAction, GitBranch, GitCommit, GitFile, GitFileHistory, GitHistoricalTree, GitHistory, GitPreview, GitSnapshot } from "../../shared/git-explorer.js";
 import type { CodexGitInfo } from "../../shared/codex.js";
 import { git } from "./codex/git.js";
 import { parseWorktreeBranches } from "./codex/merge.js";
@@ -11,9 +13,11 @@ const localPrefix = "refs/heads/";
 const remotePrefix = "refs/remotes/";
 const maxPreviewBytes = 512 * 1024;
 const historyLimit = 50;
+// NUL-delimited status and path fields are nonempty, so this marker frames entire log records.
+const historyRecordMarker = "\0\0commit\0";
 const historyLogOptions = [
   "--no-notes", "--no-show-signature", "--no-decorate", "--no-color", "--encoding=UTF-8", "-z",
-  "--format=%H%x00%cI%x00%s", `--max-count=${historyLimit + 1}`,
+  "--format=%x00%x00commit%x00%H%x00%cI%x00%s%x00%B",
 ];
 const objectId = /^[\da-f]{40}(?:[\da-f]{24})?$/;
 const operationMarkers = [
@@ -30,18 +34,22 @@ type Ref = {
   remoteRef: string;
 };
 
-function run(
-  cwd: string,
-  args: string[],
-  options: { network?: boolean; maxBuffer?: number; encoding?: BufferEncoding } = {},
-): Promise<string> {
+function gitEnvironment(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" };
   for (const key of [
     "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
     "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
   ]) delete env[key];
+  return env;
+}
+
+function run(
+  cwd: string,
+  args: string[],
+  options: { network?: boolean; maxBuffer?: number; encoding?: BufferEncoding } = {},
+): Promise<string> {
   return git(cwd, ["--no-optional-locks", ...args], {
-    env, timeout: options.network ? 120_000 : 30_000, maxBuffer: options.maxBuffer, encoding: options.encoding,
+    env: gitEnvironment(), timeout: options.network ? 120_000 : 30_000, maxBuffer: options.maxBuffer, encoding: options.encoding,
   });
 }
 
@@ -385,58 +393,96 @@ export async function gitPreview(cwd: string, fullName: string, expected: string
   return { ...await readWorkingFile(target), publishedCommit };
 }
 
-export async function gitFileHistory(cwd: string, expected: string, file: string, commit?: string): Promise<GitFileHistory> {
+async function* historyRecords(cwd: string, args: string[], readError: string) {
+  const child = spawn("git", ["-c", "core.fsmonitor=false", "--no-optional-locks", ...args], {
+    cwd, env: gitEnvironment(), stdio: ["ignore", "pipe", "ignore"],
+  });
+  const exited = once(child, "close").then(([code]) => code === 0, () => false);
+  const timer = setTimeout(() => child.kill(), 30_000);
+  let pending = "";
+  let started = false;
+  try {
+    for await (const chunk of child.stdout.setEncoding("utf8")) {
+      pending += chunk;
+      if (!started) {
+        if (pending.length < historyRecordMarker.length) continue;
+        if (!pending.startsWith(historyRecordMarker)) throw new Error(readError);
+        pending = pending.slice(historyRecordMarker.length);
+        started = true;
+      }
+      let boundary: number;
+      while ((boundary = pending.indexOf(historyRecordMarker)) !== -1) {
+        yield pending.slice(0, boundary);
+        pending = pending.slice(boundary + historyRecordMarker.length);
+      }
+    }
+    if (!await exited) throw new Error(readError);
+    if (pending) yield pending;
+  } finally {
+    clearTimeout(timer);
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+    await exited;
+  }
+}
+
+async function readHistory<T extends GitCommit>(
+  cwd: string, args: string[], readError: string, query: string | undefined,
+  entryFor: (entry: GitCommit, changes: string[]) => T | undefined,
+): Promise<GitHistory<T>> {
+  const filter = query?.trim().toLowerCase();
+  const commits: T[] = [];
+  for await (const record of historyRecords(cwd, args, readError)) {
+    const [commit, date, subject, body, ...changes] = record.slice(0, -1).split("\0");
+    if (!record.endsWith("\0") || !objectId.test(commit) || !date || body === undefined)
+      throw new Error(readError);
+    // Update the followed path even when this commit doesn't match the search.
+    const entry = entryFor({ commit, date, subject }, changes);
+    if (entry && (!filter || commit.startsWith(filter) ||
+        subject.toLowerCase().includes(filter) || body.toLowerCase().includes(filter))) {
+      if (commits.length === historyLimit) return { commits, hasOlder: true };
+      commits.push(entry);
+    }
+  }
+  return { commits, hasOlder: false };
+}
+
+export async function gitFileHistory(cwd: string, expected: string, file: string, commit?: string, query?: string): Promise<GitFileHistory> {
   checkoutFilePath(cwd, file);
   const current = commit === undefined ? await readPosition(cwd) : await historyPosition(cwd, expected, commit);
   if (current.revision !== expected) throw new Error("The checkout changed. Refresh to view file history.");
   if (current.head === "(initial)") return { commits: [], hasOlder: false };
 
-  const output = await run(cwd, [
+  const readError = "Unable to read the file’s Git history.";
+  let followedPath = file;
+  return readHistory(cwd, [
     "--literal-pathspecs", "log", "--follow", "--find-renames", "--no-ext-diff", "--no-textconv", "--name-status",
     ...historyLogOptions, commit ?? current.head, "--", file,
-  ], { maxBuffer: 1024 * 1024 });
-  const fields = output.split("\0");
-  const commits: GitFileHistory["commits"] = [];
-  let followedPath = file;
-  for (let index = 0; index < fields.length - 1;) {
-    const [commit, date, subject] = fields.slice(index, index + 3);
-    if (!objectId.test(commit) || !date || subject === undefined)
-      throw new Error("Unable to read the file’s Git history.");
-    index += 3;
+  ], readError, query, (entry, changes) => {
     let previousPath: string | undefined;
-    while (index < fields.length - 1 && !objectId.test(fields[index])) {
-      const status = fields[index++].replace(/^\n/, "");
-      const originalPath = fields[index++];
+    for (let index = 0; index < changes.length;) {
+      const status = changes[index++].replace(/^\n/, "");
+      const originalPath = changes[index++];
       const moved = status.startsWith("R") || status.startsWith("C");
-      const entryPath = moved ? fields[index++] : originalPath;
+      const entryPath = moved ? changes[index++] : originalPath;
       if (!/^[A-Z]\d*$/.test(status) || !originalPath || !entryPath)
-        throw new Error("Unable to read the file’s Git history.");
+        throw new Error(readError);
       if (entryPath === followedPath) previousPath = originalPath;
     }
     // A literal pathspec also matches children when the path used to be a directory.
-    if (previousPath) {
-      commits.push({ commit, date, subject, path: followedPath });
-      followedPath = previousPath;
-    }
-  }
-  return { commits: commits.slice(0, historyLimit), hasOlder: commits.length > historyLimit };
+    if (!previousPath) return;
+    const result = { ...entry, path: followedPath };
+    followedPath = previousPath;
+    return result;
+  });
 }
 
-export async function gitRepositoryHistory(cwd: string, expected: string): Promise<GitHistory> {
+export async function gitRepositoryHistory(cwd: string, expected: string, query?: string): Promise<GitHistory> {
   const current = await readPosition(cwd);
   if (current.revision !== expected) throw new Error("The checkout changed. Refresh to view repository history.");
   if (current.head === "(initial)") return { commits: [], hasOlder: false };
 
-  const output = await run(cwd, ["log", "--no-follow", ...historyLogOptions, current.head, "--"], { maxBuffer: 1024 * 1024 });
-  const fields = output.split("\0");
-  const commits: GitHistory["commits"] = [];
-  for (let index = 0; index < fields.length - 1; index += 3) {
-    const [commit, date, subject] = fields.slice(index, index + 3);
-    if (!objectId.test(commit) || !date || subject === undefined)
-      throw new Error("Unable to read the repository’s Git history.");
-    commits.push({ commit, date, subject });
-  }
-  return { commits: commits.slice(0, historyLimit), hasOlder: commits.length > historyLimit };
+  return readHistory(cwd, ["log", "--no-follow", ...historyLogOptions, current.head, "--"],
+    "Unable to read the repository’s Git history.", query, (entry) => entry);
 }
 
 function isAncestor(cwd: string, commit: string, tip: string): Promise<boolean> {

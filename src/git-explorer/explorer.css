@@ -271,7 +271,7 @@
   transition: width 140ms ease;
 }
 
-.git-history-rail:is(:hover, :has(:focus-visible)) {
+.git-history-rail:is(:hover, :has(:focus-visible, .git-history-search :focus)) {
   --git-history-surface: var(--panel-bg);
   width: var(--git-history-expanded-width);
   background: var(--git-history-surface);
@@ -279,6 +279,47 @@
 
 .git-file-body > .git-history-rail {
   inset-inline: auto 0;
+}
+
+.git-history-search-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 0 0 auto;
+  padding-block: 4px;
+}
+
+.git-history-search,
+.git-history-filter-indicator {
+  grid-area: 1 / 1;
+}
+
+.search-box.git-history-search {
+  margin: 0 6px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.git-history-search > svg {
+  flex-shrink: 0;
+}
+
+.git-history-rail:is(:hover, :has(:focus-visible, .git-history-search :focus)) .git-history-search {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.git-history-filter-indicator {
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.git-history-filter-indicator[data-filtered="true"] {
+  color: var(--accent);
+}
+
+.git-history-rail:is(:hover, :has(:focus-visible, .git-history-search :focus)) .git-history-filter-indicator {
+  display: none;
 }
 
 .git-history-entry {
@@ -295,7 +336,7 @@
   text-align: start;
 }
 
-.git-history-rail:is(:hover, :has(:focus-visible)) .git-history-entry:is(:hover, [aria-pressed="true"]) {
+.git-history-rail:is(:hover, :has(:focus-visible, .git-history-search :focus)) .git-history-entry:is(:hover, [aria-pressed="true"]) {
   color: var(--text-strong);
   background: var(--row-active-bg);
 }
@@ -362,7 +403,7 @@
   white-space: nowrap;
 }
 
-.git-history-rail:is(:hover, :has(:focus-visible)) .git-history-label {
+.git-history-rail:is(:hover, :has(:focus-visible, .git-history-search :focus)) .git-history-label {
   opacity: 1;
 }
 
@@ -413,7 +454,7 @@
   white-space: normal;
 }
 
-.git-history-rail:is(:hover, :has(:focus-visible)) .git-history-note:not(:empty) {
+.git-history-rail:is(:hover, :has(:focus-visible, .git-history-search :focus)) .git-history-note:not(:empty) {
   display: block;
 }
 

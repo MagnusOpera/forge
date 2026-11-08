@@ -20,22 +20,26 @@ const previewMessages = {
   unsupported: "Symbolic links, submodules, and other special files cannot be previewed.",
 };
 
-export function GitFileView({ path, baseVersion, publishedTreeCommit, ...context }: FileViewContext & {
+export function GitFileView({ path, baseVersion, publishedTreeCommit, query, onSearch, ...context }: FileViewContext & {
   path: string;
   baseVersion: GitCommit | null;
   publishedTreeCommit?: string;
+  query: string;
+  onSearch(query: string): void;
 }) {
   const { repositoryId, revision, worktree } = context;
   const [version, setVersion] = useState<FileVersion | null>(null);
   const commit = baseVersion?.commit;
-  const loadHistory = useCallback(() => codexApi().request("gitFileHistory", { repositoryId, revision, worktree, path, commit }),
+  const loadHistory = useCallback((query?: string) => codexApi().request("gitFileHistory", {
+    repositoryId, revision, worktree, path, commit, ...(query ? { query } : {}),
+  }),
     [repositoryId, revision, worktree, path, commit]);
 
   return (
     <GitVersionPreview {...context} path={version?.path ?? path} version={version ?? baseVersion}
       publishedTreeCommit={version ? undefined : publishedTreeCommit}
       historyRail={<GitHistoryRail<FileVersion> title="File history" baseLabel={baseVersion ? "Selected commit" : undefined}
-        loadHistory={loadHistory} version={version} onSelect={setVersion} />} />
+        loadHistory={loadHistory} version={version} onSelect={setVersion} query={query} onSearch={onSearch} />} />
   );
 }
 

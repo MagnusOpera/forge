@@ -108,6 +108,10 @@ it("uses the saved local checkout for Git Explorer and validates action inputs",
     .resolves.toMatchObject({ commits: [{ commit, path: "hello.txt", subject: "initial" }] });
   await expect(request("gitRepositoryHistory", { repositoryId, revision }))
     .resolves.toMatchObject({ commits: [{ commit, subject: "initial" }] });
+  await expect(request("gitRepositoryHistory", { repositoryId, revision, query: "missing" }))
+    .resolves.toEqual({ commits: [], hasOlder: false });
+  await expect(request("gitFileHistory", { repositoryId, revision, path: "hello.txt", query: commit.slice(0, 8) }))
+    .resolves.toMatchObject({ commits: [{ commit, path: "hello.txt" }] });
   await expect(request("gitHistoricalTree", { repositoryId, revision, commit }))
     .resolves.toMatchObject({ files: [{ path: "hello.txt", status: "clean" }] });
   await expect(request("gitHistoricalPreview", { repositoryId, revision, path: "hello.txt", commit }))
