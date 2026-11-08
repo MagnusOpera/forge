@@ -4,8 +4,13 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.22.2]
+
+
 - Link the website’s macOS download to the current Forge version.
 - Show Pull progress in the Git Explorer toolbar without a separate status row.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.22.1...0.22.2
 
 ## [0.22.1]
 
