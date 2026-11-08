@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.22.0]
+
+
 - Browse local files and conflicts, switch branches, and pull from Git Explorer.
 - Remove the duplicate GitHub icon from the Git Explorer toolbar.
 - Show Git action errors in a wide dialog with concise details and a Close button.
@@ -19,6 +22,8 @@ All notable changes to Forge are documented in this file.
 - Show Git Explorer in the website’s main screenshot in both themes.
 - Document the Git Explorer keyboard shortcut on the website.
 - Refresh the website screenshots to show the current workspace, detached panes, and release view in both themes.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.21.14...0.22.0
 
 ## [0.21.14]
 
