@@ -3767,7 +3767,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       />
       {!chatMode && <ProjectPane
         onProjectConfiguration={() => { setSettingsScope("project"); }}
-        gitTree={<div ref={setGitTreeHost} />}
+        gitTree={<div className="git-tree-host" ref={setGitTreeHost} />}
         codexCount={codexThreads.threads.filter((thread) => !thread.archived).length}
         codexList={selectedRepo ? (
           <CodexThreadList

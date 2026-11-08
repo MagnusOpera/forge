@@ -40,9 +40,15 @@ const gitFileText = `import type { WorkflowJob } from "./workflowTypes";
 
 const failureStates = new Set(["failure", "timed_out"]);
 
-export function summarizeWorkflow(jobs: WorkflowJob[]) {
-  const failed = jobs.filter(job => failureStates.has(job.conclusion));
-  const completed = jobs.filter(job => job.status === "completed");
+export function summarizeWorkflow(
+  jobs: WorkflowJob[],
+) {
+  const failed = jobs.filter(({ conclusion }) =>
+    failureStates.has(conclusion),
+  );
+  const completed = jobs.filter(
+    ({ status }) => status === "completed",
+  );
 
   return {
     totalJobs: jobs.length,
@@ -50,21 +56,23 @@ export function summarizeWorkflow(jobs: WorkflowJob[]) {
     failedJobs: failed.map(job => ({
       name: job.name,
       url: job.htmlUrl,
-      failedStep: job.steps.find(step => step.conclusion === "failure")?.name,
+      failedStep: job.steps.find(
+        step => step.conclusion === "failure",
+      )?.name,
     })),
   };
 }
 
-export function workflowHeadline(jobs: WorkflowJob[]) {
-  const summary = summarizeWorkflow(jobs);
-  if (!summary.totalJobs) return "Waiting for jobs to start";
-  if (summary.failedJobs.length === 1) {
-    return \`Failed job: \${summary.failedJobs[0].name}\`;
+export function workflowHeadline(
+  jobs: WorkflowJob[],
+) {
+  const { completedJobs, failedJobs } =
+    summarizeWorkflow(jobs);
+  if (failedJobs.length > 1) {
+    return \`\${failedJobs.length} jobs failed\`;
   }
-  if (summary.failedJobs.length > 1) {
-    return \`\${summary.failedJobs.length} jobs failed\`;
-  }
-  return \`\${summary.completedJobs} of \${summary.totalJobs} jobs completed\`;
+  return failedJobs[0]?.name ??
+    \`\${completedJobs} jobs completed\`;
 }
 `;
 const gitSnapshot = {
@@ -98,6 +106,11 @@ const gitSnapshot = {
     switch: "Finish the pending Git operation first.",
   },
 };
+const gitFileCommits = [
+  { commit: "a18bd0f".padEnd(40, "0"), date: "2026-10-02T14:15:00Z", subject: "Show the failing workflow step" },
+  { commit: "70e9d2a".padEnd(40, "0"), date: "2026-10-01T10:30:00Z", subject: "Handle timed-out jobs" },
+  { commit: "54f1b83".padEnd(40, "0"), date: "2026-09-28T09:00:00Z", subject: "Add workflow summaries" },
+];
 const envelope = data => ({ data, fetchedAt: "2026-10-01T10:02:00Z", stale: false, source: "cache" });
 window.githubFocus = {
   platform: "darwin",
@@ -132,6 +145,23 @@ window.forgeCodex = {
       case "threadWindows": return [];
       case "models": return [];
       case "gitSnapshot": return gitSnapshot;
+      case "gitFileHistory": return {
+        commits: input.path === gitFile ? gitFileCommits
+          .slice(Math.max(0, gitFileCommits.findIndex(({ commit }) => commit === input.commit)))
+          .map((commit) => ({ ...commit, path: gitFile })) : [],
+        hasOlder: false,
+      };
+      case "gitRepositoryHistory": return {
+        commits: [
+          { commit: "861b0fa".padEnd(40, "0"), date: "2026-10-03T16:20:00Z", subject: "Document workflow configuration" },
+          ...gitFileCommits,
+        ],
+        hasOlder: false,
+      };
+      case "gitHistoricalTree": return {
+        files: gitSnapshot.files.filter(({ path }) => path !== "src/workflowFilters.ts").map(({ path }) => ({ path, status: "clean" })),
+      };
+      case "gitHistoricalPreview": return { kind: "text", text: gitFileText.replace('"failure", "timed_out"', '"failure"') };
       case "gitPreview": {
         if (input.path !== gitFile) throw new Error("Unexpected screenshot file: " + input.path);
         return { kind: "text", text: gitFileText };

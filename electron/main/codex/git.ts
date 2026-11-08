@@ -7,7 +7,7 @@ const exec = promisify(execFile);
 export async function git(
   cwd: string,
   args: string[],
-  options: { timeout?: number; env?: NodeJS.ProcessEnv; maxBuffer?: number } = {},
+  options: { timeout?: number; env?: NodeJS.ProcessEnv; maxBuffer?: number; encoding?: BufferEncoding } = {},
 ): Promise<string> {
   return (
     await exec("git", ["-c", "core.fsmonitor=false", ...args], {
@@ -15,6 +15,7 @@ export async function git(
       timeout: options.timeout ?? 30_000,
       env: options.env,
       maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
+      encoding: options.encoding ?? "utf8",
     })
   ).stdout;
 }

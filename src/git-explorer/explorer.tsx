@@ -2,13 +2,15 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { createPortal } from "react-dom";
 import { ArrowDownToLine, GitBranch, Loader2, X } from "lucide-react";
 import type { RepoSummary } from "../../shared/github";
-import type { GitAction, GitPreview, GitSnapshot } from "../../shared/git-explorer";
+import type { GitAction, GitCommit, GitFile, GitHistoricalTree, GitSnapshot } from "../../shared/git-explorer";
 import { codexApi, errorMessage } from "../codex/api";
 import { DiffDialog } from "../codex/diff-dialog";
 import { usePaneSurface } from "../pane-surface";
 import { displayPathText } from "../paths";
 import { BranchPicker } from "./branch-picker";
 import { GitFileTree } from "./file-tree";
+import { GitFileView, GitVersionPreview, type FilePreview } from "./file-view";
+import { GitHistoryRail } from "./history-rail";
 import "./explorer.css";
 
 type ExplorerAction = GitAction & { kind: "pull" | "switch" };
@@ -18,18 +20,15 @@ const failureTitles: Record<ExplorerAction["kind"], string> = {
   switch: "Branch switch failed",
 };
 
-const previewMessages = {
-  missing: "This file is missing from the working tree.",
-  binary: "This file cannot be displayed as text.",
-  "too-large": "This file exceeds the 512 KiB preview limit.",
-  unsupported: "Symbolic links, submodules, and other special files cannot be previewed.",
-};
-
 type PreviewResult = {
   snapshot: GitSnapshot;
   file: string;
-  result: GitPreview | { kind: "error"; message: string };
+  result: FilePreview;
 };
+
+type HistorySelection = { revision: string; version: GitCommit; file: string | null };
+type HistoricalTreeResult = { revision: string; version: GitCommit } & (GitHistoricalTree | { error: string });
+const noFiles: GitFile[] = [];
 
 export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigure, onFileGithubUrlChange }: {
   repo: RepoSummary;
@@ -45,6 +44,8 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
   const [snapshot, setSnapshot] = useState<GitSnapshot>();
   const [file, setFile] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResult>();
+  const [historySelection, setHistorySelection] = useState<HistorySelection | null>(null);
+  const [historicalTree, setHistoricalTree] = useState<HistoricalTreeResult>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
@@ -57,6 +58,17 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
   const filePreview = preview?.snapshot === snapshot && preview?.file === selected ? preview?.result : undefined;
   const revision = ready?.revision;
   const checkout = ready?.checkout;
+  const history = historySelection?.revision === revision ? historySelection : null;
+  const version = history?.version ?? null;
+  const treeResult = version && historicalTree?.version === version && historicalTree.revision === revision ? historicalTree : null;
+  const versionFiles = treeResult && "files" in treeResult ? treeResult.files : noFiles;
+  const historyFile = versionFiles.some((entry) => entry.path === history?.file) ? history?.file ?? null : null;
+  const visibleFile = version ? historyFile : selected;
+  const title = visibleFile ?? (version ? "Repository history" : "Git Explorer");
+  const loadRepositoryHistory = useCallback(() => {
+    if (!revision) return Promise.reject(new Error("The checkout is unavailable."));
+    return codexApi().request("gitRepositoryHistory", { repositoryId: repo.id, revision, worktree: checkout });
+  }, [repo.id, revision, checkout]);
   const loadDiff = useCallback(async () => {
     if (!diffFile || !revision) throw new Error("The checkout is unavailable.");
     return codexApi().request("gitFileDiff", { repositoryId: repo.id, revision, path: diffFile, worktree: checkout });
@@ -90,6 +102,7 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
     void api.request("gitSnapshot", { repositoryId: repo.id, worktree }).then((next) => {
       if (!active) return;
       setSnapshot(next);
+      setHistorySelection((current) => next.kind === "ready" && current?.revision === next.revision ? current : null);
       if (worktree && next.kind === "ready" && next.checkout !== worktree) setWorktree(next.checkout);
       setFile((current) => next.kind === "ready" && next.files.some((entry) => entry.path === current) ? current : null);
       setError("");
@@ -104,6 +117,16 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
   }, [repo.id, refresh, refreshSequence, worktree]);
 
   useEffect(() => setFeedback(undefined), [refreshSequence]);
+
+  useEffect(() => {
+    if (!version || !revision) return;
+    let active = true;
+    void codexApi().request("gitHistoricalTree", { repositoryId: repo.id, revision, worktree: checkout, commit: version.commit }).then(
+      (result) => { if (active) setHistoricalTree({ ...result, revision, version }); },
+      (error) => { if (active) setHistoricalTree({ error: errorMessage(error), revision, version }); },
+    );
+    return () => { active = false; };
+  }, [repo.id, revision, checkout, version]);
 
   useEffect(() => {
     if (!ready || !selected || !window.forgeCodex || operation || loading) return;
@@ -147,15 +170,25 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
   const navigationBlocker = operation ? "A Git action is in progress." : loading ? "Reading the checkout…" : null;
   const blocker = (kind: ExplorerAction["kind"]) => navigationBlocker ?? ready?.blockers[kind] ?? null;
   const pullBlocker = blocker("pull") ?? (!ready ? "Configure a local checkout first." : null);
-  const publishedCommit = filePreview && "publishedCommit" in filePreview ? filePreview.publishedCommit : undefined;
-  const fileGithubUrl = selected && publishedCommit
-    ? `${repo.url}/blob/${publishedCommit}/${selected.split("/").map(encodeURIComponent).join("/")}`
-    : null;
-  useLayoutEffect(() => {
-    onFileGithubUrlChange(fileGithubUrl);
-    return () => onFileGithubUrlChange(null);
-  }, [fileGithubUrl, onFileGithubUrlChange]);
   const workingMessage = operation === "switch" ? "Switching branches…" : "Pulling the current branch…";
+  const treeMessage = !treeResult ? "Reading commit files…" : "error" in treeResult ? treeResult.error : "This commit has no files.";
+  const publishedTreeCommit = treeResult && "publishedCommit" in treeResult ? treeResult.publishedCommit : undefined;
+  const gitFeedback = (operation || feedback) && (
+    <p className="git-explorer-message" role="status">{operation ? workingMessage : feedback}</p>
+  );
+  const previewContext = ready && {
+    repositoryId: repo.id, repositoryUrl: repo.url, revision: ready.revision, worktree: ready.checkout,
+    workingPreview: filePreview, onGithubUrlChange: onFileGithubUrlChange,
+    header: <>
+      <div className="git-checkout-status">
+        <span className="git-checkout-path" title={displayPathText(ready.checkout)}>{displayPathText(ready.checkout)}</span>
+        <span className="git-upstream" title={ready.pushDestination ? `Upstream ${ready.pushDestination}` : "No remote upstream"}>
+          {ready.pushDestination ?? "No upstream"}
+        </span>
+      </div>
+      {gitFeedback}
+    </>,
+  };
 
   return (
     <main className="content-pane git-explorer-content" tabIndex={0} aria-label="Git Explorer">
@@ -163,8 +196,19 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
         ready ? <>
           <BranchPicker branch={ready.branch} branches={ready.branches} blocker={blocker("switch")}
             navigationBlocker={navigationBlocker} onSwitch={(ref) => void act({ kind: "switch", ref })} />
-          <GitFileTree key={ready.checkout} files={ready.files} selected={selected} onSelect={setFile}
-            onOpenDiff={(path) => { if (!loading && !operation) setDiffFile(path); }} />
+          <div className="git-history-layout git-repository-body">
+            <GitHistoryRail key={ready.revision} title="Repository history"
+              loadHistory={loadRepositoryHistory} version={version}
+              onSelect={(entry) => setHistorySelection(entry ? {
+                revision: ready.revision, version: entry, file: history ? history.file : selected,
+              } : null)} />
+            <div className="git-repository-tree">
+              <GitFileTree key={ready.checkout} files={version ? versionFiles : ready.files} selected={visibleFile}
+                label={version ? "Commit files" : undefined} emptyMessage={version ? treeMessage : undefined}
+                onSelect={(path) => history ? setHistorySelection({ ...history, file: path }) : setFile(path)}
+                onOpenDiff={(path) => { if (!loading && !operation) setDiffFile(path); }} />
+            </div>
+          </div>
         </> :
           <p className="git-explorer-hint">{error || snapshot?.kind === "setup" && snapshot.message || "Reading the checkout…"}</p>,
         treeHost,
@@ -173,7 +217,7 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
         <div className="content-header-left">
           <div className="content-title git-explorer-title">
             <GitBranch size={15} aria-hidden="true" />
-            <span title={selected ?? "Git Explorer"}>{selected ?? "Git Explorer"}</span>
+            <span title={title}>{title}</span>
           </div>
         </div>
         <div className="header-actions git-explorer-actions" role="toolbar" aria-label="Git actions">
@@ -186,39 +230,26 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
           </span>
         </div>
       </div>
-      {ready && (
-        <div className="git-checkout-status">
-          <span className="git-checkout-path" title={displayPathText(ready.checkout)}>{displayPathText(ready.checkout)}</span>
-          <span className="git-upstream" title={ready.pushDestination ? `Upstream ${ready.pushDestination}` : "No remote upstream"}>
-            {ready.pushDestination ?? "No upstream"}
-          </span>
-        </div>
-      )}
-      {(operation || feedback) && (
-        <p className="git-explorer-message" role="status">{operation ? workingMessage : feedback}</p>
-      )}
       {diffFile && createPortal(
         <DiffDialog title={diffFile} theme={theme} load={loadDiff} onClose={() => setDiffFile(null)}
           emptyMessage="No local changes to this file." />,
         portalRoot ?? document.querySelector(".app-shell") ?? document.body,
       )}
       {failure && <GitActionErrorDialog {...failure} onDismiss={() => setFailure(undefined)} />}
-      {!ready && (
+      {!ready && <>
+        {gitFeedback}
         <div className="content-scroll git-explorer-empty">
           <p>{error || (snapshot?.kind === "setup" ? snapshot.message : "Reading the checkout…")}</p>
           {snapshot?.kind === "setup" && <button type="button" className="ghost-button" onClick={onConfigure}>Configure local checkout</button>}
         </div>
-      )}
-      {ready && (!selected ? (
-        <div className="content-scroll git-explorer-empty">Select a file to preview its working-tree content.</div>
-      ) : !filePreview ? (
-        <div className="content-scroll git-explorer-empty" role="status">Reading file…</div>
-      ) : filePreview.kind === "text" ? (
-        <pre className="git-file-preview" tabIndex={0} aria-label={`File preview: ${selected}`}>{filePreview.text}</pre>
+      </>}
+      {previewContext && (visibleFile ? (
+        <GitFileView key={`${previewContext.revision}\0${version?.commit ?? "working"}\0${visibleFile}`}
+          {...previewContext} path={visibleFile} baseVersion={version} publishedTreeCommit={publishedTreeCommit} />
       ) : (
-        <div className="content-scroll git-explorer-empty">
-          {filePreview.kind === "error" ? filePreview.message : previewMessages[filePreview.kind]}
-        </div>
+        <GitVersionPreview {...previewContext} path={null} version={version} publishedTreeCommit={publishedTreeCommit}
+          emptyMessage={version ? (versionFiles.length ? "Select a file to preview it at this commit." : treeMessage) :
+            "Select a file to preview its working-tree content."} />
       ))}
     </main>
   );

@@ -26,11 +26,13 @@ function buildTree(files: GitFile[]): Map<string, Entry> {
   return root;
 }
 
-export function GitFileTree({ files, selected, onSelect, onOpenDiff }: {
+export function GitFileTree({ files, selected, onSelect, onOpenDiff, label = "Checkout files", emptyMessage = "No tracked or untracked files." }: {
   files: GitFile[];
   selected: string | null;
   onSelect(path: string): void;
   onOpenDiff(path: string): void;
+  label?: string;
+  emptyMessage?: string;
 }) {
   const tree = useMemo(() => buildTree(files), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -74,9 +76,9 @@ export function GitFileTree({ files, selected, onSelect, onOpenDiff }: {
     if (next) buttons.current.get(next)?.focus();
   };
 
-  if (!rows.length) return <p className="git-explorer-hint">No tracked or untracked files.</p>;
+  if (!rows.length) return <p className="git-explorer-hint" role="status">{emptyMessage}</p>;
   return (
-    <div role="tree" aria-label="Checkout files" className="git-file-tree">
+    <div role="tree" aria-label={label} className="git-file-tree">
       {rows.map(({ entry, depth }, index) => {
         const isOpen = expanded.has(entry.key);
         const status = entry.file?.status;

@@ -30,6 +30,8 @@ describe("homepage Forge previews", () => {
       toggle.click();
       expect(preview.getAttribute("src")).toBe("screenshots/forge-dark.png");
       expect(preview.alt).toContain("Git Explorer");
+      expect(preview.alt).toContain("repository history");
+      expect(preview.alt).toContain("file history");
     } finally {
       document.documentElement.innerHTML = "";
       localStorage.clear();

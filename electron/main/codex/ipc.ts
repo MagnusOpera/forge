@@ -23,7 +23,7 @@ import { terminalDimensions } from "../../../shared/terminal.js";
 import { TerminalManager } from "./terminal.js";
 import { ThreadManager } from "./threads.js";
 import { assertWorktree, gitInfo, inspectRepository } from "./git.js";
-import { gitBranchCheckout, gitCheckoutRevision, gitFileDiff, gitPreview, gitSnapshot, resolveExplorerWorktree, resolveGitCheckout, runGitAction } from "../git-explorer.js";
+import { gitBranchCheckout, gitCheckoutRevision, gitFileDiff, gitFileHistory, gitHistoricalPreview, gitHistoricalTree, gitPreview, gitRepositoryHistory, gitSnapshot, resolveExplorerWorktree, resolveGitCheckout, runGitAction } from "../git-explorer.js";
 import type { GitAction } from "../../../shared/git-explorer.js";
 import {
   validatePreferences,
@@ -419,7 +419,9 @@ export function registerCodexIpc(
         return;
       }
       const projectId = repositoryId(input.repositoryId);
-      if (method === "gitSnapshot" || method === "gitPreview" || method === "gitFileDiff" || method === "gitAction") {
+      if (method === "gitSnapshot" || method === "gitPreview" || method === "gitFileDiff" ||
+          method === "gitFileHistory" || method === "gitRepositoryHistory" || method === "gitHistoricalTree" ||
+          method === "gitHistoricalPreview" || method === "gitAction") {
         if (event.sender !== window()?.webContents)
           throw new Error("Git Explorer is available in the main workspace.");
         const project = store.configuration.projects[projectId];
@@ -456,6 +458,14 @@ export function registerCodexIpc(
           return gitPreview(cwd, project.name ?? "", revision, string(input.path, "file path", 4096));
         if (method === "gitFileDiff")
           return gitFileDiff(cwd, revision, string(input.path, "file path", 4096));
+        if (method === "gitFileHistory")
+          return gitFileHistory(cwd, revision, string(input.path, "file path", 4096),
+            input.commit === undefined ? undefined : string(input.commit, "commit ID", 64));
+        if (method === "gitRepositoryHistory") return gitRepositoryHistory(cwd, revision);
+        if (method === "gitHistoricalTree")
+          return gitHistoricalTree(cwd, project.name ?? "", revision, string(input.commit, "commit ID", 64));
+        if (method === "gitHistoricalPreview")
+          return gitHistoricalPreview(cwd, project.name ?? "", revision, string(input.path, "file path", 4096), string(input.commit, "commit ID", 64));
 
         const actionInput = object(input.action);
         let action: GitAction;

@@ -56,17 +56,26 @@ app.whenReady().then(async () => {
     await waitFor(win, `!!document.querySelector('.git-tree-row[title="src/workflowDetails.ts"]')`);
     await win.webContents.executeJavaScript(`document.querySelector('.git-tree-row[title="src/workflowDetails.ts"]').click()`);
     await waitFor(win, `document.querySelector('.git-file-preview')?.textContent.includes("export function summarizeWorkflow")`);
+    await waitFor(win, `document.querySelectorAll('.git-repository-body .git-history-entry').length > 1 &&
+      !!document.querySelector('.git-file-body .git-history-entry[title="Handle timed-out jobs"]')`);
+    await win.webContents.executeJavaScript(`document.querySelector('.git-file-body .git-history-entry[title="Handle timed-out jobs"]').click()`);
+    await waitFor(win, `document.querySelector('.git-file-version-bar')?.textContent.includes("Handle timed-out jobs") &&
+      document.querySelector('.git-file-preview')?.textContent.includes("export function summarizeWorkflow")`);
     await win.webContents.executeJavaScript("document.fonts.ready");
     win.setWindowButtonPosition(trafficLightPosition(zoomFactor));
     win.show();
     app.focus({ steal: true });
     win.focus();
     await new Promise(resolve => setTimeout(resolve, 600));
+    const history = await win.webContents.executeJavaScript(`document.querySelector('.git-file-body .git-history-rail').getBoundingClientRect().toJSON()`);
+    win.webContents.sendInputEvent({ type: "mouseMove", x: Math.round((history.right - 16) * zoomFactor),
+      y: Math.round((history.top + history.height / 2) * zoomFactor) });
+    await waitFor(win, `document.querySelector('.git-file-body .git-history-rail').offsetWidth >= 260`);
     const windowId = win.getMediaSourceId().split(":")[1];
     // Capture the actual window, including native traffic lights, without its shadow.
     execFileSync("/usr/sbin/screencapture", ["-x", "-o", "-l", windowId,
       path.join(root, "website/screenshots/forge-" + theme + ".png")]);
-    console.log("Captured " + theme + " Git Explorer preview");
+    console.log("Captured " + theme + " Git Explorer history preview");
     if (heroOnly) {
       win.destroy();
       continue;

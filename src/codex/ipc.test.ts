@@ -103,6 +103,15 @@ it("uses the saved local checkout for Git Explorer and validates action inputs",
   const { revision } = result as { revision: string };
   await expect(request("gitPreview", { repositoryId, revision, path: "hello.txt" }))
     .resolves.toMatchObject({ kind: "text", text: "hello" });
+  const commit = (await git(checkout, ["rev-parse", "HEAD"])).trim();
+  await expect(request("gitFileHistory", { repositoryId, revision, path: "hello.txt" }))
+    .resolves.toMatchObject({ commits: [{ commit, path: "hello.txt", subject: "initial" }] });
+  await expect(request("gitRepositoryHistory", { repositoryId, revision }))
+    .resolves.toMatchObject({ commits: [{ commit, subject: "initial" }] });
+  await expect(request("gitHistoricalTree", { repositoryId, revision, commit }))
+    .resolves.toMatchObject({ files: [{ path: "hello.txt", status: "clean" }] });
+  await expect(request("gitHistoricalPreview", { repositoryId, revision, path: "hello.txt", commit }))
+    .resolves.toMatchObject({ kind: "text", text: "hello" });
   await expect(request("gitAction", { repositoryId, revision, action: { kind: "reset" } }))
     .rejects.toThrow(/Unknown Git action/);
   await expect(request("gitPreview", { repositoryId, revision, path: ".git/config" }))

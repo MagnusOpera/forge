@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
-import type { GitAction, GitBranch, GitFile, GitPreview, GitSnapshot } from "../../shared/git-explorer.js";
+import type { GitAction, GitBranch, GitFile, GitFileHistory, GitHistoricalTree, GitHistory, GitPreview, GitSnapshot } from "../../shared/git-explorer.js";
 import type { CodexGitInfo } from "../../shared/codex.js";
 import { git } from "./codex/git.js";
 import { parseWorktreeBranches } from "./codex/merge.js";
@@ -10,6 +10,12 @@ import { parseWorktreeBranches } from "./codex/merge.js";
 const localPrefix = "refs/heads/";
 const remotePrefix = "refs/remotes/";
 const maxPreviewBytes = 512 * 1024;
+const historyLimit = 50;
+const historyLogOptions = [
+  "--no-notes", "--no-show-signature", "--no-decorate", "--no-color", "--encoding=UTF-8", "-z",
+  "--format=%H%x00%cI%x00%s", `--max-count=${historyLimit + 1}`,
+];
+const objectId = /^[\da-f]{40}(?:[\da-f]{24})?$/;
 const operationMarkers = [
   "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge",
   "rebase-apply", "sequencer", "BISECT_LOG", "index.lock",
@@ -27,7 +33,7 @@ type Ref = {
 function run(
   cwd: string,
   args: string[],
-  options: { network?: boolean; maxBuffer?: number } = {},
+  options: { network?: boolean; maxBuffer?: number; encoding?: BufferEncoding } = {},
 ): Promise<string> {
   const env: NodeJS.ProcessEnv = { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" };
   for (const key of [
@@ -35,7 +41,7 @@ function run(
     "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
   ]) delete env[key];
   return git(cwd, ["--no-optional-locks", ...args], {
-    env, timeout: options.network ? 120_000 : 30_000, maxBuffer: options.maxBuffer,
+    env, timeout: options.network ? 120_000 : 30_000, maxBuffer: options.maxBuffer, encoding: options.encoding,
   });
 }
 
@@ -319,12 +325,17 @@ function githubRepository(url: string): string | undefined {
   return match?.[1].toLowerCase();
 }
 
-async function publishedGitHubCommit(cwd: string, fullName: string, file: string, upstream?: Ref) {
+async function publishedGitHubTip(cwd: string, fullName: string, upstream?: Ref) {
   if (!fullName || !upstream?.upstream.startsWith(remotePrefix)) return undefined;
   const url = await run(cwd, ["remote", "get-url", "--", upstream.remote]).then(outputLine, () => "");
   if (githubRepository(url) !== fullName.toLowerCase()) return undefined;
   const commit = await run(cwd, ["rev-parse", "--verify", upstream.upstream]).then(outputLine, () => "");
-  if (!/^[\da-f]{40}(?:[\da-f]{24})?$/.test(commit)) return undefined;
+  return objectId.test(commit) ? commit : undefined;
+}
+
+async function publishedGitHubCommit(cwd: string, fullName: string, file: string, upstream?: Ref) {
+  const commit = await publishedGitHubTip(cwd, fullName, upstream);
+  if (!commit) return undefined;
   const entry = await run(cwd, ["--literal-pathspecs", "ls-tree", "-z", commit, "--", file]);
   return entry ? commit : undefined;
 }
@@ -374,6 +385,119 @@ export async function gitPreview(cwd: string, fullName: string, expected: string
   return { ...await readWorkingFile(target), publishedCommit };
 }
 
+export async function gitFileHistory(cwd: string, expected: string, file: string, commit?: string): Promise<GitFileHistory> {
+  checkoutFilePath(cwd, file);
+  const current = commit === undefined ? await readPosition(cwd) : await historyPosition(cwd, expected, commit);
+  if (current.revision !== expected) throw new Error("The checkout changed. Refresh to view file history.");
+  if (current.head === "(initial)") return { commits: [], hasOlder: false };
+
+  const output = await run(cwd, [
+    "--literal-pathspecs", "log", "--follow", "--find-renames", "--no-ext-diff", "--no-textconv", "--name-status",
+    ...historyLogOptions, commit ?? current.head, "--", file,
+  ], { maxBuffer: 1024 * 1024 });
+  const fields = output.split("\0");
+  const commits: GitFileHistory["commits"] = [];
+  let followedPath = file;
+  for (let index = 0; index < fields.length - 1;) {
+    const [commit, date, subject] = fields.slice(index, index + 3);
+    if (!objectId.test(commit) || !date || subject === undefined)
+      throw new Error("Unable to read the file’s Git history.");
+    index += 3;
+    let previousPath: string | undefined;
+    while (index < fields.length - 1 && !objectId.test(fields[index])) {
+      const status = fields[index++].replace(/^\n/, "");
+      const originalPath = fields[index++];
+      const moved = status.startsWith("R") || status.startsWith("C");
+      const entryPath = moved ? fields[index++] : originalPath;
+      if (!/^[A-Z]\d*$/.test(status) || !originalPath || !entryPath)
+        throw new Error("Unable to read the file’s Git history.");
+      if (entryPath === followedPath) previousPath = originalPath;
+    }
+    // A literal pathspec also matches children when the path used to be a directory.
+    if (previousPath) {
+      commits.push({ commit, date, subject, path: followedPath });
+      followedPath = previousPath;
+    }
+  }
+  return { commits: commits.slice(0, historyLimit), hasOlder: commits.length > historyLimit };
+}
+
+export async function gitRepositoryHistory(cwd: string, expected: string): Promise<GitHistory> {
+  const current = await readPosition(cwd);
+  if (current.revision !== expected) throw new Error("The checkout changed. Refresh to view repository history.");
+  if (current.head === "(initial)") return { commits: [], hasOlder: false };
+
+  const output = await run(cwd, ["log", "--no-follow", ...historyLogOptions, current.head, "--"], { maxBuffer: 1024 * 1024 });
+  const fields = output.split("\0");
+  const commits: GitHistory["commits"] = [];
+  for (let index = 0; index < fields.length - 1; index += 3) {
+    const [commit, date, subject] = fields.slice(index, index + 3);
+    if (!objectId.test(commit) || !date || subject === undefined)
+      throw new Error("Unable to read the repository’s Git history.");
+    commits.push({ commit, date, subject });
+  }
+  return { commits: commits.slice(0, historyLimit), hasOlder: commits.length > historyLimit };
+}
+
+function isAncestor(cwd: string, commit: string, tip: string): Promise<boolean> {
+  return run(cwd, ["merge-base", "--is-ancestor", commit, tip]).then(() => true, (error: NodeJS.ErrnoException) => {
+    if (String(error.code) === "1") return false;
+    throw error;
+  });
+}
+
+async function historyPosition(cwd: string, expected: string, commit: string) {
+  if (!objectId.test(commit)) throw new Error("Invalid commit ID.");
+  const current = await readPosition(cwd);
+  if (current.revision !== expected) throw new Error("The checkout changed. Refresh to preview this version.");
+  if (current.head === "(initial)" || !await isAncestor(cwd, commit, current.head))
+    throw new Error("This commit is outside the current branch history.");
+  return current;
+}
+
+async function publishedHistoryCommit(cwd: string, fullName: string, commit: string, upstream?: Ref) {
+  const tip = await publishedGitHubTip(cwd, fullName, upstream);
+  return tip && await isAncestor(cwd, commit, tip) ? commit : undefined;
+}
+
+export async function gitHistoricalTree(cwd: string, fullName: string, expected: string, commit: string): Promise<GitHistoricalTree> {
+  const { upstream } = await historyPosition(cwd, expected, commit);
+  const [output, publishedCommit] = await Promise.all([
+    run(cwd, ["ls-tree", "--full-tree", "-r", "-z", "--name-only", commit]),
+    publishedHistoryCommit(cwd, fullName, commit, upstream),
+  ]);
+  const files: GitFile[] = output.split("\0").filter(Boolean).map((path) => ({ path, status: "clean" }));
+  return { files, publishedCommit };
+}
+
+export async function gitHistoricalPreview(
+  cwd: string, fullName: string, expected: string, file: string, commit: string,
+): Promise<GitPreview> {
+  checkoutFilePath(cwd, file);
+  const { upstream } = await historyPosition(cwd, expected, commit);
+
+  const entry = await run(cwd, ["--literal-pathspecs", "ls-tree", "-z", commit, "--", file]);
+  const match = entry.match(/^(\d+) (\w+) ([\da-f]+)\t([^\0]+)\0$/);
+  if (!match || match[4] !== file) return { kind: "missing" };
+  const [, mode, type, blob] = match;
+  if (type !== "blob" || !["100644", "100755"].includes(mode) || !objectId.test(blob)) return { kind: "unsupported" };
+
+  const publishedCommit = await publishedHistoryCommit(cwd, fullName, commit, upstream);
+  const size = Number(await run(cwd, ["cat-file", "-s", blob]));
+  if (size > maxPreviewBytes) return { kind: "too-large", publishedCommit };
+  const data = await run(cwd, ["cat-file", "blob", blob], { maxBuffer: maxPreviewBytes + 1, encoding: "latin1" });
+  return { ...decodePreview(Buffer.from(data, "latin1")), publishedCommit };
+}
+
+function decodePreview(data: Buffer): GitPreview {
+  if (data.includes(0)) return { kind: "binary" };
+  try {
+    return { kind: "text", text: new TextDecoder("utf-8", { fatal: true }).decode(data) };
+  } catch {
+    return { kind: "binary" };
+  }
+}
+
 async function readWorkingFile(target: string): Promise<GitPreview> {
   try {
     // Canonical equality rejects both escaping symlinks and symlinked parent directories.
@@ -393,13 +517,7 @@ async function readWorkingFile(target: string): Promise<GitPreview> {
         length += bytesRead;
       }
       if (length > maxPreviewBytes) return { kind: "too-large" };
-      const data = buffer.subarray(0, length);
-      if (data.includes(0)) return { kind: "binary" };
-      try {
-        return { kind: "text", text: new TextDecoder("utf-8", { fatal: true }).decode(data) };
-      } catch {
-        return { kind: "binary" };
-      }
+      return decodePreview(buffer.subarray(0, length));
     } finally {
       await handle.close();
     }

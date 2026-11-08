@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { CodexApi, CodexGitInfo } from "../../shared/codex";
-import type { GitPreview, GitSnapshot } from "../../shared/git-explorer";
+import type { GitFileHistory, GitHistoricalTree, GitPreview, GitSnapshot } from "../../shared/git-explorer";
 import type { RepoSummary } from "../../shared/github";
 import { BranchPicker } from "./branch-picker";
 import { GitExplorer } from "./explorer";
@@ -76,6 +76,7 @@ const snapshot = (id: string): GitSnapshot => ({
 
 it("keeps file previews and branch state scoped to the project and refreshes after an action error", async () => {
   const oldPreview = Promise.withResolvers<GitPreview>();
+  const oldHistory = Promise.withResolvers<GitFileHistory>();
   const gitError = [
     "The following untracked working tree files would be overwritten by merge:",
     "\tsrc/main.txt",
@@ -83,6 +84,7 @@ it("keeps file previews and branch state scoped to the project and refreshes aft
   ].join("\n");
   const publishedCommit = "a".repeat(40);
   const request = vi.fn((method, { repositoryId }) => {
+    if (method === "gitRepositoryHistory") return Promise.resolve({ commits: [], hasOlder: false });
     if (method === "gitSnapshot") {
       const checkout = snapshot(repositoryId);
       if (checkout.kind === "ready" && repositoryId === "old")
@@ -91,6 +93,8 @@ it("keeps file previews and branch state scoped to the project and refreshes aft
     }
     if (method === "gitPreview") return repositoryId === "old" ? oldPreview.promise :
       Promise.resolve({ kind: "text", text: "<b>new checkout</b>", publishedCommit });
+    if (method === "gitFileHistory") return repositoryId === "old" ? oldHistory.promise :
+      Promise.resolve({ commits: [], hasOlder: false });
     if (method === "gitAction") return Promise.reject(new Error(`error: ${gitError}\nAborting`));
     throw new Error("Unexpected request");
   });
@@ -111,7 +115,7 @@ it("keeps file previews and branch state scoped to the project and refreshes aft
   };
   await act(async () => render("old"));
   expect(tree.firstElementChild?.querySelector('[aria-label="Branch: main"]')).not.toBeNull();
-  expect(tree.firstElementChild?.nextElementSibling?.getAttribute("role")).toBe("tree");
+  expect(tree.querySelector('aside[aria-label="Repository history"]')?.nextElementSibling?.querySelector('[role="tree"]')).not.toBeNull();
   const actions = [...container.querySelectorAll<HTMLButtonElement>('[aria-label="Git actions"] button')];
   expect(actions.map((button) => button.getAttribute("aria-label"))).toEqual(["Pull"]);
   expect(actions[0].disabled).toBe(true);
@@ -122,8 +126,12 @@ it("keeps file previews and branch state scoped to the project and refreshes aft
   await select();
   expect(container.querySelector("pre")?.textContent).toBe("<b>new checkout</b>");
   expect(container.querySelector("pre b")).toBeNull();
-  await act(async () => oldPreview.resolve({ kind: "text", text: "stale old project" }));
+  await act(async () => {
+    oldPreview.resolve({ kind: "text", text: "stale old project" });
+    oldHistory.resolve({ commits: [{ commit: publishedCommit, date: "2026-11-03T12:00:00Z", subject: "stale file commit", path: "src/main.txt" }], hasOlder: false });
+  });
   expect(container.textContent).not.toContain("stale old project");
+  expect(container.textContent).not.toContain("stale file commit");
   expect(container.querySelector('[aria-label="Open in GitHub"]')).toBeNull();
   expect(onFileGithubUrlChange).toHaveBeenLastCalledWith(`${repo("new").url}/blob/${publishedCommit}/src/main.txt`);
 
@@ -148,6 +156,7 @@ it("opens the shared diff dialog for a changed file and keeps single click as a 
   if (current.kind !== "ready") throw new Error("Expected a checkout.");
   current.files.push({ path: "clean.txt", status: "clean" });
   const request = vi.fn((method) => {
+    if (method === "gitRepositoryHistory" || method === "gitFileHistory") return Promise.resolve({ commits: [], hasOlder: false });
     if (method === "gitSnapshot") return Promise.resolve(current);
     if (method === "gitPreview") return Promise.resolve({ kind: "text", text: "working copy" });
     if (method === "gitFileDiff") return Promise.resolve({ status: "", diff: "selected patch", untracked: [] });
@@ -179,6 +188,114 @@ it("opens the shared diff dialog for a changed file and keeps single click as a 
   expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("other.txt");
 });
 
+it("browses file versions, ignores a late preview, and returns to the working tree", async () => {
+  const slowPreview = Promise.withResolvers<GitPreview>();
+  const commits: GitFileHistory["commits"] = [
+    { commit: "a".repeat(40), path: "other.txt", subject: "Improve preview", date: "2026-11-03T12:00:00Z" },
+    { commit: "b".repeat(40), path: "old name.txt", subject: "Add preview", date: "2026-11-02T12:00:00Z" },
+  ];
+  const request = vi.fn((method, input) => {
+    if (method === "gitSnapshot") return Promise.resolve(snapshot("repo"));
+    if (method === "gitPreview") return Promise.resolve({ kind: "text", text: "local edit" });
+    if (method === "gitRepositoryHistory") return Promise.resolve({ commits: [], hasOlder: false });
+    if (method === "gitFileHistory") return Promise.resolve({ commits, hasOlder: false });
+    if (method === "gitHistoricalPreview") return input.commit === commits[0].commit ? slowPreview.promise :
+      Promise.resolve({ kind: "text", text: "older version", publishedCommit: commits[1].commit });
+    throw new Error("Unexpected request");
+  });
+  vi.stubGlobal("forgeCodex", { request, onChanged: () => () => {} } as unknown as CodexApi);
+  const onFileGithubUrlChange = vi.fn();
+  await act(async () => root.render(<GitExplorer repo={repo("repo")} treeHost={tree} theme="light"
+    refreshSequence={0} onConfigure={() => {}} onFileGithubUrlChange={onFileGithubUrlChange} />));
+  expect(request).not.toHaveBeenCalledWith("gitFileHistory", expect.anything());
+  await act(async () => tree.querySelector<HTMLButtonElement>('[title="other.txt"]')!.click());
+
+  const history = container.querySelector('[aria-label="File history"]')!;
+  expect(history.parentElement?.previousElementSibling?.matches(".content-header")).toBe(true);
+  expect(history.previousElementSibling?.firstElementChild?.matches(".git-checkout-status")).toBe(true);
+  expect(history.previousElementSibling?.querySelector("pre")?.textContent).toBe("local edit");
+  const firstEntry = history.firstElementChild?.firstElementChild;
+  expect(firstEntry?.textContent).toBe("Working tree");
+  expect(history.textContent).not.toContain("File history");
+  expect(request).toHaveBeenCalledWith("gitFileHistory", expect.objectContaining({ path: "other.txt" }));
+  const [working, newer, older] = history.querySelectorAll<HTMLButtonElement>(".git-history-entry");
+  expect(working.getAttribute("aria-pressed")).toBe("true");
+  expect(older.textContent).toContain("Add preview");
+  await act(async () => newer.click());
+  expect(container.textContent).toContain("Reading version…");
+  await act(async () => older.click());
+  expect(request).toHaveBeenCalledWith("gitHistoricalPreview", expect.objectContaining({ path: "old name.txt", commit: commits[1].commit }));
+  expect(container.querySelector("pre")?.textContent).toBe("older version");
+  expect(container.querySelector("time")?.dateTime).toBe(commits[1].date);
+  expect(onFileGithubUrlChange).toHaveBeenLastCalledWith(`${repo("repo").url}/blob/${commits[1].commit}/old%20name.txt`);
+
+  await act(async () => slowPreview.resolve({ kind: "text", text: "stale version" }));
+  expect(container.querySelector("pre")?.textContent).toBe("older version");
+  await act(async () => working.click());
+  expect(container.querySelector("pre")?.textContent).toBe("local edit");
+  expect(container.querySelector("time")).toBeNull();
+  expect(onFileGithubUrlChange).toHaveBeenLastCalledWith(null);
+});
+
+it("browses repository trees and keeps the file timeline scoped to the selected file", async () => {
+  const slowTree = Promise.withResolvers<GitHistoricalTree>();
+  const newer = { commit: "a".repeat(40), subject: "Edit unrelated file", date: "2026-11-03T12:00:00Z" };
+  const older = { commit: "b".repeat(40), subject: "Initialize layout", date: "2026-11-02T12:00:00Z" };
+  const fileChange = { commit: "c".repeat(40), subject: "Add the file", date: "2026-11-01T12:00:00Z" };
+  const request = vi.fn((method, input) => {
+    if (method === "gitSnapshot") return Promise.resolve(snapshot("repo"));
+    if (method === "gitPreview") return Promise.resolve({ kind: "text", text: "local edit" });
+    if (method === "gitRepositoryHistory") return Promise.resolve({ commits: [newer, older], hasOlder: false });
+    if (method === "gitHistoricalTree") return input.commit === newer.commit ? slowTree.promise :
+      Promise.resolve({ files: [{ path: "old-only.txt", status: "clean" }], publishedCommit: older.commit });
+    if (method === "gitHistoricalPreview") return Promise.resolve({ kind: "text",
+      text: input.commit === older.commit ? "committed file" : "original file", publishedCommit: input.commit });
+    if (method === "gitFileHistory") return Promise.resolve({ commits: [{ ...fileChange, path: input.path }], hasOlder: false });
+    throw new Error("Unexpected request");
+  });
+  vi.stubGlobal("forgeCodex", { request, onChanged: () => () => {} } as unknown as CodexApi);
+  const onFileGithubUrlChange = vi.fn();
+  await act(async () => root.render(<GitExplorer repo={repo("repo")} treeHost={tree} theme="light"
+    refreshSequence={0} onConfigure={() => {}} onFileGithubUrlChange={onFileGithubUrlChange} />));
+  expect(request).toHaveBeenCalledWith("gitRepositoryHistory", { repositoryId: "repo", revision: "repo", worktree: "/tmp/repo" });
+  const repositoryHistory = tree.querySelector('aside[aria-label="Repository history"]')!;
+  expect(repositoryHistory.firstElementChild?.firstElementChild?.textContent).toBe("Working tree");
+  expect(repositoryHistory.textContent).not.toContain("Repository history");
+  expect(container.querySelector('button[aria-label="Repository history"]')).toBeNull();
+  expect(container.querySelector('aside[aria-label="File history"]')).toBeNull();
+  await act(async () => tree.querySelector<HTMLButtonElement>('[title="other.txt"]')!.click());
+  const [working, recentCommit, olderCommit] = repositoryHistory.querySelectorAll<HTMLButtonElement>(".git-history-entry");
+  expect(recentCommit.textContent).toContain(newer.subject);
+  await act(async () => recentCommit.click());
+  expect(tree.textContent).toContain("Reading commit files…");
+  await act(async () => olderCommit.click());
+  expect(tree.querySelector('[aria-label="Commit files"]')).not.toBeNull();
+  expect(tree.querySelector('[title="other.txt"]')).toBeNull();
+  expect(onFileGithubUrlChange).toHaveBeenLastCalledWith(`${repo("repo").url}/commit/${older.commit}`);
+  await act(async () => slowTree.resolve({ files: [{ path: "stale.txt", status: "clean" }] }));
+  expect(tree.querySelector('[title="stale.txt"]')).toBeNull();
+  await act(async () => tree.querySelector<HTMLButtonElement>('[title="old-only.txt"]')!.click());
+  expect(request).toHaveBeenCalledWith("gitHistoricalPreview", expect.objectContaining({ path: "old-only.txt", commit: older.commit }));
+  expect(container.querySelector("pre")?.textContent).toBe("committed file");
+  expect(onFileGithubUrlChange).toHaveBeenLastCalledWith(`${repo("repo").url}/blob/${older.commit}/old-only.txt`);
+  expect(request).toHaveBeenCalledWith("gitFileHistory", expect.objectContaining({ path: "old-only.txt", commit: older.commit }));
+  const [baseline, original] = container.querySelectorAll<HTMLButtonElement>('aside[aria-label="File history"] .git-history-entry');
+  expect(baseline.textContent).toBe("Selected commit");
+  await act(async () => original.click());
+  expect(container.querySelector("pre")?.textContent).toBe("original file");
+  expect(olderCommit.getAttribute("aria-pressed")).toBe("true");
+  await act(async () => baseline.click());
+  expect(container.querySelector("pre")?.textContent).toBe("committed file");
+  await act(async () => working.click());
+  expect(tree.querySelector('[title="other.txt"][aria-selected="true"]')).not.toBeNull();
+  expect(container.querySelector("pre")?.textContent).toBe("local edit");
+  expect(request).toHaveBeenCalledWith("gitFileHistory", expect.objectContaining({ path: "other.txt", commit: undefined }));
+  const fileHistory = container.querySelector('aside[aria-label="File history"]')!;
+  expect(fileHistory.querySelectorAll(".git-history-entry")).toHaveLength(2);
+  expect(fileHistory.textContent).toContain(fileChange.subject);
+  expect(fileHistory.textContent).not.toContain(newer.subject);
+});
+
 it("opens a linked worktree from the branch picker even when local edits block switching", async () => {
   const current = snapshot("repo");
   const linked = snapshot("linked");
@@ -191,6 +308,7 @@ it("opens a linked worktree from the branch picker even when local edits block s
   linked.branch = "topic";
   linked.files = [{ path: "linked.txt", status: "clean" }];
   const request = vi.fn((method, { worktree }) => {
+    if (method === "gitRepositoryHistory" || method === "gitFileHistory") return Promise.resolve({ commits: [], hasOlder: false });
     if (method === "gitSnapshot") return Promise.resolve(worktree === linked.checkout ? linked : current);
     if (method === "gitAction") return Promise.resolve({ checkout: linked.checkout, message: "Opened worktree for topic." });
     if (method === "gitPreview") return Promise.resolve({ kind: "text", text: "from the linked worktree" });

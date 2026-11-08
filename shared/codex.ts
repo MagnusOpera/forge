@@ -1,4 +1,4 @@
-import type { GitAction, GitActionResult, GitPreview, GitSnapshot } from "./git-explorer.js";
+import type { GitAction, GitActionResult, GitFileHistory, GitHistoricalTree, GitHistory, GitPreview, GitSnapshot } from "./git-explorer.js";
 export type JsonObject = Record<string, unknown>;
 // Raise when Forge's integration requires a newer Codex app-server release.
 export const MINIMUM_CODEX_VERSION = "0.164.0";
@@ -216,6 +216,8 @@ export type CodexCheckoutReview = {
 };
 export type CodexCheckoutPreview = CodexCheckoutReview & { token: string; message: string };
 type Command<I, O> = { input: I; output: O };
+type GitCheckoutInput = { repositoryId: string; revision: string; worktree?: string };
+type GitFileInput = GitCheckoutInput & { path: string };
 type ThreadInput = { repositoryId: string; id: string };
 export type CodexThreadWindow = ThreadInput & {
   title: string;
@@ -225,8 +227,12 @@ export type CodexThreadWindow = ThreadInput & {
 };
 export type CodexCommands = {
   gitSnapshot: Command<{ repositoryId: string; worktree?: string }, GitSnapshot>;
-  gitPreview: Command<{ repositoryId: string; revision: string; path: string; worktree?: string }, GitPreview>;
-  gitFileDiff: Command<{ repositoryId: string; revision: string; path: string; worktree?: string }, CodexGitInfo>;
+  gitPreview: Command<GitFileInput, GitPreview>;
+  gitFileHistory: Command<GitFileInput & { commit?: string }, GitFileHistory>;
+  gitRepositoryHistory: Command<GitCheckoutInput, GitHistory>;
+  gitHistoricalTree: Command<GitCheckoutInput & { commit: string }, GitHistoricalTree>;
+  gitHistoricalPreview: Command<GitFileInput & { commit: string }, GitPreview>;
+  gitFileDiff: Command<GitFileInput, CodexGitInfo>;
   gitAction: Command<{ repositoryId: string; revision: string; action: GitAction; worktree?: string }, GitActionResult>;
   displayContext: Command<Record<string, never>, { homeDirectory: string; platform: string }>;
   openThreadWindow: Command<

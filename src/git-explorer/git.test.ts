@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { git } from "../../electron/main/codex/git";
-import { gitFileDiff, gitPreview, gitSnapshot, resolveGitCheckout, runGitAction } from "../../electron/main/git-explorer";
+import { gitFileDiff, gitFileHistory, gitHistoricalPreview, gitHistoricalTree, gitPreview, gitRepositoryHistory, gitSnapshot, resolveGitCheckout, runGitAction } from "../../electron/main/git-explorer";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -46,6 +46,82 @@ async function commit(cwd: string, file: string, content: string) {
   await git(cwd, ["commit", "-m", "edit " + file]);
   return (await git(cwd, ["rev-parse", "HEAD"])).trim();
 }
+
+it("follows file renames and safely reads committed versions without changing local edits", async () => {
+  const { checkout } = await setup();
+  const original = "base.txt";
+  const renamed = "new\nname [1].txt";
+  const initial = (await git(checkout, ["rev-parse", "HEAD"])).trim();
+  const edited = await commit(checkout, original, "Révision ✓\n");
+  await git(checkout, ["mv", "--", original, renamed]);
+  await git(checkout, ["commit", "-m", "Rename the file"]);
+  const rename = (await git(checkout, ["rev-parse", "HEAD"])).trim();
+  await writeFile(path.join(checkout, renamed), "Local edits\n");
+  await writeFile(path.join(checkout, "new.txt"), "Untracked\n");
+  const { revision } = await snapshot(checkout);
+
+  const history = await gitFileHistory(checkout, revision, renamed);
+  expect(history).toEqual({ commits: [
+    { commit: rename, date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), subject: "Rename the file", path: renamed },
+    { commit: edited, date: expect.any(String), subject: "edit base.txt", path: original },
+    { commit: initial, date: expect.any(String), subject: "initial", path: original },
+  ], hasOlder: false });
+  await expect(gitFileHistory(checkout, revision, "new.txt")).resolves.toEqual({ commits: [], hasOlder: false });
+  await expect(gitHistoricalPreview(checkout, "", revision, original, edited)).resolves.toMatchObject({ kind: "text", text: "Révision ✓\n" });
+  await expect(gitHistoricalPreview(checkout, "", revision, renamed, initial)).resolves.toEqual({ kind: "missing" });
+  await expect(gitHistoricalPreview(checkout, "", revision, "../outside.txt", initial)).rejects.toThrow("Invalid checkout file path");
+  await expect(gitHistoricalPreview(checkout, "", revision, original, "HEAD")).rejects.toThrow("Invalid commit ID");
+  const unrelated = (await git(checkout, ["commit-tree", "HEAD^{tree}", "-m", "Unrelated"])).trim();
+  await expect(gitHistoricalPreview(checkout, "", revision, renamed, unrelated)).rejects.toThrow("outside the current branch history");
+  expect(await readFile(path.join(checkout, renamed), "utf8")).toBe("Local edits\n");
+  expect((await git(checkout, ["rev-parse", "HEAD"])).trim()).toBe(rename);
+});
+
+it("bounds committed file previews and rejects binary content and symlinks", async () => {
+  const { checkout } = await setup();
+  await writeFile(path.join(checkout, "binary.txt"), Buffer.from([0xc3, 0x28]));
+  await writeFile(path.join(checkout, "large.txt"), "x".repeat(512 * 1024 + 1));
+  await symlink("base.txt", path.join(checkout, "link.txt"));
+  await git(checkout, ["add", "."]);
+  await git(checkout, ["commit", "-m", "Add preview fixtures"]);
+  const head = (await git(checkout, ["rev-parse", "HEAD"])).trim();
+  const { revision } = await snapshot(checkout);
+  await expect(gitHistoricalPreview(checkout, "", revision, "binary.txt", head)).resolves.toMatchObject({ kind: "binary" });
+  await expect(gitHistoricalPreview(checkout, "", revision, "large.txt", head)).resolves.toMatchObject({ kind: "too-large" });
+  await expect(gitHistoricalPreview(checkout, "", revision, "link.txt", head)).resolves.toMatchObject({ kind: "unsupported" });
+});
+
+it("lists repository commits separately from file changes and reads a commit's full tree", async () => {
+  const { checkout } = await setup();
+  const initial = (await git(checkout, ["rev-parse", "HEAD"])).trim();
+  const edit = await commit(checkout, "base.txt", "Updated file\n");
+  const head = await commit(checkout, "other.txt", "An unrelated change\n");
+  await writeFile(path.join(checkout, "base.txt"), "Working tree\n");
+  await writeFile(path.join(checkout, "untracked.txt"), "Local file\n");
+  const { revision } = await snapshot(checkout);
+
+  expect((await gitRepositoryHistory(checkout, revision)).commits.map(({ commit }) => commit)).toEqual([head, edit, initial]);
+  expect((await gitFileHistory(checkout, revision, "base.txt")).commits.map(({ commit }) => commit)).toEqual([edit, initial]);
+  expect((await gitFileHistory(checkout, revision, "base.txt", initial)).commits.map(({ commit }) => commit)).toEqual([initial]);
+  await expect(gitFileHistory(checkout, revision, "base.txt", "HEAD")).rejects.toThrow("Invalid commit ID");
+  const oldTree = await gitHistoricalTree(checkout, "", revision, initial);
+  expect(oldTree.files).toEqual([{ path: ".gitignore", status: "clean" }, { path: "base.txt", status: "clean" }]);
+  expect((await gitHistoricalTree(checkout, "", revision, head)).files.map(({ path }) => path)).toEqual([".gitignore", "base.txt", "other.txt"]);
+  await expect(gitHistoricalPreview(checkout, "", revision, "base.txt", initial)).resolves.toMatchObject({ kind: "text", text: "base\n" });
+  await expect(gitHistoricalTree(checkout, "", "0".repeat(64), initial)).rejects.toThrow("checkout changed");
+  expect(await readFile(path.join(checkout, "base.txt"), "utf8")).toBe("Working tree\n");
+  expect((await git(checkout, ["rev-parse", "HEAD"])).trim()).toBe(head);
+});
+
+it("excludes old directory contents from the history of a same-named file", async () => {
+  const { checkout } = await setup();
+  await mkdir(path.join(checkout, "notes"));
+  await commit(checkout, "notes/old.txt", "Old directory contents\n");
+  await git(checkout, ["rm", "-r", "notes"]);
+  const replaced = await commit(checkout, "notes", "A single file\n");
+  const { revision } = await snapshot(checkout);
+  expect((await gitFileHistory(checkout, revision, "notes")).commits).toMatchObject([{ commit: replaced, path: "notes" }]);
+});
 
 it("orders local and remote branches together by their tip commit date", async () => {
   const { checkout } = await setup();

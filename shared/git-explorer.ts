@@ -31,6 +31,16 @@ export type GitAction =
   | { kind: "fetch" | "pull" | "push" }
   | { kind: "switch"; ref: string };
 
+export type GitCommit = { commit: string; date: string; subject: string };
+
+export type GitHistory<T extends GitCommit = GitCommit> = {
+  commits: T[];
+  hasOlder: boolean;
+};
+
+export type GitFileHistory = GitHistory<GitCommit & { path: string }>;
+export type GitHistoricalTree = { files: GitFile[]; publishedCommit?: string };
+
 export type GitPreview = {
   publishedCommit?: string;
 } & (
