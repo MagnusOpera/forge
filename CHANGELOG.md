@@ -17,6 +17,7 @@ All notable changes to Forge are documented in this file.
 - Open a file’s diff by double-clicking a changed file in Git Explorer.
 - Keep development Favorites across restarts while the installed app is open.
 - Show Git Explorer in the website’s main screenshot in both themes.
+- Document the Git Explorer keyboard shortcut on the website.
 - Refresh the website screenshots to show the current workspace, detached panes, and release view in both themes.
 
 ## [0.21.14]
