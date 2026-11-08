@@ -35,6 +35,69 @@ const releases = [
   { id: "release-preview", databaseId: 2, name: "Workspace 1.5 Preview", tagName: "v1.5.0-beta.1", isDraft: false, isPrerelease: true, isLatest: false, createdAt: "2026-10-28T10:00:00Z", publishedAt: "2026-10-28T12:00:00Z", description: "Try the next workspace improvements.", url: "https://github.com/acme/workspace/releases/tag/v1.5.0-beta.1" },
   { id: "release-draft", databaseId: 3, name: "Workspace 1.5", tagName: "v1.5.0", isDraft: true, isPrerelease: false, isLatest: false, createdAt: "2026-11-01T10:00:00Z", publishedAt: null, description: "## A faster path from draft to release\n\n- Keep stable releases, previews, and drafts in separate views.\n- Publish an existing draft without rewriting its release notes.\n- Preserve prerelease status and mark stable releases as Latest.\n\n## Workflow improvements\n\nReview failing jobs first and keep every change a click away on GitHub.\n\n**Full Changelog**: [v1.4.0...v1.5.0](https://github.com/acme/workspace/compare/v1.4.0...v1.5.0)", url: "https://github.com/acme/workspace/releases/3" }
 ];
+const gitFile = "src/workflowDetails.ts";
+const gitFileText = `import type { WorkflowJob } from "./workflowTypes";
+
+const failureStates = new Set(["failure", "timed_out"]);
+
+export function summarizeWorkflow(jobs: WorkflowJob[]) {
+  const failed = jobs.filter(job => failureStates.has(job.conclusion));
+  const completed = jobs.filter(job => job.status === "completed");
+
+  return {
+    totalJobs: jobs.length,
+    completedJobs: completed.length,
+    failedJobs: failed.map(job => ({
+      name: job.name,
+      url: job.htmlUrl,
+      failedStep: job.steps.find(step => step.conclusion === "failure")?.name,
+    })),
+  };
+}
+
+export function workflowHeadline(jobs: WorkflowJob[]) {
+  const summary = summarizeWorkflow(jobs);
+  if (!summary.totalJobs) return "Waiting for jobs to start";
+  if (summary.failedJobs.length === 1) {
+    return \`Failed job: \${summary.failedJobs[0].name}\`;
+  }
+  if (summary.failedJobs.length > 1) {
+    return \`\${summary.failedJobs.length} jobs failed\`;
+  }
+  return \`\${summary.completedJobs} of \${summary.totalJobs} jobs completed\`;
+}
+`;
+const gitSnapshot = {
+  kind: "ready",
+  checkout: "/demo/workspace",
+  revision: "demo-workflow-summary",
+  branch: "feature/workflow-summary",
+  pushDestination: "origin/feature/workflow-summary",
+  branches: [
+    { ref: "refs/heads/feature/workflow-summary", label: "feature/workflow-summary" },
+    { ref: "refs/heads/main", label: "main" },
+    { ref: "refs/remotes/origin/release/1.5", label: "release/1.5", remote: "origin" },
+  ],
+  files: [
+    { path: ".github/workflows/ci.yml", status: "clean" },
+    { path: ".gitignore", status: "clean" },
+    { path: "docs/workflows.md", status: "clean" },
+    { path: "package.json", status: "clean" },
+    { path: "README.md", status: "clean" },
+    { path: "src/index.ts", status: "clean" },
+    { path: gitFile, status: "changed" },
+    { path: "src/workflowDetails.test.ts", status: "changed" },
+    { path: "src/workflowFilters.ts", status: "conflict" },
+    { path: "src/workflowTypes.ts", status: "clean" },
+    { path: "tsconfig.json", status: "clean" },
+  ],
+  blockers: {
+    fetch: null,
+    pull: "Finish the pending Git operation first.",
+    push: "Finish the pending Git operation first.",
+    switch: "Finish the pending Git operation first.",
+  },
+};
 const envelope = data => ({ data, fetchedAt: "2026-10-01T10:02:00Z", stale: false, source: "cache" });
 window.githubFocus = {
   platform: "darwin",
@@ -68,6 +131,11 @@ window.forgeCodex = {
       case "thread": return { thread, before: null };
       case "threadWindows": return [];
       case "models": return [];
+      case "gitSnapshot": return gitSnapshot;
+      case "gitPreview": {
+        if (input.path !== gitFile) throw new Error("Unexpected screenshot file: " + input.path);
+        return { kind: "text", text: gitFileText };
+      }
       default: throw new Error("Unsupported screenshot fixture request: " + method);
     }
   }

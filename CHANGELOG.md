@@ -16,6 +16,7 @@ All notable changes to Forge are documented in this file.
 - Open existing worktrees from the branch picker even during pending changes in the current checkout.
 - Open a file’s diff by double-clicking a changed file in Git Explorer.
 - Keep development Favorites across restarts while the installed app is open.
+- Show Git Explorer in the website’s main screenshot in both themes.
 - Refresh the website screenshots to show the current workspace, detached panes, and release view in both themes.
 
 ## [0.21.14]

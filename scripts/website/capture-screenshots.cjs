@@ -1,12 +1,14 @@
 // Run on macOS with Screen Recording permission: make build && npx electron scripts/website/capture-screenshots.cjs
+// Pass --hero-only to refresh only the home page's Git Explorer previews.
 // Uses the real built renderer with an isolated session and synthetic IPC data.
 // No real credentials, Codex runtime, repositories, or conversations are read.
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, nativeTheme } = require("electron");
 const { mkdtempSync, rmSync } = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const { tmpdir } = require("node:os");
 const path = require("node:path");
 const root = path.resolve(__dirname, "../..");
+const heroOnly = process.argv.includes("--hero-only");
 const profile = mkdtempSync(path.join(tmpdir(), "forge-screenshots-"));
 app.setPath("userData", profile);
 // Match the shipping macOS window: native controls are not part of capturePage().
@@ -23,6 +25,7 @@ app.whenReady().then(async () => {
   const { trafficLightPosition } = await import(path.join(root, "dist-electron/electron/main/window-chrome.js"));
   for (const theme of ["dark", "light"]) {
     process.env.FORGE_SCREENSHOT_THEME = theme;
+    nativeTheme.themeSource = theme;
     const win = new BrowserWindow({
       width: 1440, height: 920, useContentSize: true, show: false,
       title: "Forge screenshot",
@@ -46,6 +49,30 @@ app.whenReady().then(async () => {
     }));
     win.webContents.on("did-create-window", child => { detached = child; });
     await win.loadFile(path.join(root, "dist/renderer/index.html"));
+    await waitFor(win, `!!document.querySelector('button[aria-label="Git Explorer"]:not(:disabled)')`);
+    await win.webContents.executeJavaScript(`document.querySelector('button[aria-label="Git Explorer"]').click()`);
+    await waitFor(win, `!!document.querySelector('.git-tree-row[title="src/"]')`);
+    await win.webContents.executeJavaScript(`document.querySelector('.git-tree-row[title="src/"]').click()`);
+    await waitFor(win, `!!document.querySelector('.git-tree-row[title="src/workflowDetails.ts"]')`);
+    await win.webContents.executeJavaScript(`document.querySelector('.git-tree-row[title="src/workflowDetails.ts"]').click()`);
+    await waitFor(win, `document.querySelector('.git-file-preview')?.textContent.includes("export function summarizeWorkflow")`);
+    await win.webContents.executeJavaScript("document.fonts.ready");
+    win.setWindowButtonPosition(trafficLightPosition(zoomFactor));
+    win.show();
+    app.focus({ steal: true });
+    win.focus();
+    await new Promise(resolve => setTimeout(resolve, 600));
+    const windowId = win.getMediaSourceId().split(":")[1];
+    // Capture the actual window, including native traffic lights, without its shadow.
+    execFileSync("/usr/sbin/screencapture", ["-x", "-o", "-l", windowId,
+      path.join(root, "website/screenshots/forge-" + theme + ".png")]);
+    console.log("Captured " + theme + " Git Explorer preview");
+    if (heroOnly) {
+      win.destroy();
+      continue;
+    }
+
+    await win.webContents.executeJavaScript(`document.querySelector('button[aria-label^="Codex ("]').click()`);
     await waitFor(win, "!!document.querySelector('.codex-thread-select')");
     await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Search conversations\"]').click()");
     await waitFor(win, "!!document.querySelector('[aria-label=\"Search conversation text\"]')");
@@ -61,15 +88,6 @@ app.whenReady().then(async () => {
     await new Promise(resolve => setTimeout(resolve, 400));
     const errors = await win.webContents.executeJavaScript("Array.from(document.querySelectorAll('.error-banner, .codex-error')).map(el => el.textContent)");
     if (errors.some(Boolean)) throw new Error(errors.join("\n"));
-    win.setWindowButtonPosition(trafficLightPosition(zoomFactor));
-    win.show();
-    app.focus({ steal: true });
-    win.focus();
-    await new Promise(resolve => setTimeout(resolve, 600));
-    const windowId = win.getMediaSourceId().split(":")[1];
-    // Capture the actual window, including native traffic lights, without its shadow.
-    execFileSync("/usr/sbin/screencapture", ["-x", "-o", "-l", windowId,
-      path.join(root, "website/screenshots/forge-" + theme + ".png")]);
     await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"Detach content pane\"]').click()");
     for (let attempt = 0; !detached && attempt < 100; attempt++)
       await new Promise(resolve => setTimeout(resolve, 100));

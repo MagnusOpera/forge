@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 const homepage = readFileSync(path.resolve("website/index.html"), "utf8");
 const siteScript = readFileSync(path.resolve("website/site.js"), "utf8");
 
-describe("homepage Codex previews", () => {
+describe("homepage Forge previews", () => {
   it("switches between the bundled dark and light screenshots with the theme control", () => {
     document.documentElement.innerHTML = homepage;
     localStorage.clear();
@@ -29,7 +29,7 @@ describe("homepage Codex previews", () => {
       expect(toggle.getAttribute("aria-label")).toBe("Switch to light theme");
       toggle.click();
       expect(preview.getAttribute("src")).toBe("screenshots/forge-dark.png");
-      expect(preview.alt).toContain("Codex");
+      expect(preview.alt).toContain("Git Explorer");
     } finally {
       document.documentElement.innerHTML = "";
       localStorage.clear();
