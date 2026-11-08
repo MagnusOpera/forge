@@ -33,6 +33,10 @@
   min-height: 0;
 }
 
+.project-scroll.git-project-scroll {
+  padding-block-end: 0;
+}
+
 .git-project-scroll > .project-identity,
 .git-tree-host > .git-branch-picker {
   flex-shrink: 0;
@@ -236,6 +240,7 @@
 
 .git-repository-body {
   --git-history-expanded-width: min(248px, 85%);
+  --git-history-surface: var(--project-bg);
   padding-inline-start: var(--git-history-width);
 }
 
@@ -244,9 +249,11 @@
   min-width: 0;
   overflow: auto;
   padding-inline-start: 4px;
+  padding-block-end: 18px;
 }
 
 .git-file-body {
+  --git-history-surface: var(--content-bg);
   padding-inline-end: var(--git-history-width);
 }
 
@@ -261,26 +268,17 @@
   max-width: 100%;
   overflow: hidden;
   color: var(--text-secondary);
-  background: var(--panel-bg);
   transition: width 140ms ease;
 }
 
 .git-history-rail:is(:hover, :has(:focus-visible)) {
+  --git-history-surface: var(--panel-bg);
   width: var(--git-history-expanded-width);
+  background: var(--git-history-surface);
 }
 
 .git-file-body > .git-history-rail {
   inset-inline: auto 0;
-}
-
-.git-file-body > .git-history-rail::after {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  width: 1px;
-  background: var(--matte-divider);
-  content: "";
-  pointer-events: none;
 }
 
 .git-history-entry {
@@ -297,8 +295,7 @@
   text-align: start;
 }
 
-.git-history-entry:hover,
-.git-history-entry[aria-pressed="true"] {
+.git-history-rail:is(:hover, :has(:focus-visible)) .git-history-entry:is(:hover, [aria-pressed="true"]) {
   color: var(--text-strong);
   background: var(--row-active-bg);
 }
@@ -316,6 +313,10 @@
   min-height: 0;
   overflow: hidden auto;
   padding-block: 4px;
+}
+
+.git-repository-body .git-history-timeline {
+  padding-block-end: 0;
 }
 
 .git-file-body .git-history-timeline {
@@ -345,7 +346,7 @@
   height: 8px;
   border: 1px solid var(--icon);
   border-radius: 50%;
-  background: var(--panel-bg);
+  background: var(--git-history-surface);
 }
 
 .git-history-entry[aria-pressed="true"] .git-history-dot {

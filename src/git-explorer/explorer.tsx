@@ -172,21 +172,9 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
   const pullBlocker = blocker("pull") ?? (!ready ? "Configure a local checkout first." : null);
   const treeMessage = !treeResult ? "Reading commit files…" : "error" in treeResult ? treeResult.error : "This commit has no files.";
   const publishedTreeCommit = treeResult && "publishedCommit" in treeResult ? treeResult.publishedCommit : undefined;
-  const gitFeedback = (operation === "switch" || feedback) && (
-    <p className="git-explorer-message" role="status">{operation === "switch" ? "Switching branches…" : feedback}</p>
-  );
   const previewContext = ready && {
     repositoryId: repo.id, repositoryUrl: repo.url, revision: ready.revision, worktree: ready.checkout,
     workingPreview: filePreview, onGithubUrlChange: onFileGithubUrlChange,
-    header: <>
-      <div className="git-checkout-status">
-        <span className="git-checkout-path" title={displayPathText(ready.checkout)}>{displayPathText(ready.checkout)}</span>
-        <span className="git-upstream" title={ready.pushDestination ? `Upstream ${ready.pushDestination}` : "No remote upstream"}>
-          {ready.pushDestination ?? "No upstream"}
-        </span>
-      </div>
-      {gitFeedback}
-    </>,
   };
 
   return (
@@ -229,19 +217,29 @@ export function GitExplorer({ repo, treeHost, theme, refreshSequence, onConfigur
           </span>
         </div>
       </div>
+      {ready && (
+        <div className="git-checkout-status">
+          <span className="git-checkout-path" title={displayPathText(ready.checkout)}>{displayPathText(ready.checkout)}</span>
+          <span className="git-upstream" title={ready.pushDestination ? `Upstream ${ready.pushDestination}` : "No remote upstream"}>
+            {ready.pushDestination ?? "No upstream"}
+          </span>
+        </div>
+      )}
+      {(operation === "switch" || feedback) && (
+        <p className="git-explorer-message" role="status">{operation === "switch" ? "Switching branches…" : feedback}</p>
+      )}
       {diffFile && createPortal(
         <DiffDialog title={diffFile} theme={theme} load={loadDiff} onClose={() => setDiffFile(null)}
           emptyMessage="No local changes to this file." />,
         portalRoot ?? document.querySelector(".app-shell") ?? document.body,
       )}
       {failure && <GitActionErrorDialog {...failure} onDismiss={() => setFailure(undefined)} />}
-      {!ready && <>
-        {gitFeedback}
+      {!ready && (
         <div className="content-scroll git-explorer-empty">
           <p>{error || (snapshot?.kind === "setup" ? snapshot.message : "Reading the checkout…")}</p>
           {snapshot?.kind === "setup" && <button type="button" className="ghost-button" onClick={onConfigure}>Configure local checkout</button>}
         </div>
-      </>}
+      )}
       {previewContext && (visibleFile ? (
         <GitFileView key={`${previewContext.revision}\0${version?.commit ?? "working"}\0${visibleFile}`}
           {...previewContext} path={visibleFile} baseVersion={version} publishedTreeCommit={publishedTreeCommit} />

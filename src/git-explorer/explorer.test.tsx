@@ -234,8 +234,8 @@ it("browses file versions, ignores a late preview, and returns to the working tr
   await act(async () => tree.querySelector<HTMLButtonElement>('[title="other.txt"]')!.click());
 
   const history = container.querySelector('[aria-label="File history"]')!;
-  expect(history.parentElement?.previousElementSibling?.matches(".content-header")).toBe(true);
-  expect(history.previousElementSibling?.firstElementChild?.matches(".git-checkout-status")).toBe(true);
+  expect(history.parentElement?.previousElementSibling?.matches(".git-checkout-status")).toBe(true);
+  expect(history.previousElementSibling?.firstElementChild?.matches(".git-file-preview")).toBe(true);
   expect(history.previousElementSibling?.querySelector("pre")?.textContent).toBe("local edit");
   const firstEntry = history.firstElementChild?.firstElementChild;
   expect(firstEntry?.textContent).toBe("Working tree");
@@ -250,6 +250,8 @@ it("browses file versions, ignores a late preview, and returns to the working tr
   expect(request).toHaveBeenCalledWith("gitHistoricalPreview", expect.objectContaining({ path: "old name.txt", commit: commits[1].commit }));
   expect(container.querySelector("pre")?.textContent).toBe("older version");
   expect(container.querySelector("time")?.dateTime).toBe(commits[1].date);
+  expect(history.parentElement?.previousElementSibling).toBe(container.querySelector(".git-file-version-bar"));
+  expect(history.previousElementSibling?.firstElementChild?.matches(".git-file-preview")).toBe(true);
   expect(onFileGithubUrlChange).toHaveBeenLastCalledWith(`${repo("repo").url}/blob/${commits[1].commit}/old%20name.txt`);
 
   await act(async () => slowPreview.resolve({ kind: "text", text: "stale version" }));

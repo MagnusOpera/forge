@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Refine the layout and highlighting of Git Explorer’s history rails.
+
 ## [0.22.2]
 
 
