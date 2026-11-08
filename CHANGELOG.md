@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.22.5]
+
+
 - Search repository and file history by commit ID or message, including commits older than the latest 50, and see when a filter is active on a collapsed rail.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.22.4...0.22.5
 
 ## [0.22.4]
 
