@@ -358,6 +358,10 @@ input {
   z-index: 3;
   background: transparent;
 }
+/* Titlebar menus extend across the workspace body divider. */
+.workspace-shell .content-header:has(.titlebar-picker) {
+  z-index: 6;
+}
 /* Let the native material show through the header across all three panes. */
 .workspace-shell > .project-pane {
   position: relative;

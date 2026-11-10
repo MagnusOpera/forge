@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Keep pull request toolbar menus above the divider under the window header.
+
 ## [0.22.5]
 
 
