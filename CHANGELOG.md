@@ -4,7 +4,12 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.23.1]
+
+
 - Place Delivery after Build in the workspace toolbar.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.23.0...0.23.1
 
 ## [0.23.0]
 
