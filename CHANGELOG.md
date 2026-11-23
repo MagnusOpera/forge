@@ -4,6 +4,8 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Place Delivery after Build in the workspace toolbar.
+
 ## [0.23.0]
 
 

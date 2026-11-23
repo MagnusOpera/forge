@@ -111,7 +111,7 @@ it("keeps global controls in a permanent rail while only navigation collapses", 
   expect(navigation.hasAttribute("inert")).toBe(false);
 });
 
-it("places Delivery before Build and Chat and uses the shared active underline", async () => {
+it("places Delivery after Build and uses the shared active underline", async () => {
   const toolbar = container.querySelector(
     '[role="toolbar"][aria-label="Workspace mode"]',
   )!;
@@ -126,7 +126,7 @@ it("places Delivery before Build and Chat and uses the shared active underline",
     '[aria-label="Chat"]',
   )!;
   const delivery = toolbar.querySelector<HTMLButtonElement>('[aria-label="Delivery"]')!;
-  expect([...toolbar.querySelectorAll("button")]).toEqual([delivery, build, think]);
+  expect([...toolbar.querySelectorAll("button")]).toEqual([build, delivery, think]);
   expect(build.getAttribute("aria-pressed")).toBe("true");
   await act(async () => delivery.click());
   expect(delivery.getAttribute("data-active-tab")).toBe("true");

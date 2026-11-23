@@ -3960,8 +3960,8 @@ function Sidebar(props: SidebarProps) {
         <div className="header-actions">
           <div ref={modeUnderline.containerRef} className="project-view-switcher workspace-mode-selector" role="toolbar" aria-label="Workspace mode">
             {([
-              ["delivery", "Delivery", Package],
               ["build", "Build", Code2],
+              ["delivery", "Delivery", Package],
               ["chat", "Chat", MessageSquare],
             ] as const).map(([mode, label, Icon]) => (
               <button key={mode} className={cx("icon-button project-view-button", props.mode === mode && "active")}
