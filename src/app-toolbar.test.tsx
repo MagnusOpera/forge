@@ -111,7 +111,7 @@ it("keeps global controls in a permanent rail while only navigation collapses", 
   expect(navigation.hasAttribute("inert")).toBe(false);
 });
 
-it("keeps icon-only Build and Chat modes in the sidebar toolbar with the shared active underline", async () => {
+it("places Delivery before Build and Chat and uses the shared active underline", async () => {
   const toolbar = container.querySelector(
     '[role="toolbar"][aria-label="Workspace mode"]',
   )!;
@@ -125,8 +125,17 @@ it("keeps icon-only Build and Chat modes in the sidebar toolbar with the shared 
   const think = toolbar.querySelector<HTMLButtonElement>(
     '[aria-label="Chat"]',
   )!;
+  const delivery = toolbar.querySelector<HTMLButtonElement>('[aria-label="Delivery"]')!;
+  expect([...toolbar.querySelectorAll("button")]).toEqual([delivery, build, think]);
   expect(build.getAttribute("aria-pressed")).toBe("true");
+  await act(async () => delivery.click());
+  expect(delivery.getAttribute("data-active-tab")).toBe("true");
+  expect(build.getAttribute("data-active-tab")).toBeNull();
+  const bundles = container.querySelector('[aria-label="Project bundles"]');
+  expect(bundles?.querySelector('[aria-label="New bundle"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Bundle threads"]')).not.toBeNull();
   await act(async () => think.click());
+  expect(container.querySelector('[aria-label="Bundle threads"]')).toBeNull();
   expect(think.getAttribute("aria-pressed")).toBe("true");
   expect(think.getAttribute("data-active-tab")).toBe("true");
   expect(build.getAttribute("data-active-tab")).toBeNull();
@@ -135,6 +144,30 @@ it("keeps icon-only Build and Chat modes in the sidebar toolbar with the shared 
   expect(build.getAttribute("aria-pressed")).toBe("true");
   expect(build.getAttribute("data-active-tab")).toBe("true");
   expect(container.querySelector(".chatgpt-threads-pane")).toBeNull();
+});
+
+it("keeps the All search and count outside the scrolling repository groups", async () => {
+  const allTab = container.querySelector<HTMLButtonElement>('.sidebar-tab:last-of-type')!;
+  await act(async () => allTab.click());
+  const nav = container.querySelector('nav[aria-label="Repositories"]')!;
+  const search = nav.querySelector<HTMLInputElement>('[aria-label="Search repositories"]')!;
+  const count = nav.querySelector('.section-title .count')!;
+  const groups = nav.querySelector('.sidebar-repo-groups')!;
+  const scroller = nav.querySelector<HTMLElement>('.sidebar-repository-scroll')!;
+
+  expect(count.textContent).toBe("0");
+  expect(groups.contains(search)).toBe(false);
+  expect(groups.contains(count)).toBe(false);
+  expect(groups.textContent).toContain("No repositories.");
+
+  scroller.scrollTop = 120;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "example");
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(scroller.scrollTop).toBe(0);
+  expect(count.parentElement?.textContent).toContain("Results");
+  expect(groups.textContent).toContain("No matching repositories.");
 });
 
 it("keeps the rounded body divider separate from the native titlebar and rail", () => {

@@ -11,6 +11,11 @@ import { hasOpenKeyboardOverlay, isDomNode, isHtmlElement } from "./dom";
 import { displayPath, displayPathText } from "./paths";
 import { DetachablePane, useDetachablePane } from "./detachable-pane";
 import { usePaneSurface } from "./pane-surface";
+import { RepoButton, RepositorySelector } from "./components/repository-selector";
+import { DeliveryBundles } from "./codex/delivery-bundles";
+import { DeliveryThreads, useBundleThreads } from "./codex/delivery-threads";
+import { deliveryThreadKey, resolveBundleRepositories, type ProjectBundle } from "./codex/delivery";
+import "./codex/delivery.css";
 import { ThreadWorkspace } from "./codex/thread-workspace";
 import { Combobox } from "./components/combobox";
 import { useSlidingUnderline } from "./useSlidingUnderline";
@@ -40,6 +45,7 @@ import {
   Loader2,
   Moon,
   MessageSquare,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
   PictureInPicture2,
@@ -85,7 +91,8 @@ import {
   favoriteProjectPollingIntervalMs,
   formatDuration,
   githubUrlClickActionForDetail,
-  groupRepositoriesByOwner,
+  filterRepositories,
+  formatRelative,
   isLiveStatus,
   isTabNavigation,
   latestViewerPullRequestReviewEvent,
@@ -716,44 +723,6 @@ function moveListItem<T>(items: T[], source: T, target: T): T[] {
   return next;
 }
 
-function formatRelative(value?: string | null): string {
-  if (!value) {
-    return "";
-  }
-
-  const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) {
-    return "";
-  }
-
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-  if (seconds < 60) {
-    return "now";
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours}h`;
-  }
-
-  const days = Math.floor(hours / 24);
-  if (days < 30) {
-    return `${days}d`;
-  }
-
-  const months = Math.floor(days / 30);
-  if (months < 12) {
-    return `${months}mo`;
-  }
-
-  return `${Math.floor(months / 12)}y`;
-}
-
 function formatAbsoluteDateTime(value?: string | null): string {
   if (!value) {
     return "";
@@ -1150,6 +1119,7 @@ function CommitActionButton(props: {
 type ContentItemTarget = { key: string; repo: RepoSummary | null; selection: ContentSelection; focusView: ProjectFocusView };
 type ItemPaneControl = ReturnType<typeof useDetachablePane>;
 type ItemAppearance = { themePreference: ThemePreference; theme: ThemeMode; sidebarAppearance: SidebarAppearanceMode; accent: string };
+type WorkspaceMode = "delivery" | "build" | "chat";
 type WorkspaceProps = {
   item?: ContentItemTarget;
   sharedAuth?: AuthStatus | null;
@@ -1164,7 +1134,13 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   "use no memo"; // React Compiler does not yet support this try/finally control flow.
 
   const initialItem = useRef(item).current;
-  const [chatMode, setChatMode] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("build");
+  const chatMode = workspaceMode === "chat";
+  const deliveryMode = workspaceMode === "delivery";
+  const buildMode = workspaceMode === "build";
+  const [bundles, setBundles] = useStoredState<ProjectBundle[]>("github-focus:delivery-bundles", []);
+  const [bundleId, setBundleId] = useStoredState<string | null>("github-focus:delivery-bundle-id", null);
+  const [deliverySelection, setDeliverySelection] = useState<{ bundleId: string; threadKey: string }>();
   const [chatOpened, setChatOpened] = useState(false);
   const [chatSidebarHost, setChatSidebarHost] = useState<HTMLDivElement | null>(null);
   const [chatDetached, setChatDetached] = useState(false);
@@ -1344,6 +1320,19 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     () => favoriteKeys.map((key) => reposByKey.get(key)).filter(Boolean) as RepoSummary[],
     [favoriteKeys, reposByKey]
   );
+  const selectedBundle = bundles.find((bundle) => bundle.id === bundleId) ?? bundles[0];
+  const selectedBundleId = selectedBundle?.id;
+  const bundleRepos = useMemo(() => resolveBundleRepositories(selectedBundle, allRepos), [selectedBundle, allRepos]);
+  const delivery = useBundleThreads(bundleRepos, deliveryMode && Boolean(auth?.configured));
+  const selectedDeliveryThread = delivery.entries.find((entry) =>
+    deliverySelection?.bundleId === selectedBundleId && deliveryThreadKey(entry) === deliverySelection?.threadKey
+  ) ?? (delivery.loading ? undefined : delivery.entries[0]);
+  const selectedDeliveryKey = selectedDeliveryThread && deliveryThreadKey(selectedDeliveryThread);
+  useEffect(() => {
+    if (deliveryMode && selectedBundleId && selectedDeliveryKey) {
+      setDeliverySelection({ bundleId: selectedBundleId, threadKey: selectedDeliveryKey });
+    }
+  }, [deliveryMode, selectedBundleId, selectedDeliveryKey]);
   const favoriteProjectRefreshKey = useMemo(() => favoriteRepos.map(repoKey).join("|"), [favoriteRepos]);
 
   const selectedRepoKey = selectedRepo ? repoKey(selectedRepo) : "";
@@ -1404,17 +1393,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     }
   }, [favoriteRepos]);
 
-  const visibleRepos = useMemo(() => {
-    const needle = sidebarSearch.trim().toLowerCase();
-    if (!needle) {
-      return allRepos;
-    }
-    return allRepos.filter((repo) => repo.fullName.toLowerCase().includes(needle));
-  }, [allRepos, sidebarSearch]);
-
-  const repoGroups = useMemo(() => {
-    return groupRepositoriesByOwner(visibleRepos);
-  }, [visibleRepos]);
+  const visibleRepos = useMemo(() => filterRepositories(allRepos, sidebarSearch), [allRepos, sidebarSearch]);
 
   const middleItems = useMemo<MiddleItem[]>(() => {
     if (projectFocusView === "codex" || projectFocusView === "git") return [];
@@ -1677,7 +1656,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 
   const selectRepo = useCallback(
     (repo: RepoSummary) => {
-      setChatMode(false);
+      setWorkspaceMode("build");
       setSelectedRepo(repo);
       setStoredProjectFocusView((current) => repositorySelectionFocusView(
         current === "starred-actions" ? "workflows" : current,
@@ -2553,6 +2532,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       const payload = source.kind === "pull-request"
         ? pullRequestNotificationPayload(source.repo, source.pullRequest)
         : workflowFailureNotificationPayload(source.repo, source.run);
+      setWorkspaceMode("build");
       setNotificationHistory(current => markNotificationRead(current, payload.id));
       const repo = reposByKey.get(repoKey(source.repo)) ?? source.repo;
       const targetRepoKey = repoKey(repo);
@@ -2620,7 +2600,6 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       ? { kind: "pr", pr: source.pullRequest } : { kind: "run", run: source.run };
     const key = contentItemKey(source.repo.id, selectionRouteKey(selection));
     detachedItems.get(key)?.pane.reattach();
-    setChatMode(false);
     focusNotificationSource(source);
   };
 
@@ -2918,6 +2897,16 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         kind: "action",
         title: "Toggle sidebar",
         run: () => setSidebarCollapsedWithAnimation((value) => !value)
+      },
+      {
+        id: "action:open-delivery",
+        kind: "action",
+        title: "Open Delivery",
+        run: () => {
+          setSidebarCollapsedWithAnimation(false);
+          setSettingsScope(null);
+          setWorkspaceMode("delivery");
+        }
       }
     ];
 
@@ -2948,7 +2937,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         title: "Git Explorer",
         subtitle: selectedRepo.fullName,
         run: () => {
-          setChatMode(false);
+          setWorkspaceMode("build");
           setStoredProjectFocusView("git");
           setSelection({ kind: "repo" });
         }
@@ -3200,7 +3189,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
   useEffect(() => {
     if (initialItem) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (chatMode && !appKeyboardShortcut(event) && !((event.metaKey || event.ctrlKey) && ["b", "k"].includes(event.key.toLowerCase()))) return;
+      if (!buildMode && !appKeyboardShortcut(event) && !((event.metaKey || event.ctrlKey) && ["b", "k"].includes(event.key.toLowerCase()))) return;
       if (isHtmlElement(event.target) && event.target.closest(".codex-terminal-screen")) return;
       if (hasOpenKeyboardOverlay((event.target as Node | null)?.ownerDocument ?? (event.currentTarget as Window).document)) return;
       if (isTabNavigation(event) && (projectFocusView === "codex" || gitView || settingsScope)) return;
@@ -3211,7 +3200,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 
       const shortcut = appKeyboardShortcut(event);
       if (shortcut) {
-        setChatMode(false);
+        setWorkspaceMode("build");
         event.preventDefault();
 
         if (shortcut === "refresh-repository") {
@@ -3321,7 +3310,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     targets.forEach(target => target.addEventListener("keydown", onKeyDown, true));
     return () => targets.forEach(target => target.removeEventListener("keydown", onKeyDown, true));
   }, [
-    chatMode,
+    buildMode,
     detachedItems,
     favoriteKeys,
     gitView,
@@ -3432,22 +3421,34 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     : selection.kind === "run" ? workflowRunDisplayName(selection.run)
     : selection.kind === "workflow" ? selection.workflow.name
     : selectedRepo?.fullName;
-  const activeTarget: ContentItemTarget = {
+  const buildTarget: ContentItemTarget = {
     key: contentItemKey(selectedRepo?.id, projectFocusView === "codex" && selection.kind !== "codex" ? "codex-empty" : selectionRouteKey(selection)),
     repo: selectedRepo,
     selection: projectFocusView === "codex" && selection.kind !== "codex" ? { kind: "repo" } : selection,
     focusView: projectFocusView,
   };
-  const activeDetached = !initialItem && (chatMode ? chatDetached : !gitView && Boolean(detachedItems.get(activeTarget.key)?.pane.detached));
+  const deliveryTarget: ContentItemTarget | undefined = deliveryMode && selectedDeliveryThread ? {
+    key: contentItemKey(selectedDeliveryThread.repo.id, `codex:${selectedDeliveryThread.thread.id}`),
+    repo: selectedDeliveryThread.repo,
+    selection: { kind: "codex", threadId: selectedDeliveryThread.thread.id },
+    focusView: "codex",
+  } : undefined;
+  const deliveryDetached = deliveryTarget ? detachedItems.get(deliveryTarget.key)?.pane : undefined;
+  const activeDetached = !initialItem && (chatMode ? chatDetached : buildMode && !gitView && Boolean(detachedItems.get(buildTarget.key)?.pane.detached));
+  const dockedTarget = deliveryMode ? deliveryTarget : gitView ? undefined : buildTarget;
+  const detachedTargets = [...detachedItems.values()].map(({ target }) => target);
+  const contentTargets = dockedTarget ? retainedContentItems(dockedTarget, detachedTargets) : detachedTargets;
   const focusSelectedItem = (targetSelection: ContentSelection) => detachedItems.get(contentItemKey(selectedRepo?.id, selectionRouteKey(targetSelection)))?.pane.focus();
+  const activeDeliveryTargetKey = deliveryTarget?.key;
   const navigateToItem = useCallback((target: ContentItemTarget) => {
-    setChatMode(false);
+    if (target.key === activeDeliveryTargetKey) return;
+    setWorkspaceMode("build");
     setSelectedRepo(target.repo); setSelection(target.selection); setStoredProjectFocusView(target.focusView);
     if (target.selection.kind === "release") setReleaseTab(target.selection.release.isDraft ? "draft" : target.selection.release.isPrerelease ? "preview" : "active");
     if (target.selection.kind === "pr") setProjectPullRequestTab(pullRequestTabForState(target.selection.pr));
     detachedItems.get(target.key)?.pane.focus();
-  }, [detachedItems, setStoredProjectFocusView, setProjectPullRequestTab]);
-  useEffect(() => { if (!initialItem && !gitView) detachedItems.get(activeTarget.key)?.pane.focus(); }, [contentRoute, gitView]);
+  }, [activeDeliveryTargetKey, detachedItems, setStoredProjectFocusView, setProjectPullRequestTab]);
+  useEffect(() => { if (!initialItem && buildMode && !gitView) detachedItems.get(buildTarget.key)?.pane.focus(); }, [contentRoute, gitView, buildMode]);
   useEffect(() => { if (contentPane.error) flash(contentPane.error); }, [contentPane.error, flash]);
   const terminalKey = `${selectedRepo?.id}:${terminalThread?.id}`;
   const terminalOpen = Boolean(terminalThread && !terminalThread.archived && openTerminals[terminalKey]);
@@ -3459,13 +3460,13 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       cssWidth: middleWidth + (sidebarCollapsed ? sidebarRailWidth + 1 : leftWidth + 1),
     }).catch(error => console.warn("Unable to resize the content layout", error));
   }, [activeDetached, sidebarCollapsed, leftWidth, middleWidth]);
+  const sidebarWidth = sidebarCollapsed ? sidebarRailWidth : leftWidth;
+  const deliveryThreadsWidth = `min(${middleWidth}px, max(220px, calc(100vw - ${sidebarWidth + 402}px)))`;
   const gridTemplateColumns = activeDetached
-    ? (sidebarCollapsed ? `${sidebarRailWidth}px 1px minmax(0, 1fr)` : `${leftWidth}px 1px minmax(0, 1fr)`)
-    : sidebarCollapsed
-    ? `${sidebarRailWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`
-    : `${leftWidth}px 1px ${middleWidth}px 1px minmax(0, 1fr)`;
+    ? `${sidebarWidth}px 1px minmax(0, 1fr)`
+    : `${sidebarWidth}px 1px ${deliveryMode ? deliveryThreadsWidth : `${middleWidth}px`} 1px minmax(0, 1fr)`;
   const globalAccent = normalizeAccentColor(activeTheme === "dark" ? darkAccentColor : lightAccentColor, defaultAccentByTheme[activeTheme]);
-  const selectedAccent = appearance?.accent ?? projectAccentColor(projectAccentColors, chatMode ? undefined : selectedRepo?.id, globalAccent);
+  const selectedAccent = appearance?.accent ?? projectAccentColor(projectAccentColors, deliveryMode ? selectedDeliveryThread?.repo.id : buildMode ? selectedRepo?.id : undefined, globalAccent);
   const appStyle: AppCssVars = {
     gridTemplateColumns,
     "--accent": selectedAccent
@@ -3677,6 +3678,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
       className={cx(
         "app-shell",
         "workspace-shell",
+        deliveryMode && "delivery-workspace",
         layoutAnimating && "layout-animating",
         middleKeyboardNavigating && "middle-keyboard-navigating"
       )}
@@ -3692,10 +3694,33 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
     >
       <div className="workspace-body-divider" aria-hidden="true" />
       <Sidebar
-        chatActive={chatMode}
+        mode={workspaceMode}
         chatSidebarRef={setChatSidebarHost}
-        onBuild={() => setChatMode(false)}
-        onChat={() => { setChatOpened(true); setChatMode(true); setSettingsScope(null); }}
+        onModeChange={(mode) => {
+          if (mode === "chat") setChatOpened(true);
+          if (mode !== "build") setSettingsScope(null);
+          setWorkspaceMode(mode);
+        }}
+        deliveryBundles={deliveryMode ? (
+          <DeliveryBundles bundles={bundles} selectedId={selectedBundleId} repositories={allRepos} loading={initialLoading}
+            onSelect={setBundleId}
+            onSave={(bundle) => {
+              setBundles((current) => current.some(({ id }) => id === bundle.id)
+                ? current.map((previous) => previous.id === bundle.id ? bundle : previous)
+                : [...current, bundle]);
+              setBundleId(bundle.id);
+            }}
+            onRemove={(bundle) => openConfirmation({
+              title: "Delete bundle?",
+              message: `“${bundle.name}” will be removed from Delivery. Its repositories and Codex chats will still be available.`,
+              confirmLabel: "Delete bundle",
+              onConfirm: async () => {
+                setBundles((current) => current.filter(({ id }) => id !== bundle.id));
+                setBundleId((current) => current === bundle.id ? null : current);
+                return true;
+              },
+            })} />
+        ) : null}
         globalConfiguration={<><UpdateCheckIndicator api={api} /><button className="icon-button" aria-label="Global configuration" title="Global configuration" onClick={() => setSettingsScope("global")}>
             <Settings size={17} />
           </button></>}
@@ -3741,7 +3766,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
           </div>}
         collapsed={sidebarCollapsed}
         favoriteRepos={favoriteRepos}
-        repoGroups={repoGroups}
+        repositories={visibleRepos}
         selectedRepo={selectedRepo}
         search={sidebarSearch}
         onSearch={setSidebarSearch}
@@ -3765,7 +3790,7 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
           }
         }}
       />
-      {!chatMode && <ProjectPane
+      {buildMode && <ProjectPane
         onProjectConfiguration={() => { setSettingsScope("project"); }}
         gitTree={<div className="git-tree-host" ref={setGitTreeHost} />}
         codexCount={codexThreads.threads.filter((thread) => !thread.archived).length}
@@ -3821,21 +3846,42 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
         onToggleWorkflowStar={toggleWorkflowStar}
         onReorderFavoriteWorkflow={reorderFavoriteWorkflows}
       />}
+      {deliveryMode && (
+        <DeliveryThreads bundle={selectedBundle} threads={delivery} selectedKey={selectedDeliveryKey} sidebarCollapsed={sidebarCollapsed}
+          formatUpdatedAt={formatRelative}
+          onSelect={(entry) => {
+            if (!selectedBundleId) return;
+            setDeliverySelection({ bundleId: selectedBundleId, threadKey: deliveryThreadKey(entry) });
+            detachedItems.get(contentItemKey(entry.repo.id, `codex:${entry.thread.id}`))?.pane.focus();
+          }} />
+      )}
       {!chatMode && !activeDetached && <div className="resize-handle" onPointerDown={(event) => startResize("middle", event)} />}
       {chatOpened && <ChatWorkspace sidebarHost={chatSidebarHost} active={chatMode} theme={activeTheme} accent={selectedAccent} appearance={sidebarAppearance}
-        onActivate={() => setChatMode(true)} onDetachedLayout={setChatDetached}
+        onActivate={() => setWorkspaceMode("chat")} onDetachedLayout={setChatDetached}
         onResize={event => startResize("middle", event)} sidebarCollapsed={sidebarCollapsed} />}
       <div style={{ display: chatMode ? "none" : "contents" }}>
-      {gitView && selectedRepo && <GitExplorer key={selectedRepo.id} repo={selectedRepo} treeHost={gitTreeHost} theme={activeTheme}
+      {!deliveryMode && gitView && selectedRepo && <GitExplorer key={selectedRepo.id} repo={selectedRepo} treeHost={gitTreeHost} theme={activeTheme}
         refreshSequence={gitRefreshSequence} onConfigure={() => setSettingsScope("project-github")}
         onFileGithubUrlChange={setGitFileGithubUrl} />}
-      {(gitView ? [...detachedItems.values()].map(entry => entry.target)
-        : retainedContentItems(activeTarget, [...detachedItems.values()].map(entry => entry.target))).map(target => (
+      {contentTargets.map(target => (
         <ForgeWorkspace key={target.key} item={target} sharedAuth={auth} onAuthChange={setAuth}
           appearance={{ themePreference, theme: activeTheme, sidebarAppearance, accent: projectAccentColor(projectAccentColors, target.repo?.id, globalAccent) }}
           onPaneState={reportItemPane} onNavigateItem={navigateToItem} />
       ))}
       </div>
+      {deliveryMode && (!deliveryTarget || deliveryDetached?.detached) && (
+        <main className="content-pane delivery-chat-placeholder">
+          <div className="content-header app-drag"><div className="content-title">Codex</div></div>
+          <div className="codex-empty">
+            {deliveryDetached?.detached ? (
+              <>
+                <p>This chat is open in another window.</p>
+                <button className="ghost-button" onClick={deliveryDetached.focus}>Focus chat window</button>
+              </>
+            ) : <p>Select a Codex chat to see its conversation.</p>}
+          </div>
+        </main>
+      )}
       {overlays}
     </div>
   );
@@ -3843,15 +3889,15 @@ function ForgeWorkspace({ item, sharedAuth, onAuthChange, appearance, onPaneStat
 
 interface SidebarProps {
   chatSidebarRef(node: HTMLDivElement | null): void;
-  onBuild(): void;
-  chatActive: boolean;
-  onChat(): void;
+  mode: WorkspaceMode;
+  onModeChange(mode: WorkspaceMode): void;
+  deliveryBundles: React.ReactNode;
   globalConfiguration: React.ReactNode;
   themeControl: React.ReactNode;
   notifications: React.ReactNode;
   collapsed: boolean;
   favoriteRepos: RepoSummary[];
-  repoGroups: Array<[string, RepoSummary[]]>;
+  repositories: RepoSummary[];
   selectedRepo: RepoSummary | null;
   search: string;
   favoriteKeys: string[];
@@ -3870,16 +3916,16 @@ function Sidebar(props: SidebarProps) {
   "use no memo"; // Preserve the live ref handling at this imperative UI boundary.
 
   const sidebarRef = useRef<HTMLDivElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useStoredState<Record<string, boolean>>(
     "github-focus:collapsed-orgs",
     {}
   );
   const [repoTab, setRepoTab] = useStoredState<SidebarRepoTab>("github-focus:sidebar-repo-tab", "favorites");
   const searchActive = props.search.trim().length > 0;
-  const allRepoCount = props.repoGroups.reduce((total, [, repos]) => total + repos.length, 0);
-  const repoTabsUnderline = useSlidingUnderline(`${props.chatActive}:${repoTab}:${props.favoriteRepos.length}:${allRepoCount}`);
-  const modeUnderline = useSlidingUnderline(String(props.chatActive));
+  const showFavorites = !searchActive && repoTab === "favorites";
+  const allRepoCount = props.repositories.length;
+  const repoTabsUnderline = useSlidingUnderline(`${props.mode}:${repoTab}:${props.favoriteRepos.length}:${allRepoCount}`);
+  const modeUnderline = useSlidingUnderline(props.mode);
   const favoriteMonitorText = props.favoriteMonitorChecking
     ? "Checking favorites"
     : props.favoriteMonitorLastCheckedAt
@@ -3913,14 +3959,23 @@ function Sidebar(props: SidebarProps) {
       <div className="pane-header app-drag">
         <div className="header-actions">
           <div ref={modeUnderline.containerRef} className="project-view-switcher workspace-mode-selector" role="toolbar" aria-label="Workspace mode">
-            <button className={cx("icon-button project-view-button", !props.chatActive && "active")} data-active-tab={!props.chatActive ? "true" : undefined} aria-label="Build" title="Build" aria-pressed={!props.chatActive} onClick={props.onBuild}><Code2 size={15} /></button>
-            <button className={cx("icon-button project-view-button chatgpt-nav-button", props.chatActive && "active")} data-active-tab={props.chatActive ? "true" : undefined} aria-label="Chat" title="Chat" aria-pressed={props.chatActive} onClick={props.onChat}><MessageSquare size={15} /></button>
+            {([
+              ["delivery", "Delivery", Package],
+              ["build", "Build", Code2],
+              ["chat", "Chat", MessageSquare],
+            ] as const).map(([mode, label, Icon]) => (
+              <button key={mode} className={cx("icon-button project-view-button", props.mode === mode && "active")}
+                data-active-tab={props.mode === mode ? "true" : undefined}
+                aria-label={label} title={label} aria-pressed={props.mode === mode}
+                onClick={() => props.onModeChange(mode)}><Icon size={15} /></button>
+            ))}
             <span className="sliding-tab-underline" style={modeUnderline.underlineStyle} aria-hidden="true" />
           </div>
         </div>
       </div>
-      <div ref={props.chatSidebarRef} className="chatgpt-sidebar-host" style={{ display: props.chatActive ? "flex" : "none" }} />
-      <div className="sidebar-build-view" style={{ display: props.chatActive ? "none" : "flex" }}>
+      <div ref={props.chatSidebarRef} className="chatgpt-sidebar-host" style={{ display: props.mode === "chat" ? "flex" : "none" }} />
+      {props.deliveryBundles}
+      <div className="sidebar-build-view" style={{ display: props.mode === "build" ? "flex" : "none" }}>
       <div ref={repoTabsUnderline.containerRef} className="sidebar-tabs" role="tablist" aria-label="Repository view">
         <button
           className={cx("sidebar-tab", repoTab === "favorites" && "active")}
@@ -3949,8 +4004,8 @@ function Sidebar(props: SidebarProps) {
         </button>
         <span className="sliding-tab-underline" style={repoTabsUnderline.underlineStyle} aria-hidden="true" />
       </div>
-      <nav className="sidebar-scroll">
-        {!searchActive && repoTab === "favorites" ? (
+      <nav className={showFavorites ? "sidebar-scroll" : "sidebar-repositories"} aria-label="Repositories">
+        {showFavorites ? (
           <RepoSection
             title="Favorites"
             icon={<Star size={15} />}
@@ -3963,51 +4018,32 @@ function Sidebar(props: SidebarProps) {
             onReorderFavoriteRepo={props.onReorderFavoriteRepo}
           />
         ) : (
-          <>
-            <div className="search-box">
-              <Search size={16} />
-              <input
-                ref={searchInputRef}
-                value={props.search}
-                onChange={(event) => props.onSearch(event.target.value)}
-                placeholder="Search"
-                aria-label="Search repositories"
+          <RepositorySelector
+            repositories={props.repositories}
+            search={props.search}
+            onSearch={props.onSearch}
+            loading={props.loading}
+            collapsedGroups={collapsedGroups}
+            onToggleGroup={(owner) =>
+              setCollapsedGroups((current) => ({
+                ...current,
+                [owner]: current[owner] !== true
+              }))
+            }
+            renderRepository={(repo) => (
+              <RepoButton
+                key={repo.fullName}
+                repo={repo}
+                selected={props.selectedRepo ? repoKey(repo) === repoKey(props.selectedRepo) : false}
+                favorite={props.favoriteKeys.includes(repoKey(repo))}
+                onSelect={() => props.onSelectRepo(repo)}
+                onToggleFavorite={() => props.onToggleFavorite(repo)}
               />
-              {searchActive && (
-                <button
-                  className="search-clear-button"
-                  type="button"
-                  aria-label="Clear search"
-                  onClick={() => {
-                    props.onSearch("");
-                    searchInputRef.current?.focus();
-                  }}
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-            <RepoGroupList
-              title={searchActive ? "Results" : "Repositories"}
-              repoGroups={props.repoGroups}
-              collapsedGroups={collapsedGroups}
-              loading={props.loading}
-              emptyText={searchActive ? "No matching repositories." : "No repositories."}
-              selectedRepo={props.selectedRepo}
-              favoriteKeys={props.favoriteKeys}
-              onSelectRepo={props.onSelectRepo}
-              onToggleFavorite={props.onToggleFavorite}
-              onToggleGroup={(owner) =>
-                setCollapsedGroups((current) => ({
-                  ...current,
-                  [owner]: !(current[owner] ?? false)
-                }))
-              }
-            />
-          </>
+            )}
+          />
         )}
       </nav>
-      {!searchActive && repoTab === "favorites" && props.favoriteRepos.length > 0 && (
+      {showFavorites && props.favoriteRepos.length > 0 && (
         <div className="sidebar-monitor-status" aria-live="polite">
           <button
             className="icon-button sidebar-monitor-refresh"
@@ -4024,67 +4060,6 @@ function Sidebar(props: SidebarProps) {
       </div>
       </div>
     </aside>
-  );
-}
-
-function RepoGroupList(props: {
-  title: string;
-  repoGroups: Array<[string, RepoSummary[]]>;
-  collapsedGroups: Record<string, boolean>;
-  loading: boolean;
-  emptyText: string;
-  selectedRepo: RepoSummary | null;
-  favoriteKeys: string[];
-  onSelectRepo(repo: RepoSummary): void;
-  onToggleFavorite(repo: RepoSummary): void;
-  onToggleGroup(owner: string): void;
-}) {
-  const repoCount = props.repoGroups.reduce((total, [, repos]) => total + repos.length, 0);
-
-  return (
-    <div className="repo-section">
-      <div className="section-title">
-        <Github size={15} />
-        <span>{props.title}</span>
-        {props.loading ? <Loader2 className="spin" size={14} /> : <span className="count">{repoCount}</span>}
-      </div>
-      {props.repoGroups.length ? (
-        props.repoGroups.map(([owner, repos]) => {
-          const isCollapsed = props.collapsedGroups[owner] ?? false;
-          return (
-            <div key={owner} className={cx("repo-group", isCollapsed && "collapsed")}>
-              <button
-                className="repo-group-toggle"
-                type="button"
-                aria-expanded={!isCollapsed}
-                aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${owner} repositories`}
-                onClick={() => props.onToggleGroup(owner)}
-              >
-                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                <span className="repo-group-name">{owner}</span>
-                <span className="repo-group-count">{repos.length}</span>
-              </button>
-              {!isCollapsed && (
-                <div className="repo-group-items">
-                  {repos.map((repo) => (
-                    <RepoButton
-                      key={repo.fullName}
-                      repo={repo}
-                      selected={props.selectedRepo ? repoKey(repo) === repoKey(props.selectedRepo) : false}
-                      favorite={props.favoriteKeys.includes(repoKey(repo))}
-                      onSelect={() => props.onSelectRepo(repo)}
-                      onToggleFavorite={() => props.onToggleFavorite(repo)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })
-      ) : (
-        <div className="empty-row">{props.emptyText}</div>
-      )}
-    </div>
   );
 }
 
@@ -4157,60 +4132,6 @@ function RepoSection(props: {
       ) : (
         <div className="empty-row">{props.emptyText}</div>
       )}
-    </div>
-  );
-}
-
-function RepoButton(props: {
-  repo: RepoSummary;
-  selected: boolean;
-  favorite: boolean;
-  draggable?: boolean;
-  dragging?: boolean;
-  dragOver?: boolean;
-  showOwner?: boolean;
-  onDragStart?(event: React.DragEvent<HTMLDivElement>): void;
-  onDragOver?(event: React.DragEvent<HTMLDivElement>): void;
-  onDrop?(event: React.DragEvent<HTMLDivElement>): void;
-  onDragEnd?(): void;
-  onSelect(): void;
-  onToggleFavorite(): void;
-}) {
-  const repoLabel = props.showOwner ? (
-    <>
-      <span className="repo-owner">{props.repo.owner}/</span>
-      <span className="repo-short-name">{props.repo.name}</span>
-    </>
-  ) : (
-    <span className="repo-short-name">{props.repo.name}</span>
-  );
-
-  return (
-    <div
-      className={cx(
-        "repo-button-wrap",
-        props.selected && "selected",
-        props.draggable && "draggable",
-        props.dragging && "dragging",
-        props.dragOver && "drag-over"
-      )}
-      draggable={props.draggable}
-      onDragStart={props.onDragStart}
-      onDragOver={props.onDragOver}
-      onDrop={props.onDrop}
-      onDragEnd={props.onDragEnd}
-    >
-      <button className="repo-button" onClick={props.onSelect}>
-        <span className={cx("repo-name", props.showOwner && "repo-name-with-owner")}>{repoLabel}</span>
-        <span className="repo-meta">{formatRelative(props.repo.updatedAt)}</span>
-      </button>
-      <button
-        className="star-button"
-        aria-label={props.favorite ? "Remove favorite" : "Add favorite"}
-        onClick={props.onToggleFavorite}
-      >
-        {props.favorite ? <Star size={14} fill="currentColor" /> : <StarOff size={14} />}
-      </button>
     </div>
   );
 }

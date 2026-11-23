@@ -849,6 +849,43 @@ it("checks configured local repositories before directing users to project confi
 });
 
 
+it("rechecks an unstarted thread's missing checkout against the saved project path on open", async () => {
+  const store = new CodexStore(path.join(mock.root, "codex"));
+  const repositoryId = "R_123";
+  const previous = path.join(mock.root, "old-location");
+  const checkout = path.join(mock.root, "new-location");
+  mkdirSync(checkout);
+  await git(checkout, ["init", "-b", "main"]);
+  await git(checkout, ["-c", "user.name=Forge test", "-c", "user.email=forge@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"]);
+  store.configuration.projects[repositoryId] = { repositoryId, path: checkout, overrides: {} };
+  store.saveConfiguration();
+
+  const thread: CodexThread = {
+    id: randomUUID(), repositoryId, title: "New thread", archived: false,
+    createdAt: "", updatedAt: "", settings: defaultCodexPreferences, state: "idle",
+    worktree: "", branch: "", baseCommit: "", serverId: "", repositoryPath: previous,
+    items: [], requests: [], queue: [], queuePaused: false, draft: "Keep this draft", draftAttachments: [],
+  };
+  const started = { ...thread, id: randomUUID(), worktree: previous, serverId: "started", branch: "main" };
+  const existing = path.join(mock.root, "another-checkout");
+  mkdirSync(existing);
+  const pinned = { ...thread, id: randomUUID(), repositoryPath: existing };
+  for (const saved of [thread, started, pinned]) store.saveThread(saved);
+
+  const args = { repositoryId, id: thread.id };
+  await expect(request("thread", args)).resolves.toMatchObject({
+    thread: { repositoryPath: realpathSync(checkout), draft: "Keep this draft" },
+  });
+  await expect(request("startOptions", args)).resolves.toEqual({ currentBranch: "main", defaultBranch: "main" });
+  expect(new CodexStore(store.root).get(repositoryId, thread.id).repositoryPath).toBe(realpathSync(checkout));
+
+  for (const saved of [started, pinned]) {
+    await expect(request("thread", { repositoryId, id: saved.id })).resolves.toMatchObject({
+      thread: { repositoryPath: saved.repositoryPath },
+    });
+  }
+});
+
 it("validates a remote project's configured checkout on its selected environment", async () => {
   const store = new CodexStore(path.join(mock.root, "codex"));
   const environment = { id: "linux", name: "Linux", host: "dev@host", executable: "codex" };

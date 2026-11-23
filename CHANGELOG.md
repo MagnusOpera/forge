@@ -4,6 +4,18 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+- Create project bundles in Delivery and browse their Codex threads across repositories with the selected chat alongside.
+
+- Give the Delivery bundle editor the full sidebar height and use project rows for repository selection.
+
+- Keep the repository search and count visible while scrolling the All list.
+
+- Use the same searchable repository groups in the bundle editor and the All projects list.
+
+- Soften repository scrolling with frosted bars in All and the bundle editor.
+
+- Recheck the Git folder when reopening an unstarted Codex thread after moving a repository.
+
 ## [0.22.6]
 
 

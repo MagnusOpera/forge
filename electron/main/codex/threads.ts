@@ -6,6 +6,7 @@ import {
   type CodexQuickAction,
 } from "../../../shared/codexActions.js";
 import { randomUUID } from "node:crypto";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import {
   codexIsActive,
@@ -258,6 +259,30 @@ export class ThreadManager {
     const cwd = await resolveRemoteCheckoutPath(client, folder);
     return (args: string[]) => remoteCommand(client, ["git", ...args], cwd);
   }
+  async recheckLocalCheckout(thread: CodexThread): Promise<void> {
+    const original = thread.repositoryPath;
+    const configuredPath = () => this.store.configuration.projects[thread.repositoryId]?.path;
+    const configured = configuredPath();
+    const canRecheck = () => !thread.environment && !codexEnvironmentIsFixed(thread) &&
+      !this.locks.has(thread.id) && thread.repositoryPath === original;
+    if (!configured || configured === original || !canRecheck()) return;
+
+    const missing = await stat(original).then(
+      (folder) => !folder.isDirectory(),
+      (error: NodeJS.ErrnoException) => error.code === "ENOENT" || error.code === "ENOTDIR",
+    );
+    if (!missing) return;
+
+    const checkout = await git(configured, ["rev-parse", "--show-toplevel"]).then(
+      (root) => root.trim(),
+      () => "",
+    );
+    if (!checkout || configuredPath() !== configured || !canRecheck()) return;
+
+    this.store.saveThread({ ...thread, repositoryPath: checkout });
+    thread.repositoryPath = checkout;
+  }
+
   async startOptions(repositoryId: string, thread?: CodexThread) {
     return threadStartOptions(await this.startGit(repositoryId, thread));
   }

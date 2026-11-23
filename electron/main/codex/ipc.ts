@@ -678,6 +678,7 @@ export function registerCodexIpc(
           (!Number.isInteger(input.before) || Number(input.before) < 0)
         )
           throw new Error("Invalid history cursor.");
+        if (input.before === undefined) await manager.recheckLocalCheckout(thread);
         void manager.refreshMessageMetadata(thread);
         return manager.page(thread, input.before as number | undefined);
       }
