@@ -4,6 +4,9 @@ All notable changes to Forge are documented in this file.
 
 ## [Unreleased]
 
+## [0.23.0]
+
+
 - Create project bundles in Delivery and browse their Codex threads across repositories with the selected chat alongside.
 
 - Give the Delivery bundle editor the full sidebar height and use project rows for repository selection.
@@ -15,6 +18,8 @@ All notable changes to Forge are documented in this file.
 - Soften repository scrolling with frosted bars in All and the bundle editor.
 
 - Recheck the Git folder when reopening an unstarted Codex thread after moving a repository.
+
+**Full Changelog**: https://github.com/MagnusOpera/forge/compare/0.22.6...0.23.0
 
 ## [0.22.6]
 
